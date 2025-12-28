@@ -2,6 +2,5 @@
   "buildCommand": "npm run build",
   "outputDirectory": "build",
   "framework": "create-react-app",
-  "devCommand": "npm start",
   "installCommand": "npm ci"
 }
