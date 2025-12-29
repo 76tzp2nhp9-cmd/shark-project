@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Users, DollarSign, Calendar, AlertCircle, TrendingUp, Download, Plus, Check, X, Upload, LogOut, Lock } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 
 // Sample Data
 const initialAgents = [];
@@ -1436,6 +1437,7 @@ const handleDeleteAgent = (agentId) => {
       {showAddFine && <FineModal agents={agents} onClose={() => setShowAddFine(false)} onSubmit={handleAddFine} />}
       {showAddBonus && <BonusModal agents={agents} onClose={() => setShowAddBonus(false)} onSubmit={handleAddBonus} />}
       {showImportModal && <ImportModal importType={importType} onClose={() => setShowImportModal(false)} onImport={handleImport} setLateTime={setLateTime} />}
+      <SpeedInsights />
     </div>
   );
 };
