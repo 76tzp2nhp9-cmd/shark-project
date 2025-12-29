@@ -1,3 +1,5 @@
+import { useEffect } from 'react'; // Ensure useEffect is imported
+import { supabase } from './supabaseClient'; // Import the connection
 import React, { useState, useMemo } from 'react';
 import { Users, DollarSign, Calendar, AlertCircle, TrendingUp, Download, Plus, Check, X, Upload, LogOut, Lock } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -23,13 +25,35 @@ const AgentPayrollSystem = () => {
 
   // App States
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [agents, setAgents] = useState(initialAgents);
-  const [sales, setSales] = useState(initialSales);
-  const [attendance, setAttendance] = useState(initialAttendance);
-  const [fines, setFines] = useState(initialFines);
-  const [bonuses, setBonuses] = useState(initialBonuses);
+  const [agents, setAgents] = useState();
+  const [sales, setSales] = useState();
+  const [attendance, setAttendance] = useState();
+  const [fines, setFines] = useState();
+  const [bonuses, setBonuses] = useState();
   const [selectedMonth, setSelectedMonth] = useState('December 2024');
-  const [lateTime, setLateTime] = useState('09:30');
+  const [lateTime, setLateTime] = useState('19:00');
+
+  // Fetch Data from Supabase
+  useEffect(() => {
+    const fetchData = async () => {
+      // 1. Fetch Agents
+      const { data: agentsData, error: agentsError } = await supabase
+        .from('agents')
+        .select('*');
+      if (agentsData) setAgents(agentsData);
+      if (agentsError) console.error('Error fetching agents:', agentsError);
+
+      // 2. Fetch Sales
+      const { data: salesData, error: salesError } = await supabase
+        .from('sales')
+        .select('*');
+      if (salesData) setSales(salesData);
+
+      // 3. Fetch other tables similarly (attendance, fines, bonuses)...
+    };
+
+    fetchData();
+  }, []);
   
   // Modals
   const [showAddAgent, setShowAddAgent] = useState(false);
@@ -210,19 +234,30 @@ const [editingAgent, setEditingAgent] = useState(null);
   }, [agents, sales, monthlyStats, selectedMonth, userRole, currentUser]);
 
   // Add Agent
-const handleAddAgent = (formData) => {
+const handleAddAgent = async (formData) => {
+  // 1. Prepare the data
   const newAgent = {
-    id: agents.length + 1,
     ...formData,
     status: 'Active',
     activeDate: new Date().toISOString().split('T')[0],
     leftDate: null
   };
-  setAgents([...agents, newAgent]);
-  setShowAddAgent(false);
+
+  // 2. Send to Supabase
+  const { data, error } = await supabase
+    .from('agents')
+    .insert([newAgent])
+    .select();
+
+  if (error) {
+    alert('Error adding agent: ' + error.message);
+  } else {
+    // 3. Update Local State (UI) using the data returned from Supabase
+    setAgents([...agents, ...data]); 
+    setShowAddAgent(false);
+  }
 };
 
-// Edit Agent
 // Edit Agent
 const handleEditAgent = (formData) => {
   setAgents(agents.map(a => 
@@ -258,18 +293,28 @@ const handleDeleteAgent = (agentId) => {
 };
 
   // Add Sale
-  const handleAddSale = (formData) => {
-    const newSale = {
-      id: sales.length + 1,
-      timestamp: new Date().toISOString(),
-      ...formData,
-      status: (formData.disposition === 'HW- Xfer' || formData.disposition === 'HW-IBXfer') ? 'Sale' : 'Unsuccessful',
-      date: new Date().toISOString().split('T')[0],
-      month: selectedMonth
-    };
-    setSales([...sales, newSale]);
-    setShowAddSale(false);
+  const handleAddSale = async (formData) => {
+  const newSale = {
+    timestamp: new Date().toISOString(),
+    ...formData,
+    // Add your existing status logic here
+    status: (formData.disposition === 'HW- Xfer' || formData.disposition === 'HW-IBXfer') ? 'Sale' : 'Unsuccessful',
+    date: new Date().toISOString().split('T')[0],
+    month: selectedMonth
   };
+
+  const { data, error } = await supabase
+    .from('sales')
+    .insert([newSale])
+    .select();
+
+  if (error) {
+    alert('Error adding sale: ' + error.message);
+  } else {
+    setSales([...sales, ...data]);
+    setShowAddSale(false);
+  }
+};
 
   // Edit Sale
   const handleEditSale = (formData) => {
