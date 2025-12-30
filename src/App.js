@@ -11,6 +11,50 @@ const initialAttendance = [];
 const initialFines = [];
 const initialBonuses = [];
 
+// HELPER: Calculate the 21st-20th Date Range
+const getPayrollRange = (monthStr) => {
+  if(!monthStr) return { start: new Date(), end: new Date() };
+  
+  const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const [mStr, yStr] = monthStr.split(' ');
+  const monthIndex = months.indexOf(mStr);
+  const year = parseInt(yStr);
+
+  // Current Month Cycle = Previous Month 21st to Current Month 20th
+  // Example: "December 2024" Cycle = Nov 21, 2024 to Dec 20, 2024
+  
+  let startYear = year;
+  let startMonth = monthIndex - 1;
+  
+  if (startMonth < 0) { // Handle January (Prev is Dec of prev year)
+    startMonth = 11;
+    startYear = year - 1;
+  }
+
+  // Set dates (Format: YYYY-MM-DD for string comparison)
+  const startDate = new Date(startYear, startMonth, 21); // 21st prev month
+  const endDate = new Date(year, monthIndex, 20);        // 20th curr month
+  
+  return { 
+    start: startDate, 
+    end: endDate,
+    // Helper to check if a date string (YYYY-MM-DD) falls in this range
+    includes: (dateStr) => {
+      const d = new Date(dateStr);
+      return d >= startDate && d <= endDate;
+    }
+  };
+};
+
+// HELPER: Generate all dates between start and end for the table columns
+const getDaysArray = (start, end) => {
+  let arr = [];
+  for(let dt=new Date(start); dt<=end; dt.setDate(dt.getDate()+1)){
+      arr.push(new Date(dt).toISOString().split('T')[0]);
+  }
+  return arr;
+};
+
 const AgentPayrollSystem = () => {
   // Login States
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -160,48 +204,10 @@ const AgentPayrollSystem = () => {
   };
 
   // Calculate monthly stats
-  const monthlyStats = useMemo(() => {
-    const filteredAgentsList = userRole === 'Agent' 
-      ? agents.filter(a => a.name === currentUser?.name)
-      : agents;
 
-    const agentStats = filteredAgentsList.map(agent => {
-      const approvedSales = sales.filter(s => 
-        s.agentName === agent.name && 
-        s.status === 'Sale' && 
-        s.month === selectedMonth
-      );
-      
-      const totalSales = approvedSales.length;
-      const totalRevenue = approvedSales.reduce((sum, s) => sum + s.amount, 0);
-      
-      const agentFines = fines.filter(f => 
-        f.agentName === agent.name && 
-        f.month === selectedMonth
-      ).reduce((sum, f) => sum + f.amount, 0);
-      
-      const agentBonuses = bonuses.filter(b => 
-        b.agentName === agent.name && 
-        b.month === selectedMonth
-      ).reduce((sum, b) => sum + b.amount, 0);
-      
-      const netSalary = agent.baseSalary + agentBonuses - agentFines;
-      
-      return {
-        ...agent,
-        totalSales,
-        totalRevenue,
-        totalFines: agentFines,
-        totalBonuses: agentBonuses,
-        netSalary
-      };
-    });
-    
-    return agentStats.sort((a, b) => b.totalSales - a.totalSales);
-  }, [agents, sales, fines, bonuses, selectedMonth, userRole, currentUser]);
 
   // Filtered data based on search and filters
-  const filteredAgents = useMemo(() => {
+    const filteredAgents = useMemo(() => {
     let result = userRole === 'Agent' 
       ? agents.filter(a => a.name === currentUser?.name)
       : agents;
@@ -214,6 +220,66 @@ const AgentPayrollSystem = () => {
       return matchesSearch && matchesTeam && matchesStatus && matchesShift;
     });
   }, [agents, searchQuery, teamFilter, statusFilter, shiftFilter, userRole, currentUser]);
+// --- UPDATED CALCULATIONS (Uses 21st-20th Logic) ---
+  const dateRange = useMemo(() => getPayrollRange(selectedMonth), [selectedMonth]);
+
+  const monthlyStats = useMemo(() => {
+    const filteredAgentsList = userRole === 'Agent' 
+      ? agents.filter(a => a.name === currentUser?.name)
+      : agents;
+
+    const agentStats = filteredAgentsList.map(agent => {
+      // Filter Sales by Date Range (21st - 20th)
+      const approvedSales = sales.filter(s => 
+        s.agentName === agent.name && 
+        s.status === 'Sale' && 
+        dateRange.includes(s.date) // <--- CHANGED THIS
+      );
+      
+      const totalSales = approvedSales.length;
+      const totalRevenue = approvedSales.reduce((sum, s) => sum + (s.amount || 0), 0);
+      
+      // Filter Fines by Date Range
+      const agentFines = fines.filter(f => 
+        f.agentName === agent.name && 
+        dateRange.includes(f.date) // <--- CHANGED THIS
+      ).reduce((sum, f) => sum + (f.amount || 0), 0);
+      
+      // Filter Bonuses (Assuming bonuses have a 'month' string, we keep string match or add date to bonus)
+      // For now, keeping string match for Bonus as it's usually monthly based
+      const agentBonuses = bonuses.filter(b => 
+        b.agentName === agent.name && 
+        b.month === selectedMonth 
+      ).reduce((sum, b) => sum + (b.amount || 0), 0);
+      
+      const netSalary = (agent.baseSalary || 0) + agentBonuses - agentFines;
+      
+      return {
+        ...agent,
+        totalSales,
+        totalRevenue,
+        totalFines: agentFines,
+        totalBonuses: agentBonuses,
+        netSalary
+      };
+    });
+    
+    return agentStats.sort((a, b) => b.totalSales - a.totalSales);
+  }, [agents, sales, fines, bonuses, selectedMonth, dateRange, userRole, currentUser]);
+
+  // Dashboard Stats
+  const dashboardStats = useMemo(() => {
+    const relevantAgents = userRole === 'Agent' ? 1 : agents.filter(a => a.status === 'Active').length;
+    const relevantSales = userRole === 'Agent' 
+      ? sales.filter(s => s.agentName === currentUser?.name && s.status === 'Sale' && dateRange.includes(s.date))
+      : sales.filter(s => s.status === 'Sale' && dateRange.includes(s.date));
+
+    const totalSalesCount = relevantSales.length;
+    const totalRevenue = relevantSales.reduce((sum, s) => sum + (s.amount || 0), 0);
+    const totalPayroll = monthlyStats.filter(a => a.status === 'Active').reduce((sum, a) => sum + a.netSalary, 0);
+    
+    return { totalAgents: relevantAgents, totalSalesCount, totalRevenue, totalPayroll };
+  }, [agents, sales, monthlyStats, dateRange, userRole, currentUser]);
 
   const filteredSales = useMemo(() => {
     let result = userRole === 'Agent'
@@ -265,19 +331,6 @@ const AgentPayrollSystem = () => {
     );
   }, [hrRecords, searchQuery]);
 
-  // Dashboard Stats
-  const dashboardStats = useMemo(() => {
-    const relevantAgents = userRole === 'Agent' ? 1 : agents.filter(a => a.status === 'Active').length;
-    const relevantSales = userRole === 'Agent' 
-      ? sales.filter(s => s.agentName === currentUser?.name && s.status === 'Sale' && s.month === selectedMonth)
-      : sales.filter(s => s.status === 'Sale' && s.month === selectedMonth);
-
-    const totalSalesCount = relevantSales.length;
-    const totalRevenue = relevantSales.reduce((sum, s) => sum + s.amount, 0);
-    const totalPayroll = monthlyStats.filter(a => a.status === 'Active').reduce((sum, a) => sum + a.netSalary, 0);
-    
-    return { totalAgents: relevantAgents, totalSalesCount, totalRevenue, totalPayroll };
-  }, [agents, sales, monthlyStats, selectedMonth, userRole, currentUser]);
 
   // Add Agent
   const handleAddAgent = async (formData) => {
@@ -734,6 +787,18 @@ const AgentPayrollSystem = () => {
                 </button>
               );
             })}
+
+<button 
+              onClick={() => { setActiveTab('monthly_matrix'); setSearchQuery(''); }}
+              className={`px-6 py-3 text-sm font-medium capitalize whitespace-nowrap transition-colors ${
+                activeTab === 'monthly_matrix' 
+                  ? 'border-b-2 border-blue-400 text-blue-400' 
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Monthly Matrix
+            </button>
+
             {userRole === 'Admin' && (
               <>
                 <button
@@ -1544,6 +1609,59 @@ const AgentPayrollSystem = () => {
                   </tr>
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+        {/* NEW MONTHLY SALES MATRIX TAB */}
+        {activeTab === 'monthly_matrix' && (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+               <h2 className="text-xl text-white font-bold">Daily Sales Breakdown ({selectedMonth})</h2>
+               <div className="text-sm text-slate-400">
+                 Cycle: {dateRange.start.toDateString()} - {dateRange.end.toDateString()}
+               </div>
+            </div>
+            
+            <div className="bg-slate-800 rounded-xl overflow-x-auto border border-slate-600">
+               <table className="w-full text-slate-300 border-collapse">
+                  <thead>
+                    <tr>
+                      <th className="p-3 text-left bg-slate-900 border-b border-r border-slate-700 sticky left-0 z-10 min-w-[150px]">Agent Name</th>
+                      {getDaysArray(dateRange.start, dateRange.end).map(dateStr => {
+                        const d = new Date(dateStr);
+                        return (
+                          <th key={dateStr} className="p-2 text-center bg-slate-900 border-b border-slate-700 min-w-[40px]">
+                            <div className="text-xs text-slate-500">{d.toLocaleDateString('en-US', { weekday: 'narrow' })}</div>
+                            <div className="font-bold text-white">{d.getDate()}</div>
+                          </th>
+                        );
+                      })}
+                      <th className="p-3 text-center bg-slate-900 border-b border-l border-slate-700 font-bold text-green-400">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {agents.filter(a => a.status === 'Active').map(agent => {
+                      const agentSales = sales.filter(s => s.agentName === agent.name && s.status === 'Sale');
+                      let rowTotal = 0;
+                      
+                      return (
+                        <tr key={agent.id} className="hover:bg-slate-700">
+                          <td className="p-3 font-medium text-white border-r border-slate-700 bg-slate-800 sticky left-0">{agent.name}</td>
+                          {getDaysArray(dateRange.start, dateRange.end).map(dateStr => {
+                            const dailyCount = agentSales.filter(s => s.date === dateStr).length;
+                            rowTotal += dailyCount;
+                            return (
+                              <td key={dateStr} className={`p-2 text-center border-b border-slate-700 ${dailyCount > 0 ? 'bg-green-900/20 text-green-400 font-bold' : 'text-slate-600'}`}>
+                                {dailyCount > 0 ? dailyCount : '-'}
+                              </td>
+                            );
+                          })}
+                          <td className="p-3 text-center border-l border-slate-700 font-bold text-white bg-slate-800/50">{rowTotal}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+               </table>
             </div>
           </div>
         )}
