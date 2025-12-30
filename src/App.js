@@ -412,7 +412,7 @@ const AgentPayrollSystem = () => {
 
   // [FIX] Import Data - Now Inserts into Database
   // [FIXED] Import Data - Now includes CNIC parsing
-  const handleImport = (file, lateTime) => {
+  const handleImport = (file, lateTimeVal) => {
     if (!file) return;
 
     const reader = new FileReader();
@@ -484,20 +484,25 @@ const AgentPayrollSystem = () => {
         if(!error) setSales([...sales, ...data]);
         else alert('Import Failed: ' + error.message);
 
+      // --- IMPORT ATTENDANCE ---
       } else if (importType === 'attendance') {
-         // ... (Keep existing Attendance logic)
          const rows = lines.map(line => line.split(',').map(v => v.trim()));
-         const dataRows = rows.slice(1);
+         const dataRows = rows.slice(1); // Skip header row
          const dateMap = {};
+         
          dataRows.forEach(row => {
+            // Index 2 is Name, Index 3 is Time (Based on your file)
             const name = row[2] ? row[2].trim().toLowerCase() : '';
             const timeStr = row[3] ? row[3].trim() : '';
+            
             if (name && timeStr) {
+               // Regex for "12/26/2025 6:21 PM"
                const dateTimeRegex = /(\d{1,2}\/\d{1,2}\/\d{4}) (\d{1,2}:\d{2}(:\d{2})?) ?(AM|PM)/i;
                const match = timeStr.match(dateTimeRegex);
                if (match) {
                  let [_, datePart, timePart, __, ampm] = match;
                  timePart = timePart + ' ' + ampm;
+                 
                  const dateParts = datePart.split('/');
                  let month = dateParts[0]; let day = dateParts[1];
                  if (parseInt(month) > 12) [month, day] = [day, month];
@@ -521,25 +526,39 @@ const AgentPayrollSystem = () => {
          const activeAgents = agents.filter(a => a.status === 'Active');
          const newAttendance = [];
          
+         const threshold = lateTimeVal || lateTime; // Use modal time or default
+
          Object.keys(dateMap).forEach(date => {
            activeAgents.forEach(agent => {
              const agentKey = agent.name.toLowerCase();
              const times = dateMap[date][agentKey] ? Array.from(dateMap[date][agentKey]).sort() : [];
+             
              const status = times.length > 0 ? 'Present' : 'Absent';
              const loginTime = times.length > 0 ? times[0] : '';
              const logoutTime = times.length > 1 ? times[times.length - 1] : '';
-             const isLate = loginTime && lateTime && loginTime > lateTime;
+             
+             // [FIX IS HERE] Force it to be True or False. Never empty string.
+             const isLate = (loginTime && threshold && loginTime > threshold) ? true : false;
              
              newAttendance.push({
-               date: date, agentName: agent.name, loginTime: loginTime,
-               logoutTime: logoutTime, status: status, late: isLate
+               date: date, 
+               agentName: agent.name, 
+               loginTime: loginTime,
+               logoutTime: logoutTime, 
+               status: status, 
+               late: isLate
              });
            });
          });
 
          const { data, error } = await supabase.from('attendance').insert(newAttendance).select();
-         if(!error) setAttendance([...attendance, ...data]);
-         else alert('Attendance Import Failed: ' + error.message);
+         
+         if(!error) {
+             setAttendance([...attendance, ...data]);
+             alert("Success! Attendance imported.");
+         } else {
+             alert('Attendance Import Failed: ' + error.message);
+         }
       }
       
       setShowImportModal(false);
@@ -574,7 +593,7 @@ const AgentPayrollSystem = () => {
             </div>
           </div>
           <h1 className="text-3xl font-bold text-center text-slate-800 mb-2">Welcome Back</h1>
-          <p className="text-center text-slate-500 mb-8">Login to Agent Management System</p>
+          <p className="text-center text-slate-500 mb-8">Login to Shark Management System</p>
           
           <form onSubmit={handleLogin} className="space-y-5">
             <div>
@@ -629,6 +648,17 @@ const AgentPayrollSystem = () => {
     );
   }
 
+  // Helper: Convert 24h time (18:21) to 12h format (6:21 PM) for display
+  const formatTime = (timeStr) => {
+    if (!timeStr) return '-';
+    const [hours, minutes] = timeStr.split(':');
+    let h = parseInt(hours, 10);
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12;
+    h = h ? h : 12; // the hour '0' should be '12'
+    return `${h}:${minutes} ${ampm}`;
+  };
+
   // MAIN DASHBOARD
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
@@ -641,7 +671,7 @@ const AgentPayrollSystem = () => {
                 <TrendingUp className="w-6 h-6" />
               </div>
               <div>
-                <h1 className="text-xl font-bold text-white">Agent Management System</h1>
+                <h1 className="text-xl font-bold text-white">Shark Management System</h1>
                 <div className="flex items-center gap-2 text-xs text-slate-400 mt-0.5">
                   <span className={`px-2 py-0.5 rounded-full font-medium ${
                     userRole === 'Admin' ? 'bg-purple-100 text-purple-700' : 
@@ -1321,13 +1351,16 @@ const AgentPayrollSystem = () => {
 <th className="text-center py-3 px-4 text-sm font-medium text-slate-200">Late</th>
                   </tr>
                 </thead>
-                <tbody>
+              <tbody>
                   {filteredAttendance.map(record => (
                     <tr key={record.id} className="border-b border-slate-700 hover:bg-slate-700">
                       <td className="py-3 px-4 text-slate-300">{record.date}</td>
                       <td className="py-3 px-4 font-medium text-white">{record.agentName}</td>
-                      <td className="py-3 px-4 text-slate-300">{record.loginTime}</td>
-                      <td className="py-3 px-4 text-slate-300">{record.logoutTime}</td>
+                      
+                      {/* [FIX] Use formatTime to show AM/PM */}
+                      <td className="py-3 px-4 text-slate-300">{formatTime(record.loginTime)}</td>
+                      <td className="py-3 px-4 text-slate-300">{formatTime(record.logoutTime)}</td>
+                      
                       <td className="py-3 px-4 text-center">
                         <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                           record.status === 'Present' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
