@@ -1,18 +1,14 @@
-import { useEffect } from 'react'; // Ensure useEffect is imported
-import { supabase } from './supabaseClient'; // Import the connection
+import { useEffect } from 'react'; 
+import { supabase } from './supabaseClient'; 
 import React, { useState, useMemo } from 'react';
-import { Users, DollarSign, Calendar, AlertCircle, TrendingUp, Download, Plus, Check, X, Upload, LogOut, Lock } from 'lucide-react';
+import { Users, DollarSign, Calendar, AlertCircle, TrendingUp, Download, Plus, Check, X, Upload, LogOut, Lock, Briefcase } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
-// Sample Data
+// Sample Data (Kept for reference as requested)
 const initialAgents = [];
-
 const initialSales = [];
-
 const initialAttendance = [];
-
 const initialFines = [];
-
 const initialBonuses = [];
 
 const AgentPayrollSystem = () => {
@@ -25,40 +21,65 @@ const AgentPayrollSystem = () => {
 
   // App States
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [agents, setAgents] = useState();
-  const [sales, setSales] = useState();
-  const [attendance, setAttendance] = useState();
-  const [fines, setFines] = useState();
-  const [bonuses, setBonuses] = useState();
+  const [agents, setAgents] = useState([]);
+  const [sales, setSales] = useState([]);
+  const [attendance, setAttendance] = useState([]);
+  const [fines, setFines] = useState([]);
+  const [bonuses, setBonuses] = useState([]);
+  const [hrRecords, setHrRecords] = useState([]); // [NEW] HR State
   const [selectedMonth, setSelectedMonth] = useState('December 2024');
   const [lateTime, setLateTime] = useState('19:00');
 
-  // Fetch Data from Supabase
+  // [FIX 1] Session Persistence: Check LocalStorage on Load
   useEffect(() => {
-    const fetchData = async () => {
+    const storedUser = localStorage.getItem('ams_user');
+    const storedRole = localStorage.getItem('ams_role');
+    
+    if (storedUser && storedRole) {
+      setCurrentUser(JSON.parse(storedUser));
+      setUserRole(storedRole);
+      setIsLoggedIn(true);
+    }
+  }, []);
+
+  // Fetch Data from Supabase
+  const fetchData = async () => {
       // 1. Fetch Agents
-      const { data: agentsData, error: agentsError } = await supabase
-        .from('agents')
-        .select('*');
+      const { data: agentsData, error: agentsError } = await supabase.from('agents').select('*');
       if (agentsData) setAgents(agentsData);
       if (agentsError) console.error('Error fetching agents:', agentsError);
 
       // 2. Fetch Sales
-      const { data: salesData, error: salesError } = await supabase
-        .from('sales')
-        .select('*');
+      const { data: salesData } = await supabase.from('sales').select('*');
       if (salesData) setSales(salesData);
 
-      // 3. Fetch other tables similarly (attendance, fines, bonuses)...
-    };
+      // 3. Fetch Fines
+      const { data: finesData } = await supabase.from('fines').select('*');
+      if (finesData) setFines(finesData);
 
-    fetchData();
-  }, []);
-  
+      // 4. Fetch Bonuses
+      const { data: bonusData } = await supabase.from('bonuses').select('*');
+      if (bonusData) setBonuses(bonusData);
+      
+      // 5. Fetch Attendance
+      const { data: attData } = await supabase.from('attendance').select('*');
+      if (attData) setAttendance(attData);
+
+      // 6. [NEW] Fetch HR Records
+      const { data: hrData } = await supabase.from('hr_records').select('*');
+      if (hrData) setHrRecords(hrData);
+  };
+
+  useEffect(() => {
+    if (isLoggedIn) {
+      fetchData();
+    }
+  }, [isLoggedIn]); // Only fetch when logged in
+   
   // Modals
   const [showAddAgent, setShowAddAgent] = useState(false);
-const [showEditAgent, setShowEditAgent] = useState(false);
-const [editingAgent, setEditingAgent] = useState(null);
+  const [showEditAgent, setShowEditAgent] = useState(false);
+  const [editingAgent, setEditingAgent] = useState(null);
   const [showAddSale, setShowAddSale] = useState(false);
   const [editSale, setEditSale] = useState(null);
   const [showAddFine, setShowAddFine] = useState(false);
@@ -66,6 +87,9 @@ const [editingAgent, setEditingAgent] = useState(null);
   const [showImportModal, setShowImportModal] = useState(false);
   const [importType, setImportType] = useState('');
   
+  // [NEW] HR Modal State
+  const [showAddEmployee, setShowAddEmployee] = useState(false);
+   
   // Search and Filter States
   const [searchQuery, setSearchQuery] = useState('');
   const [teamFilter, setTeamFilter] = useState('All');
@@ -78,32 +102,43 @@ const [editingAgent, setEditingAgent] = useState(null);
     e.preventDefault();
     setLoginError('');
 
+    let role = '';
+    let user = null;
+
     // Check Admin
     if (loginData.name === "Admin" && loginData.password === "admin123") {
-      setUserRole('Admin');
-      setCurrentUser({ name: 'Admin' });
-      setIsLoggedIn(true);
-      return;
-    }
-
+      role = 'Admin';
+      user = { name: 'Admin' };
+    } 
     // Check QA
-    if (loginData.name === "QA" && loginData.password === "qa123") {
-      setUserRole('QA');
-      setCurrentUser({ name: 'QA' });
-      setIsLoggedIn(true);
-      return;
+    else if (loginData.name === "QA" && loginData.password === "qa123") {
+      role = 'QA';
+      user = { name: 'QA' };
+    }
+    // [NEW] Check HR
+    else if (loginData.name === "HR" && loginData.password === "hr123") {
+      role = 'HR';
+      user = { name: 'HR Manager' };
+    }
+    // Check Agents
+    else {
+      const agent = agents.find(a => 
+        a.name.toLowerCase() === loginData.name.toLowerCase() && 
+        a.password === loginData.password
+      );
+      if (agent) {
+        role = 'Agent';
+        user = agent;
+      }
     }
 
-    // Check Agents
-    const agent = agents.find(a => 
-      a.name.toLowerCase() === loginData.name.toLowerCase() && 
-      a.password === loginData.password
-    );
-
-    if (agent) {
-      setUserRole('Agent');
-      setCurrentUser(agent);
+    if (role && user) {
+      setUserRole(role);
+      setCurrentUser(user);
       setIsLoggedIn(true);
+      // [FIX] Save session
+      localStorage.setItem('ams_user', JSON.stringify(user));
+      localStorage.setItem('ams_role', role);
     } else {
       setLoginError('Invalid Username or Password');
     }
@@ -119,6 +154,9 @@ const [editingAgent, setEditingAgent] = useState(null);
     setTeamFilter('All');
     setStatusFilter('All');
     setShiftFilter('All');
+    // [FIX] Clear session
+    localStorage.removeItem('ams_user');
+    localStorage.removeItem('ams_role');
   };
 
   // Calculate monthly stats
@@ -184,7 +222,7 @@ const [editingAgent, setEditingAgent] = useState(null);
 
     return result.filter(sale => {
       const matchesSearch = sale.agentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                           sale.campaign.toLowerCase().includes(searchQuery.toLowerCase());
+                            sale.campaignType?.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesMonth = sale.month === selectedMonth;
       const matchesStatus = statusFilter === 'All' || statusFilter === 'All Status' || sale.status === statusFilter;
       return matchesSearch && matchesMonth && matchesStatus;
@@ -205,7 +243,7 @@ const [editingAgent, setEditingAgent] = useState(null);
   const filteredFines = useMemo(() => {
     return fines.filter(fine => {
       const matchesSearch = fine.agentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                           fine.reason.toLowerCase().includes(searchQuery.toLowerCase());
+                            fine.reason.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesMonth = fine.month === selectedMonth;
       return matchesSearch && matchesMonth;
     });
@@ -218,6 +256,14 @@ const [editingAgent, setEditingAgent] = useState(null);
       return matchesSearch && matchesMonth;
     });
   }, [bonuses, searchQuery, selectedMonth]);
+
+  // [NEW] HR Filters
+  const filteredHR = useMemo(() => {
+    return hrRecords.filter(rec => 
+      rec.agent_name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      rec.designation.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [hrRecords, searchQuery]);
 
   // Dashboard Stats
   const dashboardStats = useMemo(() => {
@@ -234,153 +280,143 @@ const [editingAgent, setEditingAgent] = useState(null);
   }, [agents, sales, monthlyStats, selectedMonth, userRole, currentUser]);
 
   // Add Agent
-const handleAddAgent = async (formData) => {
-  // 1. Prepare the data
-  const newAgent = {
-    ...formData,
-    status: 'Active',
-    activeDate: new Date().toISOString().split('T')[0],
-    leftDate: null
+  const handleAddAgent = async (formData) => {
+    const newAgent = { ...formData, status: 'Active', activeDate: new Date().toISOString().split('T')[0], leftDate: null };
+    const { data, error } = await supabase.from('agents').insert([newAgent]).select();
+
+    if (error) { alert('Error adding agent: ' + error.message); } 
+    else { setAgents([...agents, ...data]); setShowAddAgent(false); }
   };
 
-  // 2. Send to Supabase
-  const { data, error } = await supabase
-    .from('agents')
-    .insert([newAgent])
-    .select();
+  // [FIX] Edit Agent - Now saves to Database
+  const handleEditAgent = async (formData) => {
+    const { error } = await supabase.from('agents').update(formData).eq('id', editingAgent.id);
+    
+    if (error) { alert('Error updating agent: ' + error.message); }
+    else {
+      setAgents(agents.map(a => a.id === editingAgent.id ? { ...a, ...formData } : a));
+      setShowEditAgent(false);
+      setEditingAgent(null);
+    }
+  };
 
-  if (error) {
-    alert('Error adding agent: ' + error.message);
-  } else {
-    // 3. Update Local State (UI) using the data returned from Supabase
-    setAgents([...agents, ...data]); 
-    setShowAddAgent(false);
-  }
-};
+  const handleMarkAsLeft = async (agentId) => {
+    if (window.confirm('Are you sure?')) {
+      const leftDate = new Date().toISOString().split('T')[0];
+      const { error } = await supabase.from('agents').update({ status: 'Left', leftDate }).eq('id', agentId);
+      if (!error) {
+        setAgents(agents.map(a => a.id === agentId ? { ...a, status: 'Left', leftDate } : a));
+      }
+    }
+  };
 
-// Edit Agent
-const handleEditAgent = (formData) => {
-  setAgents(agents.map(a => 
-    a.id === editingAgent.id ? { ...a, ...formData } : a
-  ));
-  setShowEditAgent(false);
-  setEditingAgent(null);
-};
+  const handleReactivateAgent = async (agentId) => {
+    if (window.confirm('Reactivate?')) {
+      const { error } = await supabase.from('agents').update({ status: 'Active', leftDate: null }).eq('id', agentId);
+      if (!error) {
+         setAgents(agents.map(a => a.id === agentId ? { ...a, status: 'Active', leftDate: null } : a));
+      }
+    }
+  };
 
-// Mark Agent as Left
-const handleMarkAsLeft = (agentId) => {
-  if (window.confirm('Are you sure you want to mark this agent as Left?')) {
-    setAgents(agents.map(a => 
-      a.id === agentId ? { ...a, status: 'Left', leftDate: new Date().toISOString().split('T')[0] } : a
-    ));
-  }
-};
-
-// Reactivate Agent
-const handleReactivateAgent = (agentId) => {
-  if (window.confirm('Are you sure you want to reactivate this agent?')) {
-    setAgents(agents.map(a => 
-      a.id === agentId ? { ...a, status: 'Active', leftDate: null } : a
-    ));
-  }
-};
-
-// Delete Agent
-const handleDeleteAgent = (agentId) => {
-  if (window.confirm('Are you sure you want to delete this agent? This action cannot be undone.')) {
-    setAgents(agents.filter(a => a.id !== agentId));
-  }
-};
+  const handleDeleteAgent = async (agentId) => {
+    if (window.confirm('Delete this agent?')) {
+      const { error } = await supabase.from('agents').delete().eq('id', agentId);
+      if (!error) setAgents(agents.filter(a => a.id !== agentId));
+    }
+  };
 
   // Add Sale
   const handleAddSale = async (formData) => {
-  const newSale = {
-    timestamp: new Date().toISOString(),
-    ...formData,
-    // Add your existing status logic here
-    status: (formData.disposition === 'HW- Xfer' || formData.disposition === 'HW-IBXfer') ? 'Sale' : 'Unsuccessful',
-    date: new Date().toISOString().split('T')[0],
-    month: selectedMonth
-  };
-
-  const { data, error } = await supabase
-    .from('sales')
-    .insert([newSale])
-    .select();
-
-  if (error) {
-    alert('Error adding sale: ' + error.message);
-  } else {
-    setSales([...sales, ...data]);
-    setShowAddSale(false);
-  }
-};
-
-  // Edit Sale
-  const handleEditSale = (formData) => {
-    setSales(sales.map(s => s.id === editSale.id ? { ...s, ...formData, status: (formData.disposition === 'HW- Xfer' || formData.disposition === 'HW-IBXfer') ? 'Sale' : 'Unsuccessful' } : s));
-    setEditSale(null);
-  };
-
-  // Update Sale Status (QA Approval)
-  const updateSaleStatus = (saleId, newStatus) => {
-    setSales(sales.map(s => s.id === saleId ? { ...s, status: newStatus } : s));
-  };
-
-  // Update Sale Disposition
-  const updateSaleDisposition = (saleId, newDisposition) => {
-    setSales(sales.map(s => s.id === saleId ? { ...s, disposition: newDisposition, status: (newDisposition === 'HW- Xfer' || newDisposition === 'HW-IBXfer') ? 'Sale' : 'Unsuccessful' } : s));
-  };
-
-  // Update Sale Field
-  const updateSaleField = (saleId, field, value) => {
-    if (field === 'dockDetails' && value && value.trim()) {
-      const sale = sales.find(s => s.id === saleId);
-      if (!sale.dockDetails || sale.dockDetails !== value) {
-        // add fine
-        const newFine = {
-          id: fines.length + 1,
-          agentName: sale.agentName,
-          reason: `Dock Details: ${value}`,
-          amount: 1000,
-          date: new Date().toISOString().split('T')[0],
-          month: selectedMonth
-        };
-        setFines(prev => [...prev, newFine]);
-      }
-    }
-    setSales(prev => prev.map(s => s.id === saleId ? { ...s, [field]: value } : s));
-  };
-
-  // Add Fine
-  const handleAddFine = (formData) => {
-    const newFine = {
-      id: fines.length + 1,
+    const newSale = {
+      timestamp: new Date().toISOString(),
       ...formData,
+      status: (formData.disposition === 'HW- Xfer' || formData.disposition === 'HW-IBXfer') ? 'Sale' : 'Unsuccessful',
       date: new Date().toISOString().split('T')[0],
       month: selectedMonth
     };
-    setFines([...fines, newFine]);
-    setShowAddFine(false);
+
+    const { data, error } = await supabase.from('sales').insert([newSale]).select();
+    if (error) { alert('Error adding sale: ' + error.message); } 
+    else { setSales([...sales, ...data]); setShowAddSale(false); }
+  };
+
+  // [FIX] Edit Sale - Now saves to Database
+  const handleEditSale = async (formData) => {
+    const updatedStatus = (formData.disposition === 'HW- Xfer' || formData.disposition === 'HW-IBXfer') ? 'Sale' : 'Unsuccessful';
+    const { error } = await supabase.from('sales').update({ ...formData, status: updatedStatus }).eq('id', editSale.id);
+
+    if (error) { alert('Error updating sale'); }
+    else {
+      setSales(sales.map(s => s.id === editSale.id ? { ...s, ...formData, status: updatedStatus } : s));
+      setEditSale(null);
+    }
+  };
+
+  // [FIX] Update Sale Field directly to DB
+  const updateSaleField = async (saleId, field, value) => {
+    const { error } = await supabase.from('sales').update({ [field]: value }).eq('id', saleId);
+    if (!error) {
+       // Logic for fine on Dock Details
+       if (field === 'dockDetails' && value && value.trim()) {
+           const sale = sales.find(s => s.id === saleId);
+           if (!sale.dockDetails || sale.dockDetails !== value) {
+               const newFine = {
+                 agentName: sale.agentName,
+                 reason: `Dock Details: ${value}`,
+                 amount: 1000,
+                 date: new Date().toISOString().split('T')[0],
+                 month: selectedMonth
+               };
+               // Save fine to DB
+               const { data: fineData } = await supabase.from('fines').insert([newFine]).select();
+               if(fineData) setFines(prev => [...prev, ...fineData]);
+           }
+       }
+       setSales(prev => prev.map(s => s.id === saleId ? { ...s, [field]: value } : s));
+    }
+  };
+
+  // Update Disposition
+  const updateSaleDisposition = async (saleId, newDisposition) => {
+    const newStatus = (newDisposition === 'HW- Xfer' || newDisposition === 'HW-IBXfer') ? 'Sale' : 'Unsuccessful';
+    const { error } = await supabase.from('sales').update({ disposition: newDisposition, status: newStatus }).eq('id', saleId);
+    if (!error) {
+       setSales(sales.map(s => s.id === saleId ? { ...s, disposition: newDisposition, status: newStatus } : s));
+    }
+  };
+
+  // Add Fine
+  const handleAddFine = async (formData) => {
+    const newFine = { ...formData, date: new Date().toISOString().split('T')[0], month: selectedMonth };
+    const { data, error } = await supabase.from('fines').insert([newFine]).select();
+    if (!error) { setFines([...fines, ...data]); setShowAddFine(false); }
   };
 
   // Add Bonus
-  const handleAddBonus = (formData) => {
-    const newBonus = {
-      id: bonuses.length + 1,
-      ...formData,
-      month: selectedMonth
-    };
-    setBonuses([...bonuses, newBonus]);
-    setShowAddBonus(false);
+  const handleAddBonus = async (formData) => {
+    const newBonus = { ...formData, month: selectedMonth };
+    const { data, error } = await supabase.from('bonuses').insert([newBonus]).select();
+    if (!error) { setBonuses([...bonuses, ...data]); setShowAddBonus(false); }
   };
 
-  // Import Data from CSV/XLS
+  // [NEW] Add Employee (HR)
+  const handleAddEmployee = async (formData) => {
+    const { data, error } = await supabase.from('hr_records').insert([formData]).select();
+    if(error) alert('Error adding employee: ' + error.message);
+    else {
+      setHrRecords([...hrRecords, ...data]);
+      setShowAddEmployee(false);
+    }
+  };
+
+  // [FIX] Import Data - Now Inserts into Database
+  // [FIXED] Import Data - Now includes CNIC parsing
   const handleImport = (file, lateTime) => {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       let lines = [];
       if (file.name.endsWith('.csv')) {
         const text = e.target.result;
@@ -394,7 +430,6 @@ const handleDeleteAgent = (agentId) => {
           const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
           lines = rows.map(row => row.map(cell => cell || '').join(',')).filter(line => line.trim());
         } catch (error) {
-          // If XLS parsing fails, try as CSV
           const text = new TextDecoder().decode(e.target.result);
           lines = text.split('\n').filter(line => line.trim());
         }
@@ -403,139 +438,115 @@ const handleDeleteAgent = (agentId) => {
       if (importType === 'agents') {
         const newAgents = lines.slice(1).map((line, idx) => {
           const values = line.split(',').map(v => v.trim());
+          if(!values[0]) return null;
           return {
-            id: agents.length + idx + 1,
-            name: values[0],
-            password: '123',
-            team: values[1],
+            name: values[0], 
+            team: values[1], 
             shift: values[2],
-            baseSalary: parseInt(values[3]),
+            baseSalary: parseInt(values[3]) || 0,
+            cnic: values[4] || '', // [ADDED] Read CNIC from 5th column
+            password: '123', 
             status: 'Active',
-            activeDate: new Date().toISOString().split('T')[0],
+            activeDate: new Date().toISOString().split('T')[0], 
             leftDate: null
           };
-        });
-        setAgents([...agents, ...newAgents]);
+        }).filter(Boolean);
+
+        // Bulk Insert
+        const { data, error } = await supabase.from('agents').insert(newAgents).select();
+        if(!error) {
+            setAgents([...agents, ...data]);
+            alert('Agents imported successfully!');
+        } else {
+            alert('Import Failed: ' + error.message);
+        }
+
       } else if (importType === 'sales') {
+        // ... (Keep existing Sales logic)
         const newSales = lines.slice(1).map((line, idx) => {
           const values = line.split(',').map(v => v.trim());
+          if(!values[0]) return null;
           return {
-            id: sales.length + idx + 1,
-            timestamp: new Date().toISOString(),
-            agentName: values[0],
-            customerName: values[1] || '',
-            phoneNumber: values[2] || '',
-            state: values[3] || '',
-            zip: values[4] || '',
-            address: values[5] || '',
-            campaignType: values[6] || '',
-            center: values[7] || '',
-            teamLead: values[8] || '',
-            comments: values[9] || '',
-            listId: values[10] || '',
-            disposition: values[11] || '',
-            duration: values[12] || '',
-            xferTime: values[13] || '',
-            xferAttempts: values[14] || '',
-            feedbackBeforeXfer: values[15] || '',
-            feedbackAfterXfer: values[16] || '',
-            grading: values[17] || '',
-            dockDetails: values[18] || '',
-            evaluator: values[19] || '',
+            timestamp: new Date().toISOString(), agentName: values[0], customerName: values[1] || '',
+            phoneNumber: values[2] || '', state: values[3] || '', zip: values[4] || '',
+            address: values[5] || '', campaignType: values[6] || '', center: values[7] || '',
+            teamLead: values[8] || '', comments: values[9] || '', listId: values[10] || '',
+            disposition: values[11] || '', duration: values[12] || '', xferTime: values[13] || '',
+            xferAttempts: values[14] || '', feedbackBeforeXfer: values[15] || '', feedbackAfterXfer: values[16] || '',
+            grading: values[17] || '', dockDetails: values[18] || '', evaluator: values[19] || '',
             amount: parseInt(values[20]) || 0,
             status: values[21] || ((values[11] === 'HW- Xfer' || values[11] === 'HW-IBXfer') ? 'Sale' : 'Unsuccessful'),
-            date: new Date().toISOString().split('T')[0],
-            month: selectedMonth
+            date: new Date().toISOString().split('T')[0], month: selectedMonth
           };
-        });
-        setSales([...sales, ...newSales]);
+        }).filter(Boolean);
+
+        const { data, error } = await supabase.from('sales').insert(newSales).select();
+        if(!error) setSales([...sales, ...data]);
+        else alert('Import Failed: ' + error.message);
+
       } else if (importType === 'attendance') {
-        // Parse XLS rows
-        const rows = lines.map(line => line.split(',').map(v => v.trim()));
-        const dataRows = rows.slice(1); // skip header
-        
-        // Collect all unique dates and agents present per date
-        const dateMap = {};
-        dataRows.forEach(row => {
-          const name = row[2] ? row[2].trim().toLowerCase() : '';
-          const timeStr = row[3] ? row[3].trim() : '';
-          if (name && timeStr) {
-            // Parse time format: "12/26/2025 6:21 PM" or similar
-            const dateTimeRegex = /(\d{1,2}\/\d{1,2}\/\d{4}) (\d{1,2}:\d{2}(:\d{2})?) ?(AM|PM)/i;
-            const match = timeStr.match(dateTimeRegex);
-            if (match) {
-              const datePart = match[1];
-              const timePart = match[2] + ' ' + match[3];
-              
-              // Convert date to YYYY-MM-DD
-              const dateParts = datePart.split('/');
-              let month = dateParts[0];
-              let day = dateParts[1];
-              if (parseInt(month) > 12) {
-                // Assume DD/MM/YYYY, swap
-                [month, day] = [day, month];
-              }
-              month = month.padStart(2, '0');
-              day = day.padStart(2, '0');
-              const year = dateParts[2];
-              const date = `${year}-${month}-${day}`;
-              
-              // Convert time to 24-hour format
-              const timeParts = timePart.split(' ');
-              const hm = timeParts[0].split(':');
-              let hour = parseInt(hm[0]);
-              const min = hm[1];
-              const ampm = timeParts[1];
-              if (ampm.toUpperCase() === 'PM' && hour !== 12) hour += 12;
-              if (ampm.toUpperCase() === 'AM' && hour === 12) hour = 0;
-              const time = `${hour.toString().padStart(2, '0')}:${min}`;
-              
-              if (!dateMap[date]) dateMap[date] = {};
-              if (!dateMap[date][name]) dateMap[date][name] = new Set();
-              dateMap[date][name].add(time);
+         // ... (Keep existing Attendance logic)
+         const rows = lines.map(line => line.split(',').map(v => v.trim()));
+         const dataRows = rows.slice(1);
+         const dateMap = {};
+         dataRows.forEach(row => {
+            const name = row[2] ? row[2].trim().toLowerCase() : '';
+            const timeStr = row[3] ? row[3].trim() : '';
+            if (name && timeStr) {
+               const dateTimeRegex = /(\d{1,2}\/\d{1,2}\/\d{4}) (\d{1,2}:\d{2}(:\d{2})?) ?(AM|PM)/i;
+               const match = timeStr.match(dateTimeRegex);
+               if (match) {
+                 let [_, datePart, timePart, __, ampm] = match;
+                 timePart = timePart + ' ' + ampm;
+                 const dateParts = datePart.split('/');
+                 let month = dateParts[0]; let day = dateParts[1];
+                 if (parseInt(month) > 12) [month, day] = [day, month];
+                 month = month.padStart(2, '0'); day = day.padStart(2, '0');
+                 const date = `${dateParts[2]}-${month}-${day}`;
+
+                 const timeParts = timePart.split(' ');
+                 const hm = timeParts[0].split(':');
+                 let hour = parseInt(hm[0]);
+                 if (timeParts[1].toUpperCase() === 'PM' && hour !== 12) hour += 12;
+                 if (timeParts[1].toUpperCase() === 'AM' && hour === 12) hour = 0;
+                 const time = `${hour.toString().padStart(2, '0')}:${hm[1]}`;
+
+                 if (!dateMap[date]) dateMap[date] = {};
+                 if (!dateMap[date][name]) dateMap[date][name] = new Set();
+                 dateMap[date][name].add(time);
+               }
             }
-          }
-        });
-        
-        // Get active agents
-        const activeAgents = agents.filter(a => a.status === 'Active');
-        
-        // Create attendance records
-        const newAttendance = [];
-        Object.keys(dateMap).forEach(date => {
-          activeAgents.forEach(agent => {
-            const agentKey = agent.name.toLowerCase();
-            const times = dateMap[date][agentKey] ? Array.from(dateMap[date][agentKey]).sort() : [];
-            const status = times.length > 0 ? 'Present' : 'Absent';
-            const loginTime = times.length > 0 ? times[0] : ''; // earliest time
-            const logoutTime = times.length > 1 ? times[times.length - 1] : ''; // latest time
-            
-            // Check if late
-            const isLate = loginTime && lateTime && loginTime > lateTime;
-            
-            newAttendance.push({
-              id: attendance.length + newAttendance.length + 1,
-              date: date,
-              agentName: agent.name,
-              loginTime: loginTime,
-              logoutTime: logoutTime,
-              status: status,
-              late: isLate
-            });
-          });
-        });
-        
-        setAttendance([...attendance, ...newAttendance]);
+         });
+
+         const activeAgents = agents.filter(a => a.status === 'Active');
+         const newAttendance = [];
+         
+         Object.keys(dateMap).forEach(date => {
+           activeAgents.forEach(agent => {
+             const agentKey = agent.name.toLowerCase();
+             const times = dateMap[date][agentKey] ? Array.from(dateMap[date][agentKey]).sort() : [];
+             const status = times.length > 0 ? 'Present' : 'Absent';
+             const loginTime = times.length > 0 ? times[0] : '';
+             const logoutTime = times.length > 1 ? times[times.length - 1] : '';
+             const isLate = loginTime && lateTime && loginTime > lateTime;
+             
+             newAttendance.push({
+               date: date, agentName: agent.name, loginTime: loginTime,
+               logoutTime: logoutTime, status: status, late: isLate
+             });
+           });
+         });
+
+         const { data, error } = await supabase.from('attendance').insert(newAttendance).select();
+         if(!error) setAttendance([...attendance, ...data]);
+         else alert('Attendance Import Failed: ' + error.message);
       }
       
       setShowImportModal(false);
     };
     
-    if (file.name.endsWith('.csv')) {
-      reader.readAsText(file);
-    } else {
-      reader.readAsArrayBuffer(file);
-    }
+    if (file.name.endsWith('.csv')) { reader.readAsText(file); } 
+    else { reader.readAsArrayBuffer(file); }
   };
 
   // Export to CSV
@@ -609,6 +620,7 @@ const handleDeleteAgent = (agentId) => {
             <div className="space-y-1 text-xs text-slate-600">
               <p><span className="font-bold">Admin:</span> Admin / admin123</p>
               <p><span className="font-bold">QA:</span> QA / qa123</p>
+              <p><span className="font-bold">HR:</span> HR / hr123</p>
               <p><span className="font-bold">Agent:</span> Ahmed Khan / 123</p>
             </div>
           </div>
@@ -695,48 +707,33 @@ const handleDeleteAgent = (agentId) => {
             {userRole === 'Admin' && (
               <>
                 <button
-                  onClick={() => {
-                    setActiveTab('agents');
-                    setSearchQuery('');
-                    setTeamFilter('All');
-                    setStatusFilter('All');
-                    setShiftFilter('All');
-                  }}
-                  className={`px-6 py-3 text-sm font-medium capitalize transition-colors ${
-  activeTab === 'agents'
-    ? 'border-b-2 border-blue-400 text-blue-400'
-    : 'text-slate-400 hover:text-white'
-}`}
+                  onClick={() => { setActiveTab('agents'); setSearchQuery(''); }}
+                  className={`px-6 py-3 text-sm font-medium capitalize transition-colors ${activeTab === 'agents' ? 'border-b-2 border-blue-400 text-blue-400' : 'text-slate-400 hover:text-white'}`}
                 >
                   Agents
                 </button>
                 <button
-                  onClick={() => {
-                    setActiveTab('fines');
-                    setSearchQuery('');
-                  }}
-                  className={`px-6 py-3 text-sm font-medium capitalize transition-colors ${
-  activeTab === 'fines'
-    ? 'border-b-2 border-blue-400 text-blue-400'
-    : 'text-slate-400 hover:text-white'
-}`}
+                  onClick={() => { setActiveTab('fines'); setSearchQuery(''); }}
+                  className={`px-6 py-3 text-sm font-medium capitalize transition-colors ${activeTab === 'fines' ? 'border-b-2 border-blue-400 text-blue-400' : 'text-slate-400 hover:text-white'}`}
                 >
                   Fines
                 </button>
                 <button
-                  onClick={() => {
-                    setActiveTab('bonuses');
-                    setSearchQuery('');
-                  }}
-                  className={`px-6 py-3 text-sm font-medium capitalize transition-colors ${
-  activeTab === 'bonuses'
-    ? 'border-b-2 border-blue-400 text-blue-400'
-    : 'text-slate-400 hover:text-white'
-}`}
+                  onClick={() => { setActiveTab('bonuses'); setSearchQuery(''); }}
+                  className={`px-6 py-3 text-sm font-medium capitalize transition-colors ${activeTab === 'bonuses' ? 'border-b-2 border-blue-400 text-blue-400' : 'text-slate-400 hover:text-white'}`}
                 >
                   Bonuses
                 </button>
               </>
+            )}
+            {/* [NEW] HR Tab */}
+            {(userRole === 'Admin' || userRole === 'HR') && (
+              <button
+                  onClick={() => { setActiveTab('hr'); setSearchQuery(''); }}
+                  className={`px-6 py-3 text-sm font-medium capitalize transition-colors ${activeTab === 'hr' ? 'border-b-2 border-blue-400 text-blue-400' : 'text-slate-400 hover:text-white'}`}
+              >
+                  HR Team
+              </button>
             )}
           </div>
         </div>
@@ -825,6 +822,52 @@ const handleDeleteAgent = (agentId) => {
               </div>
             </div>
           </div>
+        )}
+
+        {/* [NEW] HR Tab Content */}
+        {activeTab === 'hr' && (
+           <div className="space-y-6">
+             <div className="flex justify-between items-center">
+                <h2 className="text-xl font-semibold text-white">HR - Employment Data</h2>
+                <button onClick={() => setShowAddEmployee(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                   <Plus className="w-4 h-4" /> Add Employee
+                </button>
+             </div>
+             
+             {/* HR Search */}
+             <div className="bg-slate-800/50 rounded-xl shadow-sm border border-slate-600 p-4">
+                <input type="text" placeholder="Search employee..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
+                  className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 placeholder-slate-400 w-full" />
+             </div>
+
+             <div className="bg-slate-800/80 rounded-xl shadow-sm border border-slate-600 overflow-hidden">
+                <table className="w-full text-left">
+                   <thead className="bg-slate-900">
+                      <tr>
+                         <th className="py-3 px-4 text-sm font-medium text-slate-200">Name</th>
+                         <th className="py-3 px-4 text-sm font-medium text-slate-200">Designation</th>
+                         <th className="py-3 px-4 text-sm font-medium text-slate-200">CNIC</th>
+                         <th className="py-3 px-4 text-sm font-medium text-slate-200">Joining Date</th>
+                         <th className="py-3 px-4 text-sm font-medium text-slate-200">Bank Details</th>
+                         <th className="py-3 px-4 text-sm font-medium text-slate-200">Status</th>
+                      </tr>
+                   </thead>
+                   <tbody>
+                      {filteredHR.map((rec) => (
+                         <tr key={rec.id} className="border-b border-slate-700 hover:bg-slate-700">
+                            <td className="py-3 px-4 text-white font-medium">{rec.agent_name}</td>
+                            <td className="py-3 px-4 text-slate-300">{rec.designation}</td>
+                            <td className="py-3 px-4 text-slate-300">{rec.cnic}</td>
+                            <td className="py-3 px-4 text-slate-300">{rec.joining_date}</td>
+                            <td className="py-3 px-4 text-slate-300 text-xs">{rec.bank_name}<br/>{rec.account_number}</td>
+                            <td className="py-3 px-4"><span className="bg-green-100 text-green-700 px-2 py-1 rounded text-xs">{rec.status}</span></td>
+                         </tr>
+                      ))}
+                      {filteredHR.length === 0 && <tr><td colSpan="6" className="p-4 text-center text-slate-500">No records found</td></tr>}
+                   </tbody>
+                </table>
+             </div>
+           </div>
         )}
 
         {/* Agents Tab */}
@@ -1475,41 +1518,33 @@ const handleDeleteAgent = (agentId) => {
 
       {/* Modals */}
       {showAddAgent && <AgentModal onClose={() => setShowAddAgent(false)} onSubmit={handleAddAgent} />}
-{showEditAgent && <AgentModal onClose={() => { setShowEditAgent(false); setEditingAgent(null); }} onSubmit={handleEditAgent} agent={editingAgent} isEdit={true} />}
+      {showEditAgent && <AgentModal onClose={() => { setShowEditAgent(false); setEditingAgent(null); }} onSubmit={handleEditAgent} agent={editingAgent} isEdit={true} />}
       {showAddSale && <SaleModal agents={agents} currentUser={currentUser} userRole={userRole} onClose={() => setShowAddSale(false)} onSubmit={handleAddSale} />}
       {editSale && <SaleModal agents={agents} currentUser={currentUser} userRole={userRole} onClose={() => setEditSale(null)} onSubmit={handleEditSale} sale={editSale} isEdit={true} />}
       {showAddFine && <FineModal agents={agents} onClose={() => setShowAddFine(false)} onSubmit={handleAddFine} />}
       {showAddBonus && <BonusModal agents={agents} onClose={() => setShowAddBonus(false)} onSubmit={handleAddBonus} />}
       {showImportModal && <ImportModal importType={importType} onClose={() => setShowImportModal(false)} onImport={handleImport} setLateTime={setLateTime} />}
+      {showAddEmployee && <HREmployeeModal agents={agents} onClose={() => setShowAddEmployee(false)} onSubmit={handleAddEmployee} />}
     </div>
   );
 };
 
 // Import Modal
+// Import Modal
 const ImportModal = ({ importType, onClose, onImport, setLateTime }) => {
   const [lateTimeInput, setLateTimeInput] = useState('09:30');
   const getFormatInfo = () => {
     switch(importType) {
-      case 'agents':
-        return {
-          title: 'Import Agents',
-          format: 'Name,Team,Shift,Base Salary',
-          example: 'John Doe,Team A,Morning,40000'
+      case 'agents': 
+        // [FIXED] Updated format description to include CNIC
+        return { 
+          title: 'Import Agents', 
+          format: 'Name, Team, Shift, Base Salary, CNIC', 
+          example: 'John Doe, Team A, Morning, 40000, 42101-1234567-1' 
         };
-      case 'sales':
-        return {
-          title: 'Import Sales',
-          format: 'Agent Name,Customer Name,Phone Number,State,Zip,Address,Campaign Type,Center,Team Lead,Comments,List ID,Disposition,Duration,Xfer Time,Xfer Attempts,Feedback Before Xfer,Feedback After Xfer,Grading,Dock Details,Evaluator,Amount,Status',
-          example: 'Ahmed Khan,John Doe,1234567890,CA,90210,123 Main St,Campaign A,Center A,Lead A,Good call,123,Sale,10:00,5,Good,Excellent,A,B,C,D,5000,Sale'
-        };
-      case 'attendance':
-        return {
-          title: 'Import Attendance from Machine',
-          format: 'Columns: AC-No., No., Name, Time, State, New State, Exception, Operation',
-          example: 'Sheet with headers in first row'
-        };
-      default:
-        return { title: 'Import Data', format: '', example: '' };
+      case 'sales': return { title: 'Import Sales', format: 'Agent Name,Customer Name,Phone Number,State,Zip,Address,Campaign Type,Center,Team Lead,Comments,List ID,Disposition,Duration,Xfer Time,Xfer Attempts,Feedback Before Xfer,Feedback After Xfer,Grading,Dock Details,Evaluator,Amount,Status', example: 'Ahmed Khan,John Doe,1234567890,CA,90210,123 Main St,Campaign A,Center A,Lead A,Good call,123,Sale,10:00,5,Good,Excellent,A,B,C,D,5000,Sale' };
+      case 'attendance': return { title: 'Import Attendance from Machine', format: 'Columns: AC-No., No., Name, Time, State, New State, Exception, Operation', example: 'Sheet with headers in first row' };
+      default: return { title: 'Import Data', format: '', example: '' };
     }
   };
 
@@ -1538,28 +1573,13 @@ const ImportModal = ({ importType, onClose, onImport, setLateTime }) => {
           {importType === 'attendance' && (
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">Late Time Threshold</label>
-              <input
-                type="time"
-                value={lateTimeInput}
-                onChange={(e) => setLateTimeInput(e.target.value)}
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg text-sm"
-              />
+              <input type="time" value={lateTimeInput} onChange={(e) => setLateTimeInput(e.target.value)} className="w-full px-4 py-2 border border-slate-300 rounded-lg text-sm" />
             </div>
           )}
-          <input
-            type="file"
-            accept=".xls,.xlsx"
-            onChange={handleFileChange}
-            className="w-full px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-white placeholder-slate-400"
-          />
+          <input type="file" accept=".xls,.xlsx,.csv" onChange={handleFileChange} className="w-full px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-white placeholder-slate-400" />
         </div>
         <div className="flex gap-3 mt-6">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-100 text-slate-700 font-medium"
-          >
-            Cancel
-          </button>
+          <button onClick={onClose} className="px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-100 text-slate-700 font-medium">Cancel</button>
         </div>
       </div>
     </div>
@@ -1568,22 +1588,14 @@ const ImportModal = ({ importType, onClose, onImport, setLateTime }) => {
 
 // Stat Card Component
 const StatCard = ({ icon, label, value, color }) => {
-  const colors = {
-    blue: 'bg-blue-500',
-    green: 'bg-green-500',
-    purple: 'bg-purple-500',
-    orange: 'bg-orange-500'
-  };
-
+  const colors = { blue: 'bg-blue-500', green: 'bg-green-500', purple: 'bg-purple-500', orange: 'bg-orange-500' };
   return (
     <div className="bg-slate-800/50 rounded-xl shadow-sm border border-slate-600 p-4">
       <div className="flex items-center gap-4">
-        <div className={`${colors[color]} text-white p-3 rounded-lg`}>
-          {icon}
-        </div>
+        <div className={`${colors[color]} text-white p-3 rounded-lg`}>{icon}</div>
         <div>
           <p className="text-sm text-slate-400">{label}</p>
-<p className="text-2xl font-bold text-white mt-1">{value}</p>
+          <p className="text-2xl font-bold text-white mt-1">{value}</p>
         </div>
       </div>
     </div>
@@ -1591,14 +1603,16 @@ const StatCard = ({ icon, label, value, color }) => {
 };
 
 // Agent Modal
+// Agent Modal
 const AgentModal = ({ onClose, onSubmit, agent = null, isEdit = false }) => {
   const [formData, setFormData] = useState({
-    name: agent?.name || '',
-    password: agent?.password || '123',
+    name: agent?.name || '', 
+    password: agent?.password || '123', 
     team: agent?.team || 'Team A',
-    shift: agent?.shift || 'Morning',
+    shift: agent?.shift || 'Morning', 
     baseSalary: agent?.baseSalary || 40000,
-    activeDate: agent?.activeDate || new Date().toISOString().split('T')[0],
+    cnic: agent?.cnic || '', // [ADDED] CNIC Field
+    activeDate: agent?.activeDate || new Date().toISOString().split('T')[0], 
     leftDate: agent?.leftDate || null,
     status: agent?.status || 'Active'
   });
@@ -1606,89 +1620,33 @@ const AgentModal = ({ onClose, onSubmit, agent = null, isEdit = false }) => {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
-        <h3 className="text-xl font-semibold text-slate-800 mb-4">
-          {isEdit ? 'Edit Agent' : 'Add New Agent'}
-        </h3>
+        <h3 className="text-xl font-semibold text-slate-800 mb-4">{isEdit ? 'Edit Agent' : 'Add New Agent'}</h3>
         <div className="space-y-4">
-          <input
-            type="text"
-            placeholder="Agent Name"
-            className="w-full px-4 py-2 border border-slate-300 rounded-lg bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-          />
-          <input
-            type="text"
-            placeholder="Password (default: 123)"
-            className="w-full px-4 py-2 border border-slate-300 rounded-lg bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={formData.password}
-            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-          />
-          <select
-            className="w-full px-4 py-2 border border-slate-300 rounded-lg bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={formData.team}
-            onChange={(e) => setFormData({ ...formData, team: e.target.value })}
-          >
-            <option>Team A</option>
-            <option>Team B</option>
-            <option>Team C</option>
-          </select>
-          <select
-            className="w-full px-4 py-2 border border-slate-300 rounded-lg bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={formData.shift}
-            onChange={(e) => setFormData({ ...formData, shift: e.target.value })}
-          >
-            <option>Morning</option>
-            <option>Evening</option>
-            <option>Night</option>
-          </select>
-          <input
-            type="number"
-            placeholder="Base Salary"
-            className="w-full px-4 py-2 border border-slate-300 rounded-lg bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={formData.baseSalary}
-            onChange={(e) => setFormData({ ...formData, baseSalary: parseInt(e.target.value) })}
-          />
+          <input type="text" placeholder="Agent Name" className="w-full px-4 py-2 border border-slate-300 rounded-lg" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
+          <input type="text" placeholder="Password (default: 123)" className="w-full px-4 py-2 border border-slate-300 rounded-lg" value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} />
           
+          {/* [ADDED] CNIC Input */}
+          <input type="text" placeholder="CNIC (Required)" className="w-full px-4 py-2 border border-slate-300 rounded-lg" value={formData.cnic} onChange={(e) => setFormData({ ...formData, cnic: e.target.value })} />
+
+          <select className="w-full px-4 py-2 border border-slate-300 rounded-lg" value={formData.team} onChange={(e) => setFormData({ ...formData, team: e.target.value })}>
+            <option>Team A</option><option>Team B</option><option>Team C</option>
+          </select>
+          <select className="w-full px-4 py-2 border border-slate-300 rounded-lg" value={formData.shift} onChange={(e) => setFormData({ ...formData, shift: e.target.value })}>
+            <option>Morning</option><option>Evening</option><option>Night</option>
+          </select>
+          <input type="number" placeholder="Base Salary" className="w-full px-4 py-2 border border-slate-300 rounded-lg" value={formData.baseSalary} onChange={(e) => setFormData({ ...formData, baseSalary: parseInt(e.target.value) })} />
           {isEdit && (
             <>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Active Date</label>
-                <input
-                  type="date"
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={formData.activeDate}
-                  onChange={(e) => setFormData({ ...formData, activeDate: e.target.value })}
-                />
-              </div>
-              
+              <div><label className="block text-sm font-medium text-slate-700 mb-2">Active Date</label><input type="date" className="w-full px-4 py-2 border border-slate-300 rounded-lg" value={formData.activeDate} onChange={(e) => setFormData({ ...formData, activeDate: e.target.value })} /></div>
               {formData.status === 'Left' && (
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Left Date</label>
-                  <input
-                    type="date"
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    value={formData.leftDate || ''}
-                    onChange={(e) => setFormData({ ...formData, leftDate: e.target.value })}
-                  />
-                </div>
+                <div><label className="block text-sm font-medium text-slate-700 mb-2">Left Date</label><input type="date" className="w-full px-4 py-2 border border-slate-300 rounded-lg" value={formData.leftDate || ''} onChange={(e) => setFormData({ ...formData, leftDate: e.target.value })} /></div>
               )}
             </>
           )}
         </div>
         <div className="flex gap-3 mt-6">
-          <button
-            onClick={() => onSubmit(formData)}
-            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            {isEdit ? 'Update Agent' : 'Add Agent'}
-          </button>
-          <button
-            onClick={onClose}
-            className="px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-100 text-slate-700 font-medium"
-          >
-            Cancel
-          </button>
+          <button onClick={() => onSubmit(formData)} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">{isEdit ? 'Update Agent' : 'Add Agent'}</button>
+          <button onClick={onClose} className="px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-100 text-slate-700 font-medium">Cancel</button>
         </div>
       </div>
     </div>
@@ -1699,225 +1657,54 @@ const AgentModal = ({ onClose, onSubmit, agent = null, isEdit = false }) => {
 const SaleModal = ({ agents, currentUser, userRole, onClose, onSubmit, sale = null, isEdit = false }) => {
   const [formData, setFormData] = useState({
     agentName: sale?.agentName || (userRole === 'Agent' ? currentUser?.name : agents[0]?.name || ''),
-    customerName: sale?.customerName || '',
-    phoneNumber: sale?.phoneNumber || '',
-    state: sale?.state || '',
-    zip: sale?.zip || '',
-    address: sale?.address || '',
-    campaignType: sale?.campaignType || 'Campaign A',
-    center: sale?.center || '',
-    teamLead: sale?.teamLead || '',
-    comments: sale?.comments || '',
-    listId: sale?.listId || '',
-    amount: sale?.amount || 0,
-    disposition: sale?.disposition || 'HW- Xfer',
-    duration: sale?.duration || '',
-    xferTime: sale?.xferTime || '',
-    xferAttempts: sale?.xferAttempts || '',
-    feedbackBeforeXfer: sale?.feedbackBeforeXfer || '',
-    feedbackAfterXfer: sale?.feedbackAfterXfer || '',
-    grading: sale?.grading || '',
-    dockDetails: sale?.dockDetails || '',
-    evaluator: sale?.evaluator || ''
+    customerName: sale?.customerName || '', phoneNumber: sale?.phoneNumber || '', state: sale?.state || '', zip: sale?.zip || '', address: sale?.address || '',
+    campaignType: sale?.campaignType || 'Campaign A', center: sale?.center || '', teamLead: sale?.teamLead || '', comments: sale?.comments || '',
+    listId: sale?.listId || '', amount: sale?.amount || 0, disposition: sale?.disposition || 'HW- Xfer', duration: sale?.duration || '',
+    xferTime: sale?.xferTime || '', xferAttempts: sale?.xferAttempts || '', feedbackBeforeXfer: sale?.feedbackBeforeXfer || '',
+    feedbackAfterXfer: sale?.feedbackAfterXfer || '', grading: sale?.grading || '', dockDetails: sale?.dockDetails || '', evaluator: sale?.evaluator || ''
   });
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md max-h-[90vh] flex flex-col">
-        <h3 className="text-xl font-semibold text-slate-800 mb-4">
-          {isEdit ? 'Edit Sale' : 'Submit New Sale'}
-        </h3>
+        <h3 className="text-xl font-semibold text-slate-800 mb-4">{isEdit ? 'Edit Sale' : 'Submit New Sale'}</h3>
         <div className="space-y-4 overflow-y-auto flex-1">
-          <select
-            className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={formData.agentName}
-            onChange={(e) => setFormData({ ...formData, agentName: e.target.value })}
-            disabled={userRole === 'Agent'}
-          >
-            {userRole === 'Agent' ? (
-              <option>{currentUser?.name}</option>
-            ) : (
-              agents.map(a => <option key={a.id}>{a.name}</option>)
-            )}
+          <select className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white placeholder-slate-400" value={formData.agentName} onChange={(e) => setFormData({ ...formData, agentName: e.target.value })} disabled={userRole === 'Agent'}>
+            {userRole === 'Agent' ? <option>{currentUser?.name}</option> : agents.map(a => <option key={a.id}>{a.name}</option>)}
           </select>
-          <input
-            type="text"
-            placeholder="Customer Name"
-            className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={formData.customerName}
-            onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
-          />
-          <input
-            type="text"
-            placeholder="Phone Number"
-            className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={formData.phoneNumber}
-            onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
-          />
-          <input
-            type="text"
-            placeholder="State"
-            className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={formData.state}
-            onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-          />
-          <input
-            type="text"
-            placeholder="Zip"
-            className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={formData.zip}
-            onChange={(e) => setFormData({ ...formData, zip: e.target.value })}
-          />
-          <input
-            type="text"
-            placeholder="Address"
-            className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={formData.address}
-            onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-          />
-          <select
-            className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={formData.campaignType}
-            onChange={(e) => setFormData({ ...formData, campaignType: e.target.value })}
-          >
-            <option>Campaign A</option>
-            <option>Campaign B</option>
-            <option>Campaign C</option>
+          <input type="text" placeholder="Customer Name" className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white" value={formData.customerName} onChange={(e) => setFormData({ ...formData, customerName: e.target.value })} />
+          <input type="text" placeholder="Phone Number" className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white" value={formData.phoneNumber} onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })} />
+          <input type="text" placeholder="State" className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white" value={formData.state} onChange={(e) => setFormData({ ...formData, state: e.target.value })} />
+          <input type="text" placeholder="Zip" className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white" value={formData.zip} onChange={(e) => setFormData({ ...formData, zip: e.target.value })} />
+          <input type="text" placeholder="Address" className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white" value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} />
+          <select className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white" value={formData.campaignType} onChange={(e) => setFormData({ ...formData, campaignType: e.target.value })}>
+            <option>Campaign A</option><option>Campaign B</option><option>Campaign C</option>
           </select>
-          <input
-            type="text"
-            placeholder="Center"
-            className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={formData.center}
-            onChange={(e) => setFormData({ ...formData, center: e.target.value })}
-          />
-          <input
-            type="text"
-            placeholder="Team Lead"
-            className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={formData.teamLead}
-            onChange={(e) => setFormData({ ...formData, teamLead: e.target.value })}
-          />
-          <textarea
-            placeholder="Comments"
-            className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={formData.comments}
-            onChange={(e) => setFormData({ ...formData, comments: e.target.value })}
-            rows={3}
-          />
-          <input
-            type="text"
-            placeholder="List ID"
-            className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={formData.listId}
-            onChange={(e) => setFormData({ ...formData, listId: e.target.value })}
-          />
+          <input type="text" placeholder="Center" className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white" value={formData.center} onChange={(e) => setFormData({ ...formData, center: e.target.value })} />
+          <input type="text" placeholder="Team Lead" className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white" value={formData.teamLead} onChange={(e) => setFormData({ ...formData, teamLead: e.target.value })} />
+          <textarea placeholder="Comments" className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white" value={formData.comments} onChange={(e) => setFormData({ ...formData, comments: e.target.value })} rows={3} />
+          <input type="text" placeholder="List ID" className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white" value={formData.listId} onChange={(e) => setFormData({ ...formData, listId: e.target.value })} />
           {isEdit && (
             <>
-              <input
-                type="text"
-                placeholder="Disposition"
-                className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={formData.disposition}
-                onChange={(e) => setFormData({ ...formData, disposition: e.target.value })}
-              />
-              <input
-                type="text"
-                placeholder="Duration"
-                className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={formData.duration}
-                onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
-              />
-              <input
-                type="text"
-                placeholder="Xfer Time"
-                className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={formData.xferTime}
-                onChange={(e) => setFormData({ ...formData, xferTime: e.target.value })}
-              />
-              <input
-                type="text"
-                placeholder="Xfer Attempts"
-                className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={formData.xferAttempts}
-                onChange={(e) => setFormData({ ...formData, xferAttempts: e.target.value })}
-              />
-              <textarea
-                placeholder="Feedback (Before Xfer)"
-                className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={formData.feedbackBeforeXfer}
-                onChange={(e) => setFormData({ ...formData, feedbackBeforeXfer: e.target.value })}
-                rows={2}
-              />
-              <textarea
-                placeholder="Feedback (After Xfer)"
-                className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={formData.feedbackAfterXfer}
-                onChange={(e) => setFormData({ ...formData, feedbackAfterXfer: e.target.value })}
-                rows={2}
-              />
-              <input
-                type="text"
-                placeholder="Grading"
-                className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={formData.grading}
-                onChange={(e) => setFormData({ ...formData, grading: e.target.value })}
-              />
-              <input
-                type="text"
-                placeholder="Dock Details"
-                className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={formData.dockDetails}
-                onChange={(e) => setFormData({ ...formData, dockDetails: e.target.value })}
-              />
-              <input
-                type="text"
-                placeholder="Evaluator"
-                className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={formData.evaluator}
-                onChange={(e) => setFormData({ ...formData, evaluator: e.target.value })}
-              />
+              <input type="text" placeholder="Disposition" className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white" value={formData.disposition} onChange={(e) => setFormData({ ...formData, disposition: e.target.value })} />
+              <input type="text" placeholder="Duration" className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white" value={formData.duration} onChange={(e) => setFormData({ ...formData, duration: e.target.value })} />
+              <input type="text" placeholder="Xfer Time" className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white" value={formData.xferTime} onChange={(e) => setFormData({ ...formData, xferTime: e.target.value })} />
+              <input type="text" placeholder="Xfer Attempts" className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white" value={formData.xferAttempts} onChange={(e) => setFormData({ ...formData, xferAttempts: e.target.value })} />
+              <textarea placeholder="Feedback (Before Xfer)" className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white" value={formData.feedbackBeforeXfer} onChange={(e) => setFormData({ ...formData, feedbackBeforeXfer: e.target.value })} rows={2} />
+              <textarea placeholder="Feedback (After Xfer)" className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white" value={formData.feedbackAfterXfer} onChange={(e) => setFormData({ ...formData, feedbackAfterXfer: e.target.value })} rows={2} />
+              <input type="text" placeholder="Grading" className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white" value={formData.grading} onChange={(e) => setFormData({ ...formData, grading: e.target.value })} />
+              <input type="text" placeholder="Dock Details" className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white" value={formData.dockDetails} onChange={(e) => setFormData({ ...formData, dockDetails: e.target.value })} />
+              <input type="text" placeholder="Evaluator" className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white" value={formData.evaluator} onChange={(e) => setFormData({ ...formData, evaluator: e.target.value })} />
+              <input type="number" placeholder="Amount" className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white" value={formData.amount} onChange={(e) => setFormData({ ...formData, amount: parseInt(e.target.value) })} />
             </>
           )}
-          {isEdit && (
-            <input
-              type="number"
-              placeholder="Amount"
-              className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              value={formData.amount}
-              onChange={(e) => setFormData({ ...formData, amount: parseInt(e.target.value) })}
-            />
-          )}
-          <select
-            className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={formData.disposition}
-            onChange={(e) => setFormData({ ...formData, disposition: e.target.value })}
-          >
-            <option>HW- Xfer</option>
-            <option>HW-IBXfer</option>
-            <option>Unsuccessful</option>
-            <option>HUWT</option>
-            <option>DNC</option>
-            <option>DNQ</option>
-            <option>DNQ-Dup</option>
-            <option>HW-Xfer-CDR</option>
-            <option>DNQ-Webform</option>
-            <option>Review Pending</option>
+          <select className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white" value={formData.disposition} onChange={(e) => setFormData({ ...formData, disposition: e.target.value })}>
+            <option>HW- Xfer</option><option>HW-IBXfer</option><option>Unsuccessful</option><option>HUWT</option><option>DNC</option><option>DNQ</option><option>DNQ-Dup</option><option>HW-Xfer-CDR</option><option>DNQ-Webform</option><option>Review Pending</option>
           </select>
         </div>
         <div className="flex gap-3 mt-6">
-          <button
-            onClick={() => onSubmit(formData)}
-            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            {isEdit ? 'Update Sale' : 'Submit Sale'}
-          </button>
-          <button
-            onClick={onClose}
-            className="px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-100 text-slate-700 font-medium"
-          >
-            Cancel
-          </button>
+          <button onClick={() => onSubmit(formData)} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">{isEdit ? 'Update Sale' : 'Submit Sale'}</button>
+          <button onClick={onClose} className="px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-100 text-slate-700 font-medium">Cancel</button>
         </div>
       </div>
     </div>
@@ -1926,52 +1713,22 @@ const SaleModal = ({ agents, currentUser, userRole, onClose, onSubmit, sale = nu
 
 // Fine Modal
 const FineModal = ({ agents, onClose, onSubmit }) => {
-  const [formData, setFormData] = useState({
-    agentName: agents[0]?.name || '',
-    reason: '',
-    amount: 500
-  });
+  const [formData, setFormData] = useState({ agentName: agents[0]?.name || '', reason: '', amount: 500 });
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md">
         <h3 className="text-xl font-semibold text-slate-800 mb-4">Add Fine</h3>
         <div className="space-y-4">
-          <select
-            className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={formData.agentName}
-            onChange={(e) => setFormData({ ...formData, agentName: e.target.value })}
-          >
+          <select className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white" value={formData.agentName} onChange={(e) => setFormData({ ...formData, agentName: e.target.value })}>
             {agents.map(a => <option key={a.id}>{a.name}</option>)}
           </select>
-          <input
-            type="text"
-            placeholder="Reason"
-            className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={formData.reason}
-            onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
-          />
-          <input
-            type="number"
-            placeholder="Amount"
-            className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={formData.amount}
-            onChange={(e) => setFormData({ ...formData, amount: parseInt(e.target.value) })}
-          />
+          <input type="text" placeholder="Reason" className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white" value={formData.reason} onChange={(e) => setFormData({ ...formData, reason: e.target.value })} />
+          <input type="number" placeholder="Amount" className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white" value={formData.amount} onChange={(e) => setFormData({ ...formData, amount: parseInt(e.target.value) })} />
         </div>
         <div className="flex gap-3 mt-6">
-          <button
-            onClick={() => onSubmit(formData)}
-            className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-          >
-            Add Fine
-          </button>
-          <button
-            onClick={onClose}
-            className="px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-100 text-slate-700 font-medium"
-          >
-            Cancel
-          </button>
+          <button onClick={() => onSubmit(formData)} className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">Add Fine</button>
+          <button onClick={onClose} className="px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-100 text-slate-700 font-medium">Cancel</button>
         </div>
       </div>
     </div>
@@ -1980,77 +1737,57 @@ const FineModal = ({ agents, onClose, onSubmit }) => {
 
 // Bonus Modal
 const BonusModal = ({ agents, onClose, onSubmit }) => {
-  const [formData, setFormData] = useState({
-    agentName: agents[0]?.name || '',
-    period: 'Week 1',
-    type: 'Weekly',
-    amount: 2000,
-    targetSales: 5,
-    actualSales: 6
-  });
+  const [formData, setFormData] = useState({ agentName: agents[0]?.name || '', period: 'Week 1', type: 'Weekly', amount: 2000, targetSales: 5, actualSales: 6 });
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md">
         <h3 className="text-xl font-semibold text-slate-800 mb-4">Add Bonus</h3>
         <div className="space-y-4">
-          <select
-            className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={formData.agentName}
-            onChange={(e) => setFormData({ ...formData, agentName: e.target.value })}
-          >
+          <select className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white" value={formData.agentName} onChange={(e) => setFormData({ ...formData, agentName: e.target.value })}>
             {agents.map(a => <option key={a.id}>{a.name}</option>)}
           </select>
-          <select
-            className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={formData.type}
-            onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-          >
-            <option>Weekly</option>
-            <option>Monthly</option>
+          <select className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white" value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value })}>
+            <option>Weekly</option><option>Monthly</option>
           </select>
-          <input
-            type="text"
-            placeholder="Period"
-            className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={formData.period}
-            onChange={(e) => setFormData({ ...formData, period: e.target.value })}
-          />
-          <input
-            type="number"
-            placeholder="Target Sales"
-            className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={formData.targetSales}
-            onChange={(e) => setFormData({ ...formData, targetSales: parseInt(e.target.value) })}
-          />
-          <input
-            type="number"
-            placeholder="Actual Sales"
-            className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={formData.actualSales}
-            onChange={(e) => setFormData({ ...formData, actualSales: parseInt(e.target.value) })}
-          />
-          <input
-            type="number"
-            placeholder="Bonus Amount"
-            className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={formData.amount}
-            onChange={(e) => setFormData({ ...formData, amount: parseInt(e.target.value) })}
-          />
+          <input type="text" placeholder="Period" className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white" value={formData.period} onChange={(e) => setFormData({ ...formData, period: e.target.value })} />
+          <input type="number" placeholder="Target Sales" className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white" value={formData.targetSales} onChange={(e) => setFormData({ ...formData, targetSales: parseInt(e.target.value) })} />
+          <input type="number" placeholder="Actual Sales" className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white" value={formData.actualSales} onChange={(e) => setFormData({ ...formData, actualSales: parseInt(e.target.value) })} />
+          <input type="number" placeholder="Bonus Amount" className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-white" value={formData.amount} onChange={(e) => setFormData({ ...formData, amount: parseInt(e.target.value) })} />
         </div>
         <div className="flex gap-3 mt-6">
-          <button
-            onClick={() => onSubmit(formData)}
-            className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-          >
-            Add Bonus
-          </button>
-          <button
-            onClick={onClose}
-            className="px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-100 text-slate-700 font-medium"
-          >
-            Cancel
-          </button>
+          <button onClick={() => onSubmit(formData)} className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">Add Bonus</button>
+          <button onClick={onClose} className="px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-100 text-slate-700 font-medium">Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// [NEW] HR Employee Modal
+const HREmployeeModal = ({ onClose, onSubmit }) => {
+  const [formData, setFormData] = useState({
+    agent_name: '', designation: 'Agent', email: '', phone: '', cnic: '', address: '',
+    joining_date: new Date().toISOString().split('T')[0], bank_name: '', account_number: '', emergency_contact: ''
+  });
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-xl shadow-xl p-6 w-[500px] max-h-[90vh] overflow-y-auto">
+        <h3 className="text-xl font-semibold text-slate-800 mb-4 flex items-center gap-2"><Briefcase className="w-5 h-5"/> New Employment Record</h3>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="col-span-2"><label className="text-xs font-bold text-gray-600">Name</label><input className="w-full border p-2 rounded" value={formData.agent_name} onChange={e=>setFormData({...formData, agent_name:e.target.value})} /></div>
+          <div><label className="text-xs font-bold text-gray-600">Designation</label><input className="w-full border p-2 rounded" value={formData.designation} onChange={e=>setFormData({...formData, designation:e.target.value})} /></div>
+          <div><label className="text-xs font-bold text-gray-600">Joining Date</label><input type="date" className="w-full border p-2 rounded" value={formData.joining_date} onChange={e=>setFormData({...formData, joining_date:e.target.value})} /></div>
+          <div><label className="text-xs font-bold text-gray-600">Phone</label><input className="w-full border p-2 rounded" value={formData.phone} onChange={e=>setFormData({...formData, phone:e.target.value})} /></div>
+          <div><label className="text-xs font-bold text-gray-600">CNIC</label><input className="w-full border p-2 rounded" value={formData.cnic} onChange={e=>setFormData({...formData, cnic:e.target.value})} /></div>
+          <div className="col-span-2"><label className="text-xs font-bold text-gray-600">Address</label><input className="w-full border p-2 rounded" value={formData.address} onChange={e=>setFormData({...formData, address:e.target.value})} /></div>
+          <div><label className="text-xs font-bold text-gray-600">Bank Name</label><input className="w-full border p-2 rounded" value={formData.bank_name} onChange={e=>setFormData({...formData, bank_name:e.target.value})} /></div>
+          <div><label className="text-xs font-bold text-gray-600">Account No</label><input className="w-full border p-2 rounded" value={formData.account_number} onChange={e=>setFormData({...formData, account_number:e.target.value})} /></div>
+        </div>
+        <div className="flex gap-3 mt-6">
+          <button onClick={() => onSubmit(formData)} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Save Record</button>
+          <button onClick={onClose} className="px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-100 text-slate-700 font-medium">Cancel</button>
         </div>
       </div>
     </div>

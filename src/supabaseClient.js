@@ -1,7 +1,7 @@
 // src/supabaseClient.js
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = 'YOUR_SUPABASE_PROJECT_URL' // Get this from Supabase Dashboard -> Settings -> API
-const supabaseKey = 'YOUR_SUPABASE_ANON_KEY'    // Get this from Supabase Dashboard -> Settings -> API
+const supabaseUrl = 'https://nivkbsoprmeaysbodjea.supabase.co' // Get this from Supabase Dashboard -> Settings -> API
+const supabaseKey = 'sb_publishable_6bIWguWjU-ZTAZ2pkLvrvg_4Sqg2J5j'    // Get this from Supabase Dashboard -> Settings -> API
 
 export const supabase = createClient(supabaseUrl, supabaseKey)
