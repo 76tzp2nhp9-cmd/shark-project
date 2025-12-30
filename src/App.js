@@ -20,37 +20,40 @@ const getPayrollRange = (monthStr) => {
   const monthIndex = months.indexOf(mStr);
   const year = parseInt(yStr);
 
-  // Current Month Cycle = Previous Month 21st to Current Month 20th
-  // Example: "December 2024" Cycle = Nov 21, 2024 to Dec 20, 2024
-  
   let startYear = year;
   let startMonth = monthIndex - 1;
   
-  if (startMonth < 0) { // Handle January (Prev is Dec of prev year)
+  if (startMonth < 0) {
     startMonth = 11;
     startYear = year - 1;
   }
 
-  // Set dates (Format: YYYY-MM-DD for string comparison)
-  const startDate = new Date(startYear, startMonth, 21); // 21st prev month
-  const endDate = new Date(year, monthIndex, 20);        // 20th curr month
+  // [FIX] Set hours to 12 (Noon) to avoid timezone shifts
+  const startDate = new Date(startYear, startMonth, 21, 12, 0, 0); 
+  const endDate = new Date(year, monthIndex, 20, 12, 0, 0);        
   
   return { 
     start: startDate, 
     end: endDate,
-    // Helper to check if a date string (YYYY-MM-DD) falls in this range
     includes: (dateStr) => {
       const d = new Date(dateStr);
+      // Reset comparison date to noon as well to match range
+      d.setHours(12, 0, 0, 0);
       return d >= startDate && d <= endDate;
     }
   };
 };
 
-// HELPER: Generate all dates between start and end for the table columns
+// [FIXED] HELPER: Generate dates strictly based on Local Time
 const getDaysArray = (start, end) => {
   let arr = [];
   for(let dt=new Date(start); dt<=end; dt.setDate(dt.getDate()+1)){
-      arr.push(new Date(dt).toISOString().split('T')[0]);
+      // [FIX] Construct string manually YYYY-MM-DD using local time
+      // This prevents .toISOString() from converting to UTC and shifting the day back
+      const year = dt.getFullYear();
+      const month = String(dt.getMonth() + 1).padStart(2, '0');
+      const day = String(dt.getDate()).padStart(2, '0');
+      arr.push(`${year}-${month}-${day}`);
   }
   return arr;
 };
@@ -71,8 +74,37 @@ const AgentPayrollSystem = () => {
   const [fines, setFines] = useState([]);
   const [bonuses, setBonuses] = useState([]);
   const [hrRecords, setHrRecords] = useState([]); // [NEW] HR State
-  const [selectedMonth, setSelectedMonth] = useState('December 2024');
+  
+  // [SMART DATE STATE] Automatically detects Jan 2026 cycle if today > Dec 20
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    const today = new Date();
+    // If today is after the 20th, we are in the NEXT month's cycle
+    if (today.getDate() > 20) {
+      today.setMonth(today.getMonth() + 1);
+    }
+    return `${today.toLocaleString('default', { month: 'long' })} ${today.getFullYear()}`;
+  });
+  
   const [lateTime, setLateTime] = useState('19:00');
+
+  // [NEW] Helper: Convert "January 2026" -> "2026-01" (For Input Value)
+  const getMonthInputValue = (monthStr) => {
+    if (!monthStr) return new Date().toISOString().slice(0, 7);
+    const [month, year] = monthStr.split(' ');
+    const date = new Date(`${month} 1, ${year}`);
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    return `${year}-${m}`;
+  };
+
+  // [NEW] Helper: Convert "2026-01" -> "January 2026" (For App State)
+  const handleMonthChange = (e) => {
+    if (!e.target.value) return;
+    const [year, month] = e.target.value.split('-');
+    // Create date object (using middle of month to avoid timezone issues)
+    const date = new Date(parseInt(year), parseInt(month) - 1, 15);
+    const monthName = date.toLocaleString('default', { month: 'long' });
+    setSelectedMonth(`${monthName} ${year}`);
+  };
 
   // [FIX 1] Session Persistence: Check LocalStorage on Load
   useEffect(() => {
@@ -119,7 +151,7 @@ const AgentPayrollSystem = () => {
       fetchData();
     }
   }, [isLoggedIn]); // Only fetch when logged in
-   
+    
   // Modals
   const [showAddAgent, setShowAddAgent] = useState(false);
   const [showEditAgent, setShowEditAgent] = useState(false);
@@ -130,10 +162,10 @@ const AgentPayrollSystem = () => {
   const [showAddBonus, setShowAddBonus] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [importType, setImportType] = useState('');
-  
+   
   // [NEW] HR Modal State
   const [showAddEmployee, setShowAddEmployee] = useState(false);
-   
+    
   // Search and Filter States
   const [searchQuery, setSearchQuery] = useState('');
   const [teamFilter, setTeamFilter] = useState('All');
@@ -203,9 +235,6 @@ const AgentPayrollSystem = () => {
     localStorage.removeItem('ams_role');
   };
 
-  // Calculate monthly stats
-
-
   // Filtered data based on search and filters
     const filteredAgents = useMemo(() => {
     let result = userRole === 'Agent' 
@@ -223,30 +252,28 @@ const AgentPayrollSystem = () => {
 // --- UPDATED CALCULATIONS (Uses 21st-20th Logic) ---
   const dateRange = useMemo(() => getPayrollRange(selectedMonth), [selectedMonth]);
 
+// [FIXED] Monthly Matrix Calculation
   const monthlyStats = useMemo(() => {
     const filteredAgentsList = userRole === 'Agent' 
       ? agents.filter(a => a.name === currentUser?.name)
       : agents;
 
     const agentStats = filteredAgentsList.map(agent => {
-      // Filter Sales by Date Range (21st - 20th)
+      // [FIX] Count as Sale if status is 'Sale' OR disposition matches
       const approvedSales = sales.filter(s => 
         s.agentName === agent.name && 
-        s.status === 'Sale' && 
-        dateRange.includes(s.date) // <--- CHANGED THIS
+        (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer') && 
+        dateRange.includes(s.date)
       );
       
       const totalSales = approvedSales.length;
       const totalRevenue = approvedSales.reduce((sum, s) => sum + (s.amount || 0), 0);
       
-      // Filter Fines by Date Range
       const agentFines = fines.filter(f => 
         f.agentName === agent.name && 
-        dateRange.includes(f.date) // <--- CHANGED THIS
+        dateRange.includes(f.date)
       ).reduce((sum, f) => sum + (f.amount || 0), 0);
       
-      // Filter Bonuses (Assuming bonuses have a 'month' string, we keep string match or add date to bonus)
-      // For now, keeping string match for Bonus as it's usually monthly based
       const agentBonuses = bonuses.filter(b => 
         b.agentName === agent.name && 
         b.month === selectedMonth 
@@ -268,11 +295,20 @@ const AgentPayrollSystem = () => {
   }, [agents, sales, fines, bonuses, selectedMonth, dateRange, userRole, currentUser]);
 
   // Dashboard Stats
+// [FIXED] Dashboard Stats Calculation
   const dashboardStats = useMemo(() => {
     const relevantAgents = userRole === 'Agent' ? 1 : agents.filter(a => a.status === 'Active').length;
+    
     const relevantSales = userRole === 'Agent' 
-      ? sales.filter(s => s.agentName === currentUser?.name && s.status === 'Sale' && dateRange.includes(s.date))
-      : sales.filter(s => s.status === 'Sale' && dateRange.includes(s.date));
+      ? sales.filter(s => 
+          s.agentName === currentUser?.name && 
+          (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer') && 
+          dateRange.includes(s.date)
+        )
+      : sales.filter(s => 
+          (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer') && 
+          dateRange.includes(s.date)
+        );
 
     const totalSalesCount = relevantSales.length;
     const totalRevenue = relevantSales.reduce((sum, s) => sum + (s.amount || 0), 0);
@@ -342,56 +378,88 @@ const AgentPayrollSystem = () => {
   };
 
   // [FIX] Edit Agent - Now saves to Database
-  const handleEditAgent = async (formData) => {
-    const { error } = await supabase.from('agents').update(formData).eq('id', editingAgent.id);
+const handleEditAgent = async (formData) => {
+    // [FIX] Use .eq('cnic', ...) instead of .eq('id', ...)
+    const { error } = await supabase.from('agents').update(formData).eq('cnic', editingAgent.cnic);
     
     if (error) { alert('Error updating agent: ' + error.message); }
     else {
-      setAgents(agents.map(a => a.id === editingAgent.id ? { ...a, ...formData } : a));
+      // [FIX] Update local state using cnic
+      setAgents(agents.map(a => a.cnic === editingAgent.cnic ? { ...a, ...formData } : a));
       setShowEditAgent(false);
       setEditingAgent(null);
     }
   };
 
-  const handleMarkAsLeft = async (agentId) => {
+  // [FIXED] Mark as Left with Error Handling
+ // 2. Mark as Left (Use cnic)
+  const handleMarkAsLeft = async (agentCnic) => {
     if (window.confirm('Are you sure?')) {
       const leftDate = new Date().toISOString().split('T')[0];
-      const { error } = await supabase.from('agents').update({ status: 'Left', leftDate }).eq('id', agentId);
+      // [FIX] Use .eq('cnic', ...)
+      const { error } = await supabase.from('agents').update({ status: 'Left', leftDate }).eq('cnic', agentCnic);
       if (!error) {
-        setAgents(agents.map(a => a.id === agentId ? { ...a, status: 'Left', leftDate } : a));
+        setAgents(agents.map(a => a.cnic === agentCnic ? { ...a, status: 'Left', leftDate } : a));
+      } else {
+        alert("Update Failed: " + error.message);
       }
     }
   };
 
-  const handleReactivateAgent = async (agentId) => {
+// 3. Reactivate (Use cnic)
+  const handleReactivateAgent = async (agentCnic) => {
     if (window.confirm('Reactivate?')) {
-      const { error } = await supabase.from('agents').update({ status: 'Active', leftDate: null }).eq('id', agentId);
+      // [FIX] Use .eq('cnic', ...)
+      const { error } = await supabase.from('agents').update({ status: 'Active', leftDate: null }).eq('cnic', agentCnic);
       if (!error) {
-         setAgents(agents.map(a => a.id === agentId ? { ...a, status: 'Active', leftDate: null } : a));
+         setAgents(agents.map(a => a.cnic === agentCnic ? { ...a, status: 'Active', leftDate: null } : a));
       }
     }
   };
 
-  const handleDeleteAgent = async (agentId) => {
+// 4. Delete (Use cnic)
+  const handleDeleteAgent = async (agentCnic) => {
     if (window.confirm('Delete this agent?')) {
-      const { error } = await supabase.from('agents').delete().eq('id', agentId);
-      if (!error) setAgents(agents.filter(a => a.id !== agentId));
+      // [FIX] Use .eq('cnic', ...)
+      const { error } = await supabase.from('agents').delete().eq('cnic', agentCnic);
+      if (!error) setAgents(agents.filter(a => a.cnic !== agentCnic));
     }
   };
 
-  // Add Sale
+
+// [FIXED] Add Sale (Manual) with Correct Status Logic
   const handleAddSale = async (formData) => {
+    const { amount, ...restOfData } = formData; 
+
+    // Generate Timestamp manually
+    const now = new Date();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const yyyy = now.getFullYear();
+    const hh = String(now.getHours()).padStart(2, '0');
+    const min = String(now.getMinutes()).padStart(2, '0');
+    const ss = String(now.getSeconds()).padStart(2, '0');
+    const formattedTimestamp = `${mm}/${dd}/${yyyy} ${hh}:${min}:${ss}`;
+
+    const disposition = formData.disposition ? formData.disposition.trim() : '';
+
     const newSale = {
-      timestamp: new Date().toISOString(),
-      ...formData,
-      status: (formData.disposition === 'HW- Xfer' || formData.disposition === 'HW-IBXfer') ? 'Sale' : 'Unsuccessful',
+      timestamp: formattedTimestamp,
+      ...restOfData,
+      // [FIX] Strict check for Sale status
+      status: (disposition === 'HW- Xfer' || disposition === 'HW-IBXfer') ? 'Sale' : 'Unsuccessful',
       date: new Date().toISOString().split('T')[0],
       month: selectedMonth
     };
 
     const { data, error } = await supabase.from('sales').insert([newSale]).select();
-    if (error) { alert('Error adding sale: ' + error.message); } 
-    else { setSales([...sales, ...data]); setShowAddSale(false); }
+
+    if (error) {
+      alert('Error adding sale: ' + error.message);
+    } else {
+      setSales([...sales, ...data]);
+      setShowAddSale(false);
+    }
   };
 
   // [FIX] Edit Sale - Now saves to Database
@@ -463,8 +531,7 @@ const AgentPayrollSystem = () => {
     }
   };
 
-  // [FIX] Import Data - Now Inserts into Database
-  // [FIXED] Import Data - Now includes CNIC parsing
+// [FIXED] Handle Import Function
   const handleImport = (file, lateTimeVal) => {
     if (!file) return;
 
@@ -481,13 +548,14 @@ const AgentPayrollSystem = () => {
           const sheetName = workbook.SheetNames[0];
           const worksheet = workbook.Sheets[sheetName];
           const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-          lines = rows.map(row => row.map(cell => cell || '').join(',')).filter(line => line.trim());
+          lines = rows.map(row => row.map(cell => (cell === null || cell === undefined) ? '' : cell).join(',')).filter(line => line.trim());
         } catch (error) {
           const text = new TextDecoder().decode(e.target.result);
           lines = text.split('\n').filter(line => line.trim());
         }
       }
       
+      // --- IMPORT AGENTS ---
       if (importType === 'agents') {
         const newAgents = lines.slice(1).map((line, idx) => {
           const values = line.split(',').map(v => v.trim());
@@ -497,7 +565,7 @@ const AgentPayrollSystem = () => {
             team: values[1], 
             shift: values[2],
             baseSalary: parseInt(values[3]) || 0,
-            cnic: values[4] || '', // [ADDED] Read CNIC from 5th column
+            cnic: values[5] || '', 
             password: '123', 
             status: 'Active',
             activeDate: new Date().toISOString().split('T')[0], 
@@ -505,118 +573,113 @@ const AgentPayrollSystem = () => {
           };
         }).filter(Boolean);
 
-        // Bulk Insert
         const { data, error } = await supabase.from('agents').insert(newAgents).select();
         if(!error) {
             setAgents([...agents, ...data]);
-            alert('Agents imported successfully!');
+            alert('Success! Agents imported.');
         } else {
-            alert('Import Failed: ' + error.message);
+            alert('Agents Import Failed: ' + error.message);
         }
 
+      // --- IMPORT SALES (UPDATED STATUS LOGIC) ---
       } else if (importType === 'sales') {
-        // ... (Keep existing Sales logic)
         const newSales = lines.slice(1).map((line, idx) => {
           const values = line.split(',').map(v => v.trim());
-          if(!values[0]) return null;
+          if(!values[1]) return null; 
+          
+          // Capture Disposition explicitly to check it
+          const disposition = values[12] ? values[12].trim() : '';
+
           return {
-            timestamp: new Date().toISOString(), agentName: values[0], customerName: values[1] || '',
-            phoneNumber: values[2] || '', state: values[3] || '', zip: values[4] || '',
-            address: values[5] || '', campaignType: values[6] || '', center: values[7] || '',
-            teamLead: values[8] || '', comments: values[9] || '', listId: values[10] || '',
-            disposition: values[11] || '', duration: values[12] || '', xferTime: values[13] || '',
-            xferAttempts: values[14] || '', feedbackBeforeXfer: values[15] || '', feedbackAfterXfer: values[16] || '',
-            grading: values[17] || '', dockDetails: values[18] || '', evaluator: values[19] || '',
-            amount: parseInt(values[20]) || 0,
-            status: values[21] || ((values[11] === 'HW- Xfer' || values[11] === 'HW-IBXfer') ? 'Sale' : 'Unsuccessful'),
-            date: new Date().toISOString().split('T')[0], month: selectedMonth
+            timestamp: values[0] || new Date().toISOString(), 
+            agentName: values[1] || '',      
+            customerName: values[2] || '',   
+            phoneNumber: values[3] || '',    
+            state: values[4] || '',          
+            zip: values[5] || '',            
+            address: values[6] || '',        
+            campaignType: values[7] || '',   
+            center: values[8] || '',         
+            teamLead: values[9] || '',       
+            comments: values[10] || '',      
+            listId: values[11] || '',        
+            
+            disposition: disposition, 
+            duration: values[13] || '', 
+            xferTime: values[14] || '',
+            xferAttempts: values[15] || '', 
+            feedbackBeforeXfer: values[16] || '', 
+            feedbackAfterXfer: values[17] || '',
+            grading: values[18] || '', 
+            dockDetails: values[19] || '', 
+            evaluator: values[20] || '',
+            
+            // [FIX] Strict check for Sale status
+            status: (disposition === 'HW- Xfer' || disposition === 'HW-IBXfer') ? 'Sale' : 'Unsuccessful',
+            
+            date: new Date().toISOString().split('T')[0], 
+            month: selectedMonth
           };
         }).filter(Boolean);
 
         const { data, error } = await supabase.from('sales').insert(newSales).select();
         if(!error) setSales([...sales, ...data]);
-        else alert('Import Failed: ' + error.message);
+        else alert('Sales Import Failed: ' + error.message);
 
       // --- IMPORT ATTENDANCE ---
       } else if (importType === 'attendance') {
          const rows = lines.map(line => line.split(',').map(v => v.trim()));
-         const dataRows = rows.slice(1); // Skip header row
+         const dataRows = rows.slice(1);
          const dateMap = {};
-         
          dataRows.forEach(row => {
-            // Index 2 is Name, Index 3 is Time (Based on your file)
             const name = row[2] ? row[2].trim().toLowerCase() : '';
             const timeStr = row[3] ? row[3].trim() : '';
-            
             if (name && timeStr) {
-               // Regex for "12/26/2025 6:21 PM"
                const dateTimeRegex = /(\d{1,2}\/\d{1,2}\/\d{4}) (\d{1,2}:\d{2}(:\d{2})?) ?(AM|PM)/i;
                const match = timeStr.match(dateTimeRegex);
                if (match) {
                  let [_, datePart, timePart, __, ampm] = match;
                  timePart = timePart + ' ' + ampm;
-                 
                  const dateParts = datePart.split('/');
                  let month = dateParts[0]; let day = dateParts[1];
                  if (parseInt(month) > 12) [month, day] = [day, month];
                  month = month.padStart(2, '0'); day = day.padStart(2, '0');
                  const date = `${dateParts[2]}-${month}-${day}`;
-
                  const timeParts = timePart.split(' ');
                  const hm = timeParts[0].split(':');
                  let hour = parseInt(hm[0]);
                  if (timeParts[1].toUpperCase() === 'PM' && hour !== 12) hour += 12;
                  if (timeParts[1].toUpperCase() === 'AM' && hour === 12) hour = 0;
                  const time = `${hour.toString().padStart(2, '0')}:${hm[1]}`;
-
                  if (!dateMap[date]) dateMap[date] = {};
                  if (!dateMap[date][name]) dateMap[date][name] = new Set();
                  dateMap[date][name].add(time);
                }
             }
          });
-
          const activeAgents = agents.filter(a => a.status === 'Active');
          const newAttendance = [];
-         
-         const threshold = lateTimeVal || lateTime; // Use modal time or default
-
+         const threshold = lateTimeVal || lateTime;
          Object.keys(dateMap).forEach(date => {
            activeAgents.forEach(agent => {
              const agentKey = agent.name.toLowerCase();
              const times = dateMap[date][agentKey] ? Array.from(dateMap[date][agentKey]).sort() : [];
-             
              const status = times.length > 0 ? 'Present' : 'Absent';
              const loginTime = times.length > 0 ? times[0] : '';
              const logoutTime = times.length > 1 ? times[times.length - 1] : '';
-             
-             // [FIX IS HERE] Force it to be True or False. Never empty string.
              const isLate = (loginTime && threshold && loginTime > threshold) ? true : false;
-             
              newAttendance.push({
-               date: date, 
-               agentName: agent.name, 
-               loginTime: loginTime,
-               logoutTime: logoutTime, 
-               status: status, 
-               late: isLate
+               date: date, agentName: agent.name, loginTime: loginTime,
+               logoutTime: logoutTime, status: status, late: isLate
              });
            });
          });
-
          const { data, error } = await supabase.from('attendance').insert(newAttendance).select();
-         
-         if(!error) {
-             setAttendance([...attendance, ...data]);
-             alert("Success! Attendance imported.");
-         } else {
-             alert('Attendance Import Failed: ' + error.message);
-         }
+         if(!error) { setAttendance([...attendance, ...data]); alert("Success! Attendance imported."); } 
+         else { alert('Attendance Import Failed: ' + error.message); }
       }
-      
       setShowImportModal(false);
     };
-    
     if (file.name.endsWith('.csv')) { reader.readAsText(file); } 
     else { reader.readAsArrayBuffer(file); }
   };
@@ -739,15 +802,17 @@ const AgentPayrollSystem = () => {
             </div>
             
             <div className="flex items-center gap-4">
-              <select 
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(e.target.value)}
-                className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option>December 2024</option>
-                <option>November 2024</option>
-                <option>October 2024</option>
-              </select>
+              {/* [NEW] Optimistic Native Month Picker */}
+              <div className="relative">
+                <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                <input 
+                  type="month"
+                  value={getMonthInputValue(selectedMonth)}
+                  onChange={handleMonthChange}
+                  className="pl-10 pr-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 [color-scheme:dark]"
+                />
+              </div>
+
               <button 
                 onClick={handleLogout}
                 className="flex items-center gap-2 px-4 py-2 text-slate-300 hover:text-red-400 hover:bg-slate-700 rounded-lg transition"
@@ -788,7 +853,7 @@ const AgentPayrollSystem = () => {
               );
             })}
 
-<button 
+            <button 
               onClick={() => { setActiveTab('monthly_matrix'); setSearchQuery(''); }}
               className={`px-6 py-3 text-sm font-medium capitalize whitespace-nowrap transition-colors ${
                 activeTab === 'monthly_matrix' 
@@ -939,12 +1004,12 @@ const AgentPayrollSystem = () => {
                 <table className="w-full text-left">
                    <thead className="bg-slate-900">
                       <tr>
-                         <th className="py-3 px-4 text-sm font-medium text-slate-200">Name</th>
-                         <th className="py-3 px-4 text-sm font-medium text-slate-200">Designation</th>
-                         <th className="py-3 px-4 text-sm font-medium text-slate-200">CNIC</th>
-                         <th className="py-3 px-4 text-sm font-medium text-slate-200">Joining Date</th>
-                         <th className="py-3 px-4 text-sm font-medium text-slate-200">Bank Details</th>
-                         <th className="py-3 px-4 text-sm font-medium text-slate-200">Status</th>
+                          <th className="py-3 px-4 text-sm font-medium text-slate-200">Name</th>
+                          <th className="py-3 px-4 text-sm font-medium text-slate-200">Designation</th>
+                          <th className="py-3 px-4 text-sm font-medium text-slate-200">CNIC</th>
+                          <th className="py-3 px-4 text-sm font-medium text-slate-200">Joining Date</th>
+                          <th className="py-3 px-4 text-sm font-medium text-slate-200">Bank Details</th>
+                          <th className="py-3 px-4 text-sm font-medium text-slate-200">Status</th>
                       </tr>
                    </thead>
                    <tbody>
@@ -967,6 +1032,7 @@ const AgentPayrollSystem = () => {
 
         {/* Agents Tab */}
         {activeTab === 'agents' && (
+          
           <div className="space-y-6">
             <div className="flex justify-between items-center">
               <h2 className="text-xl font-semibold text-white">Agent Management</h2>
@@ -1031,6 +1097,7 @@ const AgentPayrollSystem = () => {
                   <option>Active</option>
                   <option>Inactive</option>
                 </select>
+                
               </div>
             </div>
 
@@ -1051,14 +1118,30 @@ const AgentPayrollSystem = () => {
     )}
   </tr>
 </thead>
-                <tbody>
+      {/* Change key={agent.id} to key={agent.cnic} */}
+<tbody>
   {filteredAgents.map((agent, idx) => (
-    <tr key={agent.id} className="border-b border-slate-700 hover:bg-slate-700">
+    // [FIX] Using CNIC as key since ID was removed
+    <tr key={agent.cnic || idx} className="border-b border-slate-700 hover:bg-slate-700">
+      
+      {/* 1. Number Column */}
       <td className="py-3 px-4 text-slate-300">{idx + 1}</td>
+      
+      {/* 2. Name Column (This was missing) */}
       <td className="py-3 px-4 font-medium text-white">{agent.name}</td>
+      
+      {/* 3. Team Column (This was missing) */}
       <td className="py-3 px-4 text-slate-300">{agent.team}</td>
+      
+      {/* 4. Shift Column (This was missing) */}
       <td className="py-3 px-4 text-slate-300">{agent.shift}</td>
-      <td className="py-3 px-4 text-right text-slate-100">{agent.baseSalary.toLocaleString()} PKR</td>
+      
+      {/* 5. Base Salary Column (This was missing) */}
+      <td className="py-3 px-4 text-right text-slate-100">
+        {agent.baseSalary ? agent.baseSalary.toLocaleString() : 0} PKR
+      </td>
+      
+      {/* 6. Status Column (This was missing) */}
       <td className="py-3 px-4 text-center">
         <span className={`px-3 py-1 rounded-full text-xs font-medium ${
           agent.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
@@ -1066,12 +1149,18 @@ const AgentPayrollSystem = () => {
           {agent.status}
         </span>
       </td>
+      
+      {/* 7. Active Date (This was missing) */}
       <td className="py-3 px-4 text-center text-slate-100">
         {agent.activeDate || '-'}
       </td>
+      
+      {/* 8. Left Date (This was missing) */}
       <td className="py-3 px-4 text-center text-slate-100">
         {agent.leftDate || '-'}
       </td>
+
+      {/* 9. Actions Column (Updated to use CNIC) */}
       {userRole === 'Admin' && (
         <td className="py-3 px-4">
           <div className="flex items-center justify-center gap-2 flex-wrap">
@@ -1081,34 +1170,33 @@ const AgentPayrollSystem = () => {
                 setShowEditAgent(true);
               }}
               className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 text-xs font-medium transition-colors"
-              title="Edit Agent"
             >
               Edit
             </button>
+            
             {agent.status === 'Active' ? (
               <button
-                onClick={() => handleMarkAsLeft(agent.id)}
+                // [FIX] Using agent.cnic instead of agent.id
+                onClick={() => handleMarkAsLeft(agent.cnic)} 
                 className="px-3 py-1 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 text-xs font-medium transition-colors"
-                title="Mark as Left"
               >
                 Mark Left
               </button>
             ) : (
               <button
-                onClick={() => handleReactivateAgent(agent.id)}
+                onClick={() => handleReactivateAgent(agent.cnic)}
                 className="px-3 py-1 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 text-xs font-medium transition-colors"
-                title="Reactivate Agent"
               >
                 Reactivate
               </button>
             )}
+            
             <button
-  onClick={() => handleDeleteAgent(agent.id)}
-  className="px-3 py-1 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 text-xs font-medium transition-colors"
-  title="Delete Agent"
->
-  Delete
-</button>
+              onClick={() => handleDeleteAgent(agent.cnic)}
+              className="px-3 py-1 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 text-xs font-medium transition-colors"
+            >
+              Delete
+            </button>
           </div>
         </td>
       )}
@@ -1641,7 +1729,10 @@ const AgentPayrollSystem = () => {
                   </thead>
                   <tbody>
                     {agents.filter(a => a.status === 'Active').map(agent => {
-                      const agentSales = sales.filter(s => s.agentName === agent.name && s.status === 'Sale');
+                      const agentSales = sales.filter(s => 
+  s.agentName === agent.name && 
+  (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer')
+);
                       let rowTotal = 0;
                       
                       return (
@@ -1680,7 +1771,6 @@ const AgentPayrollSystem = () => {
   );
 };
 
-// Import Modal
 // Import Modal
 const ImportModal = ({ importType, onClose, onImport, setLateTime }) => {
   const [lateTimeInput, setLateTimeInput] = useState('09:30');
@@ -1753,7 +1843,6 @@ const StatCard = ({ icon, label, value, color }) => {
   );
 };
 
-// Agent Modal
 // Agent Modal
 const AgentModal = ({ onClose, onSubmit, agent = null, isEdit = false }) => {
   const [formData, setFormData] = useState({
