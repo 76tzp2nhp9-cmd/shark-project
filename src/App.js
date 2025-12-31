@@ -1,8 +1,11 @@
-import { useEffect } from 'react'; 
-import { supabase } from './supabaseClient'; 
-import React, { useState, useMemo } from 'react';
-import { Users, DollarSign, Calendar, AlertCircle, TrendingUp, Download, Plus, Check, X, Upload, LogOut, Lock, Briefcase } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { supabase } from './supabaseClient';
 import * as XLSX from 'xlsx';
+import { 
+  Users, DollarSign, Calendar, AlertCircle, TrendingUp, Download, 
+  Plus, Check, X, Upload, LogOut, Lock, Briefcase, Clock,
+  Pencil, Trash2, UserX, RotateCcw // <--- Added these new icons
+} from 'lucide-react';
 
 // Sample Data (Kept for reference as requested)
 const initialAgents = [];
@@ -67,7 +70,9 @@ const AgentPayrollSystem = () => {
   const [loginError, setLoginError] = useState('');
 
   // App States
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState(() => {
+    return localStorage.getItem('ams_active_tab') || 'dashboard';
+  });
   const [agents, setAgents] = useState([]);
   const [sales, setSales] = useState([]);
   const [attendance, setAttendance] = useState([]);
@@ -84,8 +89,61 @@ const AgentPayrollSystem = () => {
     }
     return `${today.toLocaleString('default', { month: 'long' })} ${today.getFullYear()}`;
   });
+
+  // [NEW] Advanced Date Filter States
+  const [filterType, setFilterType] = useState('Monthly'); // Options: Daily, Weekly, Monthly, Custom
+  const [customStartDate, setCustomStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [customEndDate, setCustomEndDate] = useState(new Date().toISOString().split('T')[0]);
+
+  // [NEW] Helper: Get the exact Start and End date based on selection
+  const getActiveDateRange = useMemo(() => {
+    const today = new Date(customStartDate); // Use customStartDate as the "anchor" date
+    let start = new Date(today);
+    let end = new Date(today);
+
+    if (filterType === 'Daily') {
+      // Start and End are the same day
+      start = today;
+      end = today;
+    } 
+    else if (filterType === 'Weekly') {
+      // Calculate Monday to Sunday of the selected week
+      const day = start.getDay();
+      const diff = start.getDate() - day + (day === 0 ? -6 : 1); // Adjust when day is Sunday
+      start.setDate(diff);
+      end = new Date(start);
+      end.setDate(start.getDate() + 6);
+    } 
+    else if (filterType === 'Monthly') {
+      // Use your existing "21st to 20th" logic
+      const range = getPayrollRange(selectedMonth);
+      start = range.start;
+      end = range.end;
+    } 
+    else if (filterType === 'Custom') {
+      start = new Date(customStartDate);
+      end = new Date(customEndDate);
+    }
+
+    // Return strings YYYY-MM-DD for easy comparison
+    return {
+      start: start.toISOString().split('T')[0],
+      end: end.toISOString().split('T')[0],
+      startObj: start,
+      endObj: end
+    };
+  }, [filterType, customStartDate, customEndDate, selectedMonth]);
   
-  const [lateTime, setLateTime] = useState('19:00');
+  // [FIX] Late Time State (Persisted in Local Storage)
+  const [lateTime, setLateTime] = useState(() => localStorage.getItem('ams_late_time') || '09:30');
+  const [showLateTimeModal, setShowLateTimeModal] = useState(false);
+
+  // Handler to save late time
+  const handleSetLateTime = (newTime) => {
+    setLateTime(newTime);
+    localStorage.setItem('ams_late_time', newTime);
+    setShowLateTimeModal(false);
+  };
 
   // [NEW] Helper: Convert "January 2026" -> "2026-01" (For Input Value)
   const getMonthInputValue = (monthStr) => {
@@ -117,6 +175,13 @@ const AgentPayrollSystem = () => {
       setIsLoggedIn(true);
     }
   }, []);
+
+  // [FIX] Persist activeTab to localStorage whenever it changes
+  useEffect(() => {
+    if (isLoggedIn) {
+      localStorage.setItem('ams_active_tab', activeTab);
+    }
+  }, [activeTab, isLoggedIn]);
 
   // Fetch Data from Supabase
   const fetchData = async () => {
@@ -165,12 +230,79 @@ const AgentPayrollSystem = () => {
    
   // [NEW] HR Modal State
   const [showAddEmployee, setShowAddEmployee] = useState(false);
+
+  // [NEW] Reusable Date Filter Component
+const DateFilterBar = ({ filterType, setFilterType, dateVal, setDateVal, endVal, setEndVal, selectedMonth, handleMonthChange }) => {
+  return (
+    <div className="bg-slate-800 p-3 rounded-lg border border-slate-600 flex flex-wrap gap-4 items-center mb-6">
+      
+      {/* 1. Filter Type Selector */}
+      <div className="flex items-center gap-2">
+        <span className="text-slate-400 text-sm font-medium"><Calendar className="w-4 h-4 inline"/> Filter:</span>
+        <select 
+          value={filterType} 
+          onChange={(e) => setFilterType(e.target.value)}
+          className="bg-slate-700 text-white text-sm border border-slate-600 rounded px-2 py-1 focus:ring-2 focus:ring-blue-500 outline-none"
+        >
+          <option value="Daily">Daily</option>
+          <option value="Weekly">Weekly</option>
+          <option value="Monthly">Monthly</option>
+          <option value="Custom">Custom Range</option>
+        </select>
+      </div>
+
+      {/* 2. Inputs based on Type */}
+      <div className="flex items-center gap-2">
+        
+        {/* Monthly: Show your existing Month Picker */}
+        {filterType === 'Monthly' && (
+           <input 
+             type="month" 
+             value={getMonthInputValue(selectedMonth)} 
+             onChange={handleMonthChange}
+             className="bg-slate-700 text-white text-sm border border-slate-600 rounded px-2 py-1 [color-scheme:dark]"
+           />
+        )}
+
+        {/* Daily or Weekly: Show Single Date Picker */}
+        {(filterType === 'Daily' || filterType === 'Weekly') && (
+          <input 
+            type="date" 
+            value={dateVal} 
+            onChange={(e) => setDateVal(e.target.value)}
+            className="bg-slate-700 text-white text-sm border border-slate-600 rounded px-2 py-1 [color-scheme:dark]"
+          />
+        )}
+
+        {/* Custom: Show Start & End Date Pickers */}
+        {filterType === 'Custom' && (
+          <>
+            <input 
+              type="date" 
+              value={dateVal} 
+              onChange={(e) => setDateVal(e.target.value)}
+              className="bg-slate-700 text-white text-sm border border-slate-600 rounded px-2 py-1 [color-scheme:dark]"
+            />
+            <span className="text-slate-400">-</span>
+            <input 
+              type="date" 
+              value={endVal} 
+              onChange={(e) => setEndVal(e.target.value)}
+              className="bg-slate-700 text-white text-sm border border-slate-600 rounded px-2 py-1 [color-scheme:dark]"
+            />
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
     
   // Search and Filter States
   const [searchQuery, setSearchQuery] = useState('');
   const [teamFilter, setTeamFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
-  const [shiftFilter, setShiftFilter] = useState('All');
+  // [FIX] Replaced Shift with Center
+  const [centerFilter, setCenterFilter] = useState('All');
   const [evaluators, setEvaluators] = useState(['John Doe', 'Jane Smith']);
 
   // Login Logic
@@ -229,26 +361,31 @@ const AgentPayrollSystem = () => {
     setSearchQuery('');
     setTeamFilter('All');
     setStatusFilter('All');
-    setShiftFilter('All');
-    // [FIX] Clear session
+    
+    // [FIX] Clear session AND tab preference
     localStorage.removeItem('ams_user');
     localStorage.removeItem('ams_role');
+    localStorage.removeItem('ams_active_tab'); // <-- Add this line
   };
 
   // Filtered data based on search and filters
-    const filteredAgents = useMemo(() => {
+const filteredAgents = useMemo(() => {
     let result = userRole === 'Agent' 
-      ? agents.filter(a => a.name === currentUser?.name)
+      ? agents.filter(a => a.name === currentUser?.name) 
       : agents;
 
     return result.filter(agent => {
       const matchesSearch = agent.name.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesTeam = teamFilter === 'All' || teamFilter === 'All Teams' || agent.team === teamFilter;
       const matchesStatus = statusFilter === 'All' || statusFilter === 'All Status' || agent.status === statusFilter;
-      const matchesShift = shiftFilter === 'All' || shiftFilter === 'All Shifts' || agent.shift === shiftFilter;
-      return matchesSearch && matchesTeam && matchesStatus && matchesShift;
+      
+      // [FIX] Filter by Center instead of Shift
+      const matchesCenter = centerFilter === 'All' || centerFilter === 'All Centers' || agent.center === centerFilter;
+      
+      return matchesSearch && matchesTeam && matchesStatus && matchesCenter;
     });
-  }, [agents, searchQuery, teamFilter, statusFilter, shiftFilter, userRole, currentUser]);
+  }, [agents, searchQuery, teamFilter, statusFilter, centerFilter, userRole, currentUser]);
+  
 // --- UPDATED CALCULATIONS (Uses 21st-20th Logic) ---
   const dateRange = useMemo(() => getPayrollRange(selectedMonth), [selectedMonth]);
 
@@ -296,51 +433,101 @@ const AgentPayrollSystem = () => {
 
   // Dashboard Stats
 // [FIXED] Dashboard Stats Calculation
-  const dashboardStats = useMemo(() => {
+ const dashboardStats = useMemo(() => {
     const relevantAgents = userRole === 'Agent' ? 1 : agents.filter(a => a.status === 'Active').length;
     
+    const { start, end } = getActiveDateRange; // Use the new range
+
     const relevantSales = userRole === 'Agent' 
       ? sales.filter(s => 
           s.agentName === currentUser?.name && 
-          (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer') && 
-          dateRange.includes(s.date)
+          (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer') &&
+          s.date >= start && s.date <= end // [FIX] Use Range
         )
       : sales.filter(s => 
-          (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer') && 
-          dateRange.includes(s.date)
+          (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer') &&
+          s.date >= start && s.date <= end // [FIX] Use Range
         );
 
+    // ... Rest remains same ...
     const totalSalesCount = relevantSales.length;
     const totalRevenue = relevantSales.reduce((sum, s) => sum + (s.amount || 0), 0);
+    // Note: Payroll usually stays Monthly, so we keep using monthlyStats for that part
     const totalPayroll = monthlyStats.filter(a => a.status === 'Active').reduce((sum, a) => sum + a.netSalary, 0);
     
     return { totalAgents: relevantAgents, totalSalesCount, totalRevenue, totalPayroll };
-  }, [agents, sales, monthlyStats, dateRange, userRole, currentUser]);
+  }, [agents, sales, monthlyStats, getActiveDateRange, userRole, currentUser]);
+
+// [NEW] Dynamic Top Performers (Respects Date Filter)
+ // [NEW] Dynamic Top Performers (Respects Date Filter)
+  const filteredPerformerStats = useMemo(() => {
+    const { start, end } = getActiveDateRange;
+    
+    const relevantAgents = userRole === 'Agent' 
+      ? agents.filter(a => a.name === currentUser?.name) 
+      : agents;
+
+    const stats = relevantAgents.map(agent => {
+      // 1. Filter Sales by Date Range
+      const agentSales = sales.filter(s => 
+        s.agentName === agent.name && 
+        (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer') &&
+        s.date >= start && s.date <= end
+      );
+
+      const totalSales = agentSales.length;
+      const totalRevenue = agentSales.reduce((sum, s) => sum + (s.amount || 0), 0);
+      
+      // 2. [FIX] Calculate a safe Net Salary (or 0) to prevent crashes
+      // Since this is a custom date range, we just show Base Salary or 0 to keep it simple
+      const safeNetSalary = agent.baseSalary || 0;
+
+      return {
+        ...agent,
+        totalSales,
+        totalRevenue,
+        netSalary: safeNetSalary // <--- This line fixes the error
+      };
+    });
+
+    return stats.sort((a, b) => b.totalSales - a.totalSales);
+  }, [agents, sales, getActiveDateRange, userRole, currentUser]);
 
   const filteredSales = useMemo(() => {
     let result = userRole === 'Agent'
       ? sales.filter(s => s.agentName === currentUser?.name)
       : sales;
 
+    const { start, end } = getActiveDateRange; // Use the new range
+
     return result.filter(sale => {
       const matchesSearch = sale.agentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
                             sale.campaignType?.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesMonth = sale.month === selectedMonth;
+      
+      // [FIX] Filter by Date Range instead of Month String
+      const matchesDate = sale.date >= start && sale.date <= end;
+      
       const matchesStatus = statusFilter === 'All' || statusFilter === 'All Status' || sale.status === statusFilter;
-      return matchesSearch && matchesMonth && matchesStatus;
+      return matchesSearch && matchesDate && matchesStatus;
     });
-  }, [sales, searchQuery, selectedMonth, statusFilter, userRole, currentUser]);
+  }, [sales, searchQuery, getActiveDateRange, statusFilter, userRole, currentUser]);
 
-  const filteredAttendance = useMemo(() => {
+const filteredAttendance = useMemo(() => {
     let result = userRole === 'Agent'
       ? attendance.filter(a => a.agentName === currentUser?.name)
       : attendance;
 
+    const { start, end } = getActiveDateRange; // Use the new range
+
     return result.filter(record => {
       const matchesSearch = record.agentName.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesSearch;
+      
+      // [FIX] Filter by Date Range
+      const matchesDate = record.date >= start && record.date <= end;
+
+      return matchesSearch && matchesDate;
     });
-  }, [attendance, searchQuery, userRole, currentUser]);
+  }, [attendance, searchQuery, getActiveDateRange, userRole, currentUser]);
 
   const filteredFines = useMemo(() => {
     return fines.filter(fine => {
@@ -532,6 +719,7 @@ const handleEditAgent = async (formData) => {
   };
 
 // [FIXED] Handle Import Function
+ // [FIXED] Handle Import with Duplicate Prevention
   const handleImport = (file, lateTimeVal) => {
     if (!file) return;
 
@@ -563,7 +751,8 @@ const handleEditAgent = async (formData) => {
           return {
             name: values[0], 
             team: values[1], 
-            shift: values[2],
+            // [FIX] Map 3rd column to 'center' instead of 'shift'
+            center: values[2] || 'Phase 7', 
             baseSalary: parseInt(values[3]) || 0,
             cnic: values[5] || '', 
             password: '123', 
@@ -581,17 +770,32 @@ const handleEditAgent = async (formData) => {
             alert('Agents Import Failed: ' + error.message);
         }
 
-      // --- IMPORT SALES (UPDATED STATUS LOGIC) ---
+      // --- IMPORT SALES ---
+       // --- IMPORT SALES (FIXED DATE LOGIC) ---
       } else if (importType === 'sales') {
         const newSales = lines.slice(1).map((line, idx) => {
           const values = line.split(',').map(v => v.trim());
           if(!values[1]) return null; 
           
-          // Capture Disposition explicitly to check it
           const disposition = values[12] ? values[12].trim() : '';
+          const timestampRaw = values[0]; // e.g., "12/29/2025 17:22:38"
+
+          // [FIX] Extract Date correctly from CSV Timestamp
+          let finalDate = new Date().toISOString().split('T')[0]; // Default: Today
+          
+          if (timestampRaw) {
+             const d = new Date(timestampRaw);
+             if (!isNaN(d.getTime())) {
+                // Manually construct YYYY-MM-DD to avoid timezone shifting
+                const year = d.getFullYear();
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                finalDate = `${year}-${month}-${day}`;
+             }
+          }
 
           return {
-            timestamp: values[0] || new Date().toISOString(), 
+            timestamp: timestampRaw || new Date().toISOString(), 
             agentName: values[1] || '',      
             customerName: values[2] || '',   
             phoneNumber: values[3] || '',    
@@ -614,10 +818,10 @@ const handleEditAgent = async (formData) => {
             dockDetails: values[19] || '', 
             evaluator: values[20] || '',
             
-            // [FIX] Strict check for Sale status
             status: (disposition === 'HW- Xfer' || disposition === 'HW-IBXfer') ? 'Sale' : 'Unsuccessful',
             
-            date: new Date().toISOString().split('T')[0], 
+            // [FIX] Use the date extracted from CSV, not "Today"
+            date: finalDate, 
             month: selectedMonth
           };
         }).filter(Boolean);
@@ -626,11 +830,13 @@ const handleEditAgent = async (formData) => {
         if(!error) setSales([...sales, ...data]);
         else alert('Sales Import Failed: ' + error.message);
 
-      // --- IMPORT ATTENDANCE ---
+      // --- IMPORT ATTENDANCE (WITH DUPLICATE CHECK) ---
       } else if (importType === 'attendance') {
          const rows = lines.map(line => line.split(',').map(v => v.trim()));
          const dataRows = rows.slice(1);
          const dateMap = {};
+         
+         // 1. Parse CSV Data
          dataRows.forEach(row => {
             const name = row[2] ? row[2].trim().toLowerCase() : '';
             const timeStr = row[3] ? row[3].trim() : '';
@@ -657,9 +863,12 @@ const handleEditAgent = async (formData) => {
                }
             }
          });
+
          const activeAgents = agents.filter(a => a.status === 'Active');
          const newAttendance = [];
          const threshold = lateTimeVal || lateTime;
+
+         // 2. Build Potential New Records
          Object.keys(dateMap).forEach(date => {
            activeAgents.forEach(agent => {
              const agentKey = agent.name.toLowerCase();
@@ -668,15 +877,36 @@ const handleEditAgent = async (formData) => {
              const loginTime = times.length > 0 ? times[0] : '';
              const logoutTime = times.length > 1 ? times[times.length - 1] : '';
              const isLate = (loginTime && threshold && loginTime > threshold) ? true : false;
+             
              newAttendance.push({
                date: date, agentName: agent.name, loginTime: loginTime,
                logoutTime: logoutTime, status: status, late: isLate
              });
            });
          });
-         const { data, error } = await supabase.from('attendance').insert(newAttendance).select();
-         if(!error) { setAttendance([...attendance, ...data]); alert("Success! Attendance imported."); } 
-         else { alert('Attendance Import Failed: ' + error.message); }
+
+         // 3. [NEW] Filter Out Duplicates
+         // Only keep records where NO match is found in existing 'attendance' state
+         const uniqueAttendance = newAttendance.filter(newItem => {
+            const isDuplicate = attendance.some(existingItem => 
+                existingItem.agentName === newItem.agentName &&
+                existingItem.date === newItem.date &&
+                existingItem.loginTime === newItem.loginTime
+            );
+            return !isDuplicate;
+         });
+
+         // 4. Insert Unique Records Only
+         if (uniqueAttendance.length === 0) {
+             alert("All records are duplicates. No new data added.");
+         } else {
+             const { data, error } = await supabase.from('attendance').insert(uniqueAttendance).select();
+             if(!error) { 
+                 setAttendance([...attendance, ...data]); 
+                 alert(`Success! Added ${data.length} new records. (${newAttendance.length - data.length} duplicates skipped)`); 
+             } 
+             else { alert('Attendance Import Failed: ' + error.message); }
+         }
       }
       setShowImportModal(false);
     };
@@ -840,7 +1070,6 @@ const handleEditAgent = async (formData) => {
                     setSearchQuery('');
                     setTeamFilter('All');
                     setStatusFilter('All');
-                    setShiftFilter('All');
                   }}
                   className={`px-6 py-3 text-sm font-medium capitalize transition-colors whitespace-nowrap ${
   activeTab === tab
@@ -904,6 +1133,13 @@ const handleEditAgent = async (formData) => {
         {/* Dashboard */}
         {activeTab === 'dashboard' && (
           <div className="space-y-6">
+            {/* [NEW] Add Filter Bar Here */}
+    <DateFilterBar 
+        filterType={filterType} setFilterType={setFilterType}
+        dateVal={customStartDate} setDateVal={setCustomStartDate}
+        endVal={customEndDate} setEndVal={setCustomEndDate}
+        selectedMonth={selectedMonth} handleMonthChange={handleMonthChange}
+    />
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {userRole === 'Admin' && (
@@ -954,8 +1190,8 @@ const handleEditAgent = async (formData) => {
                     </tr>
                   </thead>
                   <tbody>
-                    {monthlyStats.slice(0, userRole === 'Agent' ? 1 : 10).map((agent, idx) => (
-                      <tr key={agent.id} className="border-b border-slate-700 hover:bg-slate-700">
+                    {filteredPerformerStats.slice(0, userRole === 'Agent' ? 1 : 10).map((agent, idx) => (
+                    <tr key={agent.id || idx} className="border-b border-slate-700 hover:bg-slate-700">
                         {userRole !== 'Agent' && (
                           <td className="py-3 px-4">
                             <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold ${
@@ -1059,6 +1295,7 @@ const handleEditAgent = async (formData) => {
             </div>
 
             {/* Search and Filters */}
+          {/* Search and Filters */}
             <div className="bg-slate-800/50 rounded-xl shadow-sm border border-slate-600 p-4">
               <div className="grid grid-cols-4 gap-4">
                 <input
@@ -1078,16 +1315,19 @@ const handleEditAgent = async (formData) => {
                   <option>Team B</option>
                   <option>Team C</option>
                 </select>
+
+                {/* [FIX] Center Filter instead of Shift */}
                 <select
-                  value={shiftFilter}
-                  onChange={(e) => setShiftFilter(e.target.value)}
+                  value={centerFilter}
+                  onChange={(e) => setCenterFilter(e.target.value)}
                   className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option>All Shifts</option>
-                  <option>Morning</option>
-                  <option>Evening</option>
-                  <option>Night</option>
+                  <option>All Centers</option>
+                  <option>Phase 4 - HomeWarranty</option>
+                  <option>Phase 4 - 5th Floor</option>
+                  <option>Phase 7</option>
                 </select>
+
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
@@ -1097,112 +1337,97 @@ const handleEditAgent = async (formData) => {
                   <option>Active</option>
                   <option>Inactive</option>
                 </select>
-                
               </div>
             </div>
 
+            {/* Agents Table */}
             <div className="bg-slate-800/80 rounded-xl shadow-sm border border-slate-600 overflow-hidden">
               <table className="w-full">
                 <thead className="bg-slate-900">
-  <tr>
-    <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">No.</th>
-    <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">Name</th>
-    <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">Team</th>
-    <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">Shift</th>
-    <th className="text-right py-3 px-4 text-sm font-medium text-slate-200">Base Salary</th>
-    <th className="text-center py-3 px-4 text-sm font-medium text-slate-200">Status</th>
-    <th className="text-center py-3 px-4 text-sm font-medium text-slate-200">Active Date</th>
-    <th className="text-center py-3 px-4 text-sm font-medium text-slate-200">Left Date</th>
-    {userRole === 'Admin' && (
-      <th className="text-center py-3 px-4 text-sm font-medium text-slate-200">Actions</th>
-    )}
-  </tr>
-</thead>
-      {/* Change key={agent.id} to key={agent.cnic} */}
-<tbody>
-  {filteredAgents.map((agent, idx) => (
-    // [FIX] Using CNIC as key since ID was removed
-    <tr key={agent.cnic || idx} className="border-b border-slate-700 hover:bg-slate-700">
-      
-      {/* 1. Number Column */}
-      <td className="py-3 px-4 text-slate-300">{idx + 1}</td>
-      
-      {/* 2. Name Column (This was missing) */}
-      <td className="py-3 px-4 font-medium text-white">{agent.name}</td>
-      
-      {/* 3. Team Column (This was missing) */}
-      <td className="py-3 px-4 text-slate-300">{agent.team}</td>
-      
-      {/* 4. Shift Column (This was missing) */}
-      <td className="py-3 px-4 text-slate-300">{agent.shift}</td>
-      
-      {/* 5. Base Salary Column (This was missing) */}
-      <td className="py-3 px-4 text-right text-slate-100">
-        {agent.baseSalary ? agent.baseSalary.toLocaleString() : 0} PKR
-      </td>
-      
-      {/* 6. Status Column (This was missing) */}
-      <td className="py-3 px-4 text-center">
-        <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-          agent.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-        }`}>
-          {agent.status}
-        </span>
-      </td>
-      
-      {/* 7. Active Date (This was missing) */}
-      <td className="py-3 px-4 text-center text-slate-100">
-        {agent.activeDate || '-'}
-      </td>
-      
-      {/* 8. Left Date (This was missing) */}
-      <td className="py-3 px-4 text-center text-slate-100">
-        {agent.leftDate || '-'}
-      </td>
+                  <tr>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">No.</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">Name</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">CNIC</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">Team</th>
+                    {/* [FIX] Changed Header to Center */}
+                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">Center</th>
+                    <th className="text-right py-3 px-4 text-sm font-medium text-slate-200">Base Salary</th>
+                    <th className="text-center py-3 px-4 text-sm font-medium text-slate-200">Status</th>
+                    <th className="text-center py-3 px-4 text-sm font-medium text-slate-200">Active Date</th>
+                    <th className="text-center py-3 px-4 text-sm font-medium text-slate-200">Left Date</th>
+                    {userRole === 'Admin' && (
+                      <th className="text-center py-3 px-4 text-sm font-medium text-slate-200">Actions</th>
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredAgents.map((agent, idx) => (
+                    <tr key={agent.cnic || idx} className="border-b border-slate-700 hover:bg-slate-700">
+                      <td className="py-3 px-4 text-slate-300">{idx + 1}</td>
+                      <td className="py-3 px-4 font-medium text-white">{agent.name}</td>
+                      <td className="py-3 px-4 text-slate-400 text-xs font-mono">{agent.cnic || '-'}</td>
+                      <td className="py-3 px-4 text-slate-300">{agent.team}</td>
+                      
+                      {/* [FIX] Display Center */}
+                      <td className="py-3 px-4 text-slate-300 text-xs">{agent.center || '-'}</td>
+                      
+                      <td className="py-3 px-4 text-right text-slate-100">
+                        {agent.baseSalary ? agent.baseSalary.toLocaleString() : 0}
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          agent.status === 'Active' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+                        }`}>
+                          {agent.status}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-center text-slate-400 text-xs">
+                        {agent.activeDate || '-'}
+                      </td>
+                      <td className="py-3 px-4 text-center text-slate-400 text-xs">
+                        {agent.leftDate || '-'}
+                      </td>
 
-      {/* 9. Actions Column (Updated to use CNIC) */}
-      {userRole === 'Admin' && (
-        <td className="py-3 px-4">
-          <div className="flex items-center justify-center gap-2 flex-wrap">
-            <button
-              onClick={() => {
-                setEditingAgent(agent);
-                setShowEditAgent(true);
-              }}
-              className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 text-xs font-medium transition-colors"
-            >
-              Edit
-            </button>
-            
-            {agent.status === 'Active' ? (
-              <button
-                // [FIX] Using agent.cnic instead of agent.id
-                onClick={() => handleMarkAsLeft(agent.cnic)} 
-                className="px-3 py-1 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 text-xs font-medium transition-colors"
-              >
-                Mark Left
-              </button>
-            ) : (
-              <button
-                onClick={() => handleReactivateAgent(agent.cnic)}
-                className="px-3 py-1 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 text-xs font-medium transition-colors"
-              >
-                Reactivate
-              </button>
-            )}
-            
-            <button
-              onClick={() => handleDeleteAgent(agent.cnic)}
-              className="px-3 py-1 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 text-xs font-medium transition-colors"
-            >
-              Delete
-            </button>
-          </div>
-        </td>
-      )}
-    </tr>
-  ))}
-</tbody>
+                      {userRole === 'Admin' && (
+                        <td className="py-3 px-4">
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              onClick={() => { setEditingAgent(agent); setShowEditAgent(true); }}
+                              className="p-1.5 bg-blue-500/10 text-blue-400 rounded hover:bg-blue-500/20 transition-colors"
+                              title="Edit Agent"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            {agent.status === 'Active' ? (
+                              <button
+                                onClick={() => handleMarkAsLeft(agent.cnic)} 
+                                className="p-1.5 bg-orange-500/10 text-orange-400 rounded hover:bg-orange-500/20 transition-colors"
+                                title="Mark as Left"
+                              >
+                                <UserX className="w-4 h-4" />
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleReactivateAgent(agent.cnic)}
+                                className="p-1.5 bg-green-500/10 text-green-400 rounded hover:bg-green-500/20 transition-colors"
+                                title="Reactivate"
+                              >
+                                <RotateCcw className="w-4 h-4" />
+                              </button>
+                            )}
+                            <button
+                              onClick={() => handleDeleteAgent(agent.cnic)}
+                              className="p-1.5 bg-red-500/10 text-red-400 rounded hover:bg-red-500/20 transition-colors"
+                              title="Delete Agent"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
               </table>
             </div>
           </div>
@@ -1248,7 +1473,13 @@ const handleEditAgent = async (formData) => {
                 )}
               </div>
             </div>
-
+{/* [NEW] Add Filter Bar Here */}
+    <DateFilterBar 
+        filterType={filterType} setFilterType={setFilterType}
+        dateVal={customStartDate} setDateVal={setCustomStartDate}
+        endVal={customEndDate} setEndVal={setCustomEndDate}
+        selectedMonth={selectedMonth} handleMonthChange={handleMonthChange}
+    />
             {/* Search and Filters */}
             <div className="bg-slate-800/50 rounded-xl shadow-sm border border-slate-600 p-4">
               <div className="grid grid-cols-2 gap-4">
@@ -1465,23 +1696,44 @@ const handleEditAgent = async (formData) => {
           </div>
         )}
 
-        {/* Attendance Tab */}
+{/* Attendance Tab */}
         {activeTab === 'attendance' && (
           <div className="space-y-6">
+            {/* Header Section */}
             <div className="flex justify-between items-center">
               <h2 className="text-xl font-semibold text-white">Attendance Records</h2>
-              {userRole === 'Admin' && (
-                <button 
-                  onClick={() => { setImportType('attendance'); setShowImportModal(true); }}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  <Upload className="w-4 h-4" />
-                  Import from Machine
-                </button>
-              )}
-            </div>
+              <div className="flex gap-3">
+                {/* Late Time Button */}
+                {userRole === 'Admin' && (
+                  <button 
+                    onClick={() => setShowLateTimeModal(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-600 transition-colors border border-slate-600"
+                  >
+                    <Clock className="w-4 h-4" />
+                    Set Threshold: {formatTime(lateTime)}
+                  </button>
+                )}
 
-            {/* Search */}
+                {/* Import Button */}
+                {userRole === 'Admin' && (
+                  <button 
+                    onClick={() => { setImportType('attendance'); setShowImportModal(true); }}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    <Upload className="w-4 h-4" />
+                    Import from Machine
+                  </button>
+                )}
+              </div>
+            </div>
+{/* [NEW] Add Filter Bar Here */}
+    <DateFilterBar 
+        filterType={filterType} setFilterType={setFilterType}
+        dateVal={customStartDate} setDateVal={setCustomStartDate}
+        endVal={customEndDate} setEndVal={setCustomEndDate}
+        selectedMonth={selectedMonth} handleMonthChange={handleMonthChange}
+    />
+            {/* Search Section */}
             <div className="bg-slate-800/50 rounded-xl shadow-sm border border-slate-600 p-4">
               <input
                 type="text"
@@ -1492,6 +1744,7 @@ const handleEditAgent = async (formData) => {
               />
             </div>
 
+            {/* Table Section */}
             <div className="bg-slate-800/80 rounded-xl shadow-sm border border-slate-600 overflow-hidden">
               <table className="w-full">
                 <thead className="bg-slate-900">
@@ -1501,19 +1754,16 @@ const handleEditAgent = async (formData) => {
                     <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">Login</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">Logout</th>
                     <th className="text-center py-3 px-4 text-sm font-medium text-slate-200">Status</th>
-<th className="text-center py-3 px-4 text-sm font-medium text-slate-200">Late</th>
+                    <th className="text-center py-3 px-4 text-sm font-medium text-slate-200">Late</th>
                   </tr>
                 </thead>
-              <tbody>
+                <tbody>
                   {filteredAttendance.map(record => (
                     <tr key={record.id} className="border-b border-slate-700 hover:bg-slate-700">
                       <td className="py-3 px-4 text-slate-300">{record.date}</td>
                       <td className="py-3 px-4 font-medium text-white">{record.agentName}</td>
-                      
-                      {/* [FIX] Use formatTime to show AM/PM */}
                       <td className="py-3 px-4 text-slate-300">{formatTime(record.loginTime)}</td>
                       <td className="py-3 px-4 text-slate-300">{formatTime(record.logoutTime)}</td>
-                      
                       <td className="py-3 px-4 text-center">
                         <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                           record.status === 'Present' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
@@ -1759,21 +2009,27 @@ const handleEditAgent = async (formData) => {
       </div>
 
       {/* Modals */}
+      {/* Add this with the other modals */}
+      {/* Modals Section - MUST BE INSIDE THE MAIN DIV */}
       {showAddAgent && <AgentModal onClose={() => setShowAddAgent(false)} onSubmit={handleAddAgent} />}
       {showEditAgent && <AgentModal onClose={() => { setShowEditAgent(false); setEditingAgent(null); }} onSubmit={handleEditAgent} agent={editingAgent} isEdit={true} />}
       {showAddSale && <SaleModal agents={agents} currentUser={currentUser} userRole={userRole} onClose={() => setShowAddSale(false)} onSubmit={handleAddSale} />}
       {editSale && <SaleModal agents={agents} currentUser={currentUser} userRole={userRole} onClose={() => setEditSale(null)} onSubmit={handleEditSale} sale={editSale} isEdit={true} />}
       {showAddFine && <FineModal agents={agents} onClose={() => setShowAddFine(false)} onSubmit={handleAddFine} />}
       {showAddBonus && <BonusModal agents={agents} onClose={() => setShowAddBonus(false)} onSubmit={handleAddBonus} />}
-      {showImportModal && <ImportModal importType={importType} onClose={() => setShowImportModal(false)} onImport={handleImport} setLateTime={setLateTime} />}
+      {showImportModal && <ImportModal importType={importType} onClose={() => setShowImportModal(false)} onImport={handleImport} setLateTime={setLateTime} currentGlobalLateTime={lateTime} />}
       {showAddEmployee && <HREmployeeModal agents={agents} onClose={() => setShowAddEmployee(false)} onSubmit={handleAddEmployee} />}
-    </div>
+      
+      {/* Late Time Modal */}
+      {showLateTimeModal && <LateTimeModal currentLateTime={lateTime} onClose={() => setShowLateTimeModal(false)} onSubmit={handleSetLateTime} />}
+
+    </div> // <--- THIS must be the very last line before );
   );
 };
 
 // Import Modal
 const ImportModal = ({ importType, onClose, onImport, setLateTime }) => {
-  const [lateTimeInput, setLateTimeInput] = useState('09:30');
+  const [lateTimeInput, setLateTimeInput] = useState('19:00');
   const getFormatInfo = () => {
     switch(importType) {
       case 'agents': 
@@ -1849,9 +2105,10 @@ const AgentModal = ({ onClose, onSubmit, agent = null, isEdit = false }) => {
     name: agent?.name || '', 
     password: agent?.password || '123', 
     team: agent?.team || 'Team A',
-    shift: agent?.shift || 'Morning', 
+    // [FIX] Changed from shift to center (Default: Phase 7)
+    center: agent?.center || 'Phase 7', 
     baseSalary: agent?.baseSalary || 40000,
-    cnic: agent?.cnic || '', // [ADDED] CNIC Field
+    cnic: agent?.cnic || '', 
     activeDate: agent?.activeDate || new Date().toISOString().split('T')[0], 
     leftDate: agent?.leftDate || null,
     status: agent?.status || 'Active'
@@ -1865,15 +2122,27 @@ const AgentModal = ({ onClose, onSubmit, agent = null, isEdit = false }) => {
           <input type="text" placeholder="Agent Name" className="w-full px-4 py-2 border border-slate-300 rounded-lg" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
           <input type="text" placeholder="Password (default: 123)" className="w-full px-4 py-2 border border-slate-300 rounded-lg" value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} />
           
-          {/* [ADDED] CNIC Input */}
           <input type="text" placeholder="CNIC (Required)" className="w-full px-4 py-2 border border-slate-300 rounded-lg" value={formData.cnic} onChange={(e) => setFormData({ ...formData, cnic: e.target.value })} />
 
-          <select className="w-full px-4 py-2 border border-slate-300 rounded-lg" value={formData.team} onChange={(e) => setFormData({ ...formData, team: e.target.value })}>
-            <option>Team A</option><option>Team B</option><option>Team C</option>
-          </select>
-          <select className="w-full px-4 py-2 border border-slate-300 rounded-lg" value={formData.shift} onChange={(e) => setFormData({ ...formData, shift: e.target.value })}>
-            <option>Morning</option><option>Evening</option><option>Night</option>
-          </select>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">Team</label>
+              <select className="w-full px-4 py-2 border border-slate-300 rounded-lg" value={formData.team} onChange={(e) => setFormData({ ...formData, team: e.target.value })}>
+                <option>Team A</option><option>Team B</option><option>Team C</option>
+              </select>
+            </div>
+            
+            {/* [FIX] Center Dropdown */}
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">Center</label>
+              <select className="w-full px-4 py-2 border border-slate-300 rounded-lg" value={formData.center} onChange={(e) => setFormData({ ...formData, center: e.target.value })}>
+                <option>Phase 4 - HomeWarranty</option>
+                <option>Phase 4 - 5th Floor</option>
+                <option>Phase 7</option>
+              </select>
+            </div>
+          </div>
+
           <input type="number" placeholder="Base Salary" className="w-full px-4 py-2 border border-slate-300 rounded-lg" value={formData.baseSalary} onChange={(e) => setFormData({ ...formData, baseSalary: parseInt(e.target.value) })} />
           {isEdit && (
             <>
@@ -2028,6 +2297,51 @@ const HREmployeeModal = ({ onClose, onSubmit }) => {
         <div className="flex gap-3 mt-6">
           <button onClick={() => onSubmit(formData)} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Save Record</button>
           <button onClick={onClose} className="px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-100 text-slate-700 font-medium">Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// [NEW] Late Time Modal
+const LateTimeModal = ({ currentLateTime, onClose, onSubmit }) => {
+  const [time, setTime] = useState(currentLateTime);
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm">
+        <h3 className="text-xl font-semibold text-slate-800 mb-4 flex items-center gap-2">
+          <Clock className="w-5 h-5 text-blue-600"/> Set Late Threshold
+        </h3>
+        <p className="text-sm text-slate-500 mb-4">
+          Agents logging in after this time will be marked as <b>Late</b>.
+        </p>
+        
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Late Time</label>
+            <input 
+              type="time" 
+              value={time} 
+              onChange={(e) => setTime(e.target.value)} 
+              className="w-full px-4 py-3 border border-slate-300 rounded-lg text-lg" 
+            />
+          </div>
+        </div>
+
+        <div className="flex gap-3 mt-6">
+          <button 
+            onClick={() => onSubmit(time)} 
+            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+          >
+            Save Setting
+          </button>
+          <button 
+            onClick={onClose} 
+            className="px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-100 text-slate-700 font-medium"
+          >
+            Cancel
+          </button>
         </div>
       </div>
     </div>
