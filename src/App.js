@@ -196,6 +196,11 @@ const AgentPayrollSystem = () => {
   const [showAddBonus, setShowAddBonus] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [importType, setImportType] = useState('');
+  
+  // Editing States
+  const [editingFine, setEditingFine] = useState(null);
+  const [editingBonus, setEditingBonus] = useState(null);
+  const [editingHR, setEditingHR] = useState(null);
    
   // [NEW] HR Modal State
   const [showAddEmployee, setShowAddEmployee] = useState(false);
@@ -337,35 +342,29 @@ const DateFilterBar = ({ filterType, setFilterType, dateVal, setDateVal, endVal,
     localStorage.removeItem('ams_active_tab'); // <-- Add this line
   };
 
-  // Filtered data based on search and filters
-const filteredAgents = useMemo(() => {
-    let result = userRole === 'Agent' 
-      ? agents.filter(a => a.name === currentUser?.name) 
-      : agents;
+// --- FILTERING LOGIC ---
 
-    return result.filter(agent => {
-      const matchesSearch = agent.name.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesTeam = teamFilter === 'All' || teamFilter === 'All Teams' || agent.team === teamFilter;
-      const matchesStatus = statusFilter === 'All' || statusFilter === 'All Status' || agent.status === statusFilter;
-      
-      // [FIX] Filter by Center instead of Shift
-      const matchesCenter = centerFilter === 'All' || centerFilter === 'All Centers' || agent.center === centerFilter;
-      
-      return matchesSearch && matchesTeam && matchesStatus && matchesCenter;
-    });
-  }, [agents, searchQuery, teamFilter, statusFilter, centerFilter, userRole, currentUser]);
-  
-// --- UPDATED CALCULATIONS (Uses 21st-20th Logic) ---
-  const dateRange = useMemo(() => getPayrollRange(selectedMonth), [selectedMonth]);
-
-// [FIXED] Monthly Matrix Calculation
-  const monthlyStats = useMemo(() => {
-    const filteredAgentsList = userRole === 'Agent' 
+  // 1. Helper: validAgents Set (Optimized for performance)
+  // This creates a Set of names of agents who match the selected Team/Center
+  const validAgentNames = useMemo(() => {
+    const relevantAgents = userRole === 'Agent' 
       ? agents.filter(a => a.name === currentUser?.name)
       : agents;
+      
+    return new Set(relevantAgents.filter(a => {
+      const matchTeam = teamFilter === 'All' || teamFilter === 'All Teams' || a.team === teamFilter;
+      const matchCenter = centerFilter === 'All' || centerFilter === 'All Centers' || a.center === centerFilter;
+      return matchTeam && matchCenter;
+    }).map(a => a.name));
+  }, [agents, teamFilter, centerFilter, userRole, currentUser]);
+
+  const dateRange = useMemo(() => getPayrollRange(selectedMonth), [selectedMonth]);
+
+  // 2. Monthly Stats (Respects Team/Center)
+  const monthlyStats = useMemo(() => {
+    const filteredAgentsList = agents.filter(a => validAgentNames.has(a.name));
 
     const agentStats = filteredAgentsList.map(agent => {
-      // [FIX] Count as Sale if status is 'Sale' OR disposition matches
       const approvedSales = sales.filter(s => 
         s.agentName === agent.name && 
         (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer') && 
@@ -390,54 +389,45 @@ const filteredAgents = useMemo(() => {
       return {
         ...agent,
         totalSales,
-        totalRevenue,
-        totalFines: agentFines,
-        totalBonuses: agentBonuses,
-        netSalary
+        totalRevenue: totalRevenue || 0,
+        totalFines: agentFines || 0,
+        totalBonuses: agentBonuses || 0,
+        netSalary: netSalary || 0
       };
     });
     
     return agentStats.sort((a, b) => b.totalSales - a.totalSales);
-  }, [agents, sales, fines, bonuses, selectedMonth, dateRange, userRole, currentUser]);
+  }, [agents, sales, fines, bonuses, selectedMonth, dateRange, validAgentNames]);
 
-  // Dashboard Stats
-// [FIXED] Dashboard Stats Calculation
- const dashboardStats = useMemo(() => {
-    const relevantAgents = userRole === 'Agent' ? 1 : agents.filter(a => a.status === 'Active').length;
-    
-    const { start, end } = getActiveDateRange; // Use the new range
+  // 3. Dashboard Stats (Respects Team/Center + Date Range)
+  const dashboardStats = useMemo(() => {
+    const { start, end } = getActiveDateRange;
 
-    const relevantSales = userRole === 'Agent' 
-      ? sales.filter(s => 
-          s.agentName === currentUser?.name && 
-          (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer') &&
-          s.date >= start && s.date <= end // [FIX] Use Range
-        )
-      : sales.filter(s => 
-          (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer') &&
-          s.date >= start && s.date <= end // [FIX] Use Range
-        );
+    // Only count agents matching the filter
+    const activeAgentCount = agents.filter(a => a.status === 'Active' && validAgentNames.has(a.name)).length;
 
-    // ... Rest remains same ...
+    // Filter sales by Date AND by Valid Agents (Team/Center)
+    const relevantSales = sales.filter(s => 
+       validAgentNames.has(s.agentName) &&
+       (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer') &&
+       s.date >= start && s.date <= end
+    );
+
     const totalSalesCount = relevantSales.length;
     const totalRevenue = relevantSales.reduce((sum, s) => sum + (s.amount || 0), 0);
-    // Note: Payroll usually stays Monthly, so we keep using monthlyStats for that part
-    const totalPayroll = monthlyStats.filter(a => a.status === 'Active').reduce((sum, a) => sum + a.netSalary, 0);
     
-    return { totalAgents: relevantAgents, totalSalesCount, totalRevenue, totalPayroll };
-  }, [agents, sales, monthlyStats, getActiveDateRange, userRole, currentUser]);
+    // Payroll usually respects the monthly cycle, but filtered by team
+    const totalPayroll = monthlyStats.reduce((sum, a) => sum + a.netSalary, 0);
+    
+    return { totalAgents: activeAgentCount, totalSalesCount, totalRevenue, totalPayroll };
+  }, [agents, sales, monthlyStats, getActiveDateRange, validAgentNames]);
 
-// [NEW] Dynamic Top Performers (Respects Date Filter)
- // [NEW] Dynamic Top Performers (Respects Date Filter)
+  // 4. Top Performers (Respects Team/Center + Date Range)
   const filteredPerformerStats = useMemo(() => {
     const { start, end } = getActiveDateRange;
-    
-    const relevantAgents = userRole === 'Agent' 
-      ? agents.filter(a => a.name === currentUser?.name) 
-      : agents;
+    const relevantAgents = agents.filter(a => validAgentNames.has(a.name));
 
     const stats = relevantAgents.map(agent => {
-      // 1. Filter Sales by Date Range
       const agentSales = sales.filter(s => 
         s.agentName === agent.name && 
         (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer') &&
@@ -446,83 +436,81 @@ const filteredAgents = useMemo(() => {
 
       const totalSales = agentSales.length;
       const totalRevenue = agentSales.reduce((sum, s) => sum + (s.amount || 0), 0);
-      
-      // 2. [FIX] Calculate a safe Net Salary (or 0) to prevent crashes
-      // Since this is a custom date range, we just show Base Salary or 0 to keep it simple
       const safeNetSalary = agent.baseSalary || 0;
 
-      return {
-        ...agent,
-        totalSales,
-        totalRevenue,
-        netSalary: safeNetSalary // <--- This line fixes the error
-      };
+      return { ...agent, totalSales, totalRevenue, netSalary: safeNetSalary };
     });
 
     return stats.sort((a, b) => b.totalSales - a.totalSales);
-  }, [agents, sales, getActiveDateRange, userRole, currentUser]);
+  }, [agents, sales, getActiveDateRange, validAgentNames]);
 
+  // 5. Sales Table (Respects Team/Center)
   const filteredSales = useMemo(() => {
-    let result = userRole === 'Agent'
-      ? sales.filter(s => s.agentName === currentUser?.name)
-      : sales;
-
-    const { start, end } = getActiveDateRange; // Use the new range
-
-    return result.filter(sale => {
+    const { start, end } = getActiveDateRange;
+    return sales.filter(sale => {
       const matchesSearch = sale.agentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
                             sale.campaignType?.toLowerCase().includes(searchQuery.toLowerCase());
-      
-      // [FIX] Filter by Date Range instead of Month String
       const matchesDate = sale.date >= start && sale.date <= end;
-      
       const matchesStatus = statusFilter === 'All' || statusFilter === 'All Status' || sale.status === statusFilter;
-      return matchesSearch && matchesDate && matchesStatus;
-    });
-  }, [sales, searchQuery, getActiveDateRange, statusFilter, userRole, currentUser]);
-
-const filteredAttendance = useMemo(() => {
-    let result = userRole === 'Agent'
-      ? attendance.filter(a => a.agentName === currentUser?.name)
-      : attendance;
-
-    const { start, end } = getActiveDateRange; // Use the new range
-
-    return result.filter(record => {
-      const matchesSearch = record.agentName.toLowerCase().includes(searchQuery.toLowerCase());
+      // Check if agent is in allowed list (Team/Center)
+      const matchesTeamCenter = validAgentNames.has(sale.agentName);
       
-      // [FIX] Filter by Date Range
-      const matchesDate = record.date >= start && record.date <= end;
-
-      return matchesSearch && matchesDate;
+      return matchesSearch && matchesDate && matchesStatus && matchesTeamCenter;
     });
-  }, [attendance, searchQuery, getActiveDateRange, userRole, currentUser]);
+  }, [sales, searchQuery, getActiveDateRange, statusFilter, validAgentNames]);
 
+  // 6. Attendance Table (Respects Team/Center)
+  const filteredAttendance = useMemo(() => {
+    const { start, end } = getActiveDateRange;
+    return attendance.filter(record => {
+      const matchesSearch = record.agentName.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesDate = record.date >= start && record.date <= end;
+      const matchesTeamCenter = validAgentNames.has(record.agentName);
+      return matchesSearch && matchesDate && matchesTeamCenter;
+    });
+  }, [attendance, searchQuery, getActiveDateRange, validAgentNames]);
+
+  // 7. Agents Table (Respects Team/Center)
+  const filteredAgents = useMemo(() => {
+    return agents.filter(agent => {
+       const matchesSearch = agent.name.toLowerCase().includes(searchQuery.toLowerCase());
+       const matchesStatus = statusFilter === 'All' || statusFilter === 'All Status' || agent.status === statusFilter;
+       // We use validAgentNames logic here explicitly to match the dropdowns
+       const matchesTeam = teamFilter === 'All' || teamFilter === 'All Teams' || agent.team === teamFilter;
+       const matchesCenter = centerFilter === 'All' || centerFilter === 'All Centers' || agent.center === centerFilter;
+       
+       return matchesSearch && matchesStatus && matchesTeam && matchesCenter;
+    });
+  }, [agents, searchQuery, statusFilter, teamFilter, centerFilter]);
+
+  // 8. Fines (Respects Team/Center)
   const filteredFines = useMemo(() => {
     return fines.filter(fine => {
       const matchesSearch = fine.agentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
                             fine.reason.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesMonth = fine.month === selectedMonth;
-      return matchesSearch && matchesMonth;
+      const matchesTeamCenter = validAgentNames.has(fine.agentName);
+      return matchesSearch && fine.month === selectedMonth && matchesTeamCenter;
     });
-  }, [fines, searchQuery, selectedMonth]);
+  }, [fines, searchQuery, selectedMonth, validAgentNames]);
 
+  // 9. Bonuses (Respects Team/Center)
   const filteredBonuses = useMemo(() => {
     return bonuses.filter(bonus => {
       const matchesSearch = bonus.agentName.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesMonth = bonus.month === selectedMonth;
-      return matchesSearch && matchesMonth;
+      const matchesTeamCenter = validAgentNames.has(bonus.agentName);
+      return matchesSearch && bonus.month === selectedMonth && matchesTeamCenter;
     });
-  }, [bonuses, searchQuery, selectedMonth]);
+  }, [bonuses, searchQuery, selectedMonth, validAgentNames]);
 
-  // [NEW] HR Filters
+  // 10. HR (Respects Team/Center - matches by Name)
   const filteredHR = useMemo(() => {
-    return hrRecords.filter(rec => 
-      rec.agent_name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      rec.designation.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }, [hrRecords, searchQuery]);
-
+    return hrRecords.filter(rec => {
+       const matchesSearch = rec.agent_name.toLowerCase().includes(searchQuery.toLowerCase());
+       // Optional: Filter HR records if they match an existing agent in the filtered team/center
+       const matchesTeamCenter = validAgentNames.has(rec.agent_name) || teamFilter === 'All'; 
+       return matchesSearch && matchesTeamCenter;
+    });
+  }, [hrRecords, searchQuery, validAgentNames, teamFilter]);
 
   // Add Agent
   const handleAddAgent = async (formData) => {
@@ -883,6 +871,68 @@ const handleEditAgent = async (formData) => {
     else { reader.readAsArrayBuffer(file); }
   };
 
+  // --- FINE HANDLERS ---
+  const handleEditFine = async (formData) => {
+    const { error } = await supabase.from('fines').update(formData).eq('id', editingFine.id);
+    if (error) alert('Error updating fine: ' + error.message);
+    else {
+      setFines(fines.map(f => f.id === editingFine.id ? { ...f, ...formData } : f));
+      setShowAddFine(false);
+      setEditingFine(null);
+    }
+  };
+
+  const handleDeleteFine = async (id) => {
+    if (window.confirm('Delete this fine?')) {
+      const { error } = await supabase.from('fines').delete().eq('id', id);
+      if (!error) setFines(fines.filter(f => f.id !== id));
+    }
+  };
+
+  // --- BONUS HANDLERS ---
+  const handleEditBonus = async (formData) => {
+    const { error } = await supabase.from('bonuses').update(formData).eq('id', editingBonus.id);
+    if (error) alert('Error updating bonus: ' + error.message);
+    else {
+      setBonuses(bonuses.map(b => b.id === editingBonus.id ? { ...b, ...formData } : b));
+      setShowAddBonus(false);
+      setEditingBonus(null);
+    }
+  };
+
+  const handleDeleteBonus = async (id) => {
+    if (window.confirm('Delete this bonus?')) {
+      const { error } = await supabase.from('bonuses').delete().eq('id', id);
+      if (!error) setBonuses(bonuses.filter(b => b.id !== id));
+    }
+  };
+
+  // --- HR HANDLERS ---
+  const handleEditHR = async (formData) => {
+    const { error } = await supabase.from('hr_records').update(formData).eq('id', editingHR.id);
+    if (error) alert('Error updating employee: ' + error.message);
+    else {
+      setHrRecords(hrRecords.map(h => h.id === editingHR.id ? { ...h, ...formData } : h));
+      setShowAddEmployee(false);
+      setEditingHR(null);
+    }
+  };
+
+  const handleToggleHRStatus = async (id, currentStatus) => {
+    const newStatus = currentStatus === 'Active' ? 'Left' : 'Active';
+    const { error } = await supabase.from('hr_records').update({ status: newStatus }).eq('id', id);
+    if (!error) {
+       setHrRecords(hrRecords.map(h => h.id === id ? { ...h, status: newStatus } : h));
+    }
+  };
+
+  const handleDeleteHR = async (id) => {
+    if (window.confirm('Delete this employee record?')) {
+      const { error } = await supabase.from('hr_records').delete().eq('id', id);
+      if (!error) setHrRecords(hrRecords.filter(h => h.id !== id));
+    }
+  };
+
   // Export to CSV
   const exportToCSV = () => {
     const csv = monthlyStats.map(a => 
@@ -1179,49 +1229,63 @@ const handleEditAgent = async (formData) => {
         )}
 
         {/* [NEW] HR Tab Content */}
+       {/* HR Tab */}
         {activeTab === 'hr' && (
-           <div className="space-y-6">
+          <div className="space-y-6">
              <div className="flex justify-between items-center">
-                <h2 className="text-xl font-semibold text-white">HR - Employment Data</h2>
-                <button onClick={() => setShowAddEmployee(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-                   <Plus className="w-4 h-4" /> Add Employee
-                </button>
+                 <h2 className="text-xl font-semibold text-white">HR - Employment Data</h2>
+                 <button onClick={() => setShowAddEmployee(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                    <Plus className="w-4 h-4"/> Add Employee
+                 </button>
              </div>
-             
-             {/* HR Search */}
+
              <div className="bg-slate-800/50 rounded-xl shadow-sm border border-slate-600 p-4">
-                <input type="text" placeholder="Search employee..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-                  className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 placeholder-slate-400 w-full" />
+                <input type="text" placeholder="Search employee..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 placeholder-slate-400 w-full" />
              </div>
 
              <div className="bg-slate-800/80 rounded-xl shadow-sm border border-slate-600 overflow-hidden">
-                <table className="w-full text-left">
-                   <thead className="bg-slate-900">
-                      <tr>
-                          <th className="py-3 px-4 text-sm font-medium text-slate-200">Name</th>
-                          <th className="py-3 px-4 text-sm font-medium text-slate-200">Designation</th>
-                          <th className="py-3 px-4 text-sm font-medium text-slate-200">CNIC</th>
-                          <th className="py-3 px-4 text-sm font-medium text-slate-200">Joining Date</th>
-                          <th className="py-3 px-4 text-sm font-medium text-slate-200">Bank Details</th>
-                          <th className="py-3 px-4 text-sm font-medium text-slate-200">Status</th>
-                      </tr>
-                   </thead>
-                   <tbody>
-                      {filteredHR.map((rec) => (
-                         <tr key={rec.id} className="border-b border-slate-700 hover:bg-slate-700">
-                            <td className="py-3 px-4 text-white font-medium">{rec.agent_name}</td>
-                            <td className="py-3 px-4 text-slate-300">{rec.designation}</td>
-                            <td className="py-3 px-4 text-slate-300">{rec.cnic}</td>
-                            <td className="py-3 px-4 text-slate-300">{rec.joining_date}</td>
-                            <td className="py-3 px-4 text-slate-300 text-xs">{rec.bank_name}<br/>{rec.account_number}</td>
-                            <td className="py-3 px-4"><span className="bg-green-100 text-green-700 px-2 py-1 rounded text-xs">{rec.status}</span></td>
+                 <table className="w-full text-left">
+                     <thead className="bg-slate-900">
+                         <tr>
+                             <th className="py-3 px-4 text-sm font-medium text-slate-200">No.</th>
+                             <th className="py-3 px-4 text-sm font-medium text-slate-200">Name</th>
+                             <th className="py-3 px-4 text-sm font-medium text-slate-200">Designation</th>
+                             <th className="py-3 px-4 text-sm font-medium text-slate-200">CNIC</th>
+                             <th className="py-3 px-4 text-sm font-medium text-slate-200">Joining Date</th>
+                             <th className="py-3 px-4 text-sm font-medium text-slate-200">Status</th>
+                             <th className="py-3 px-4 text-sm font-medium text-center text-slate-200">Actions</th>
                          </tr>
-                      ))}
-                      {filteredHR.length === 0 && <tr><td colSpan="6" className="p-4 text-center text-slate-500">No records found</td></tr>}
-                   </tbody>
-                </table>
+                     </thead>
+                     <tbody>
+                         {filteredHR.map((rec, idx) => (
+                             <tr key={rec.id} className="border-b border-slate-700 hover:bg-slate-700">
+                                 <td className="py-3 px-4 text-slate-300">{idx + 1}</td>
+                                 <td className="py-3 px-4 text-white font-medium">{rec.agent_name}</td>
+                                 <td className="py-3 px-4 text-slate-300">{rec.designation}</td>
+                                 <td className="py-3 px-4 text-slate-300">{rec.cnic}</td>
+                                 <td className="py-3 px-4 text-slate-300">{rec.joining_date}</td>
+                                 <td className="py-3 px-4">
+                                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                        (rec.status || 'Active') === 'Active' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+                                     }`}>
+                                        {rec.status || 'Active'}
+                                     </span>
+                                 </td>
+                                 <td className="py-3 px-4">
+                                    <div className="flex items-center justify-center gap-2">
+                                        <button onClick={() => { setEditingHR(rec); setShowAddEmployee(true); }} className="p-1.5 bg-blue-500/10 text-blue-400 rounded hover:bg-blue-500/20" title="Edit"><Pencil className="w-4 h-4" /></button>
+                                        <button onClick={() => handleToggleHRStatus(rec.id, rec.status || 'Active')} className={`p-1.5 rounded transition-colors ${rec.status === 'Active' ? 'bg-orange-500/10 text-orange-400 hover:bg-orange-500/20' : 'bg-green-500/10 text-green-400 hover:bg-green-500/20'}`} title={rec.status === 'Active' ? "Mark Left" : "Reactivate"}>
+                                            {rec.status === 'Active' ? <UserX className="w-4 h-4" /> : <RotateCcw className="w-4 h-4" />}
+                                        </button>
+                                        <button onClick={() => handleDeleteHR(rec.id)} className="p-1.5 bg-red-500/10 text-red-400 rounded hover:bg-red-500/20" title="Delete"><Trash2 className="w-4 h-4" /></button>
+                                    </div>
+                                 </td>
+                             </tr>
+                         ))}
+                     </tbody>
+                 </table>
              </div>
-           </div>
+          </div>
         )}
 
         {/* Agents Tab */}
@@ -1459,11 +1523,12 @@ const handleEditAgent = async (formData) => {
                 </select>
               </div>
             </div>
-
-            <div className="bg-slate-800/80 rounded-xl shadow-sm border border-slate-600 overflow-x-auto">
+          <div className="bg-slate-800/80 rounded-xl shadow-sm border border-slate-600 overflow-x-auto">
               <table className="w-full min-w-max">
                 <thead className="bg-slate-900">
                   <tr>
+                    {/* [NEW] Row Number Header */}
+                    <th className="text-left py-3 px-2 text-xs font-medium text-slate-200">No.</th>
                     <th className="text-left py-3 px-2 text-xs font-medium text-slate-200">Timestamp</th>
                     <th className="text-left py-3 px-2 text-xs font-medium text-slate-200">Agent Name</th>
                     <th className="text-left py-3 px-2 text-xs font-medium text-slate-200">Customer Name</th>
@@ -1485,14 +1550,14 @@ const handleEditAgent = async (formData) => {
                     <th className="text-left py-3 px-2 text-xs font-medium text-slate-200">Grading</th>
                     <th className="text-left py-3 px-2 text-xs font-medium text-slate-200">Dock Details</th>
                     <th className="text-left py-3 px-2 text-xs font-medium text-slate-200">Evaluator</th>
-                    {(userRole === 'Admin' || userRole === 'QA') && (
-                      <th className="text-center py-3 px-2 text-xs font-medium text-slate-200">Actions</th>
-                    )}
+                    {(userRole === 'Admin' || userRole === 'QA') && <th className="text-center py-3 px-2 text-xs font-medium text-slate-200">Actions</th>}
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredSales.map(sale => (
+                  {filteredSales.map((sale, idx) => (
                     <tr key={sale.id} className="border-b border-slate-700 hover:bg-slate-700">
+                      {/* [NEW] Row Number Cell */}
+                      <td className="py-2 px-2 text-xs text-slate-300">{idx + 1}</td>
                       <td className="py-2 px-2 text-xs text-slate-300">{sale.timestamp || sale.date}</td>
                       <td className="py-2 px-2 text-xs font-medium text-white">{sale.agentName}</td>
                       <td className="py-2 px-2 text-xs text-slate-300">{sale.customerName || '-'}</td>
@@ -1505,6 +1570,7 @@ const handleEditAgent = async (formData) => {
                       <td className="py-2 px-2 text-xs text-slate-300">{sale.teamLead || '-'}</td>
                       <td className="py-2 px-2 text-xs text-slate-300">{sale.comments || '-'}</td>
                       <td className="py-2 px-2 text-xs text-slate-300">{sale.listId || '-'}</td>
+                      {/* (Keep the rest of your Sales columns exactly as they were...) */}
                       {(userRole === 'Admin' || userRole === 'QA') ? (
                         <td className="py-2 px-2">
                           <select
@@ -1514,20 +1580,22 @@ const handleEditAgent = async (formData) => {
                           >
                             <option value="">-</option>
                             <option>HW- Xfer</option>
-                            <option>HW-IBXfer</option>
-                            <option>Unsuccessful</option>
-                            <option>HUWT</option>
-                            <option>DNC</option>
-                            <option>DNQ</option>
-                            <option>DNQ-Dup</option>
-                            <option>HW-Xfer-CDR</option>
-                            <option>DNQ-Webform</option>
-                            <option>Review Pending</option>
+		<option>HW-IBXfer</option>
+		<option>Unsuccessful</option>
+		<option>HUWT</option>
+		<option>DNC</option>
+		<option>DNQ</option>
+		<option>DNQ-Dup</option>
+		<option>HW-Xfer-CDR</option>
+		<option>DNQ-Webform</option>
+		<option>Review Pending</option>
                           </select>
                         </td>
                       ) : (
                         <td className="py-2 px-2 text-xs text-slate-300">{sale.disposition || '-'}</td>
                       )}
+
+
                       <td className="py-2 px-2">
                         {(userRole === 'Admin' || userRole === 'QA') ? (
                           <input
@@ -1636,14 +1704,15 @@ const handleEditAgent = async (formData) => {
                           <span className="text-xs text-slate-300">{sale.evaluator || '-'}</span>
                         )}
                       </td>
+
                       {(userRole === 'Admin' || userRole === 'QA') && (
                         <td className="py-2 px-2 text-center">
-                          <button
-                            onClick={() => setEditSale(sale)}
-                            className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200"
-                          >
-                            Edit
-                          </button>
+                          <button 
+		onClick={() => setEditSale(sale)} 
+		className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200"
+			>
+			Edit
+			</button>
                         </td>
                       )}
                     </tr>
@@ -1651,6 +1720,7 @@ const handleEditAgent = async (formData) => {
                 </tbody>
               </table>
             </div>
+
           </div>
         )}
 
@@ -1707,6 +1777,7 @@ const handleEditAgent = async (formData) => {
               <table className="w-full">
                 <thead className="bg-slate-900">
                   <tr>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">No.</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">Date</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">Agent</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">Login</th>
@@ -1716,26 +1787,17 @@ const handleEditAgent = async (formData) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredAttendance.map(record => (
+                  {filteredAttendance.map((record, idx) => (
                     <tr key={record.id} className="border-b border-slate-700 hover:bg-slate-700">
+                      <td className="py-3 px-4 text-slate-300">{idx + 1}</td>
                       <td className="py-3 px-4 text-slate-300">{record.date}</td>
                       <td className="py-3 px-4 font-medium text-white">{record.agentName}</td>
                       <td className="py-3 px-4 text-slate-300">{formatTime(record.loginTime)}</td>
                       <td className="py-3 px-4 text-slate-300">{formatTime(record.logoutTime)}</td>
                       <td className="py-3 px-4 text-center">
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                          record.status === 'Present' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                        }`}>
-                          {record.status}
-                        </span>
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${record.status === 'Present' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{record.status}</span>
                       </td>
-                      <td className="py-3 px-4 text-center">
-                        {record.late && (
-                          <span className="px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700">
-                            Late
-                          </span>
-                        )}
-                      </td>
+                      <td className="py-3 px-4 text-center">{record.late && <span className="px-2 py-1 bg-yellow-100 text-yellow-700 rounded-full text-xs">Late</span>}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1744,50 +1806,48 @@ const handleEditAgent = async (formData) => {
           </div>
         )}
 
-        {/* Fines Tab */}
+       {/* Fines Tab */}
         {activeTab === 'fines' && (
           <div className="space-y-6">
             <div className="flex justify-between items-center">
               <h2 className="text-xl font-semibold text-white">Fines Management</h2>
               {userRole === 'Admin' && (
-                <button
-                  onClick={() => setShowAddFine(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-                >
-                  <Plus className="w-4 h-4" />
-                  Add Fine
-                </button>
+                <button onClick={() => setShowAddFine(true)} className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"><Plus className="w-4 h-4" /> Add Fine</button>
               )}
             </div>
-
-            {/* Search */}
+            {/* Search ... (Keep existing search div) */} 
             <div className="bg-slate-800/50 rounded-xl shadow-sm border border-slate-600 p-4">
-              <input
-                type="text"
-                placeholder="Search by agent or reason..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-white placeholder-slate-400"
-              />
+              <input type="text" placeholder="Search by agent or reason..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-white placeholder-slate-400" />
             </div>
 
             <div className="bg-slate-800/80 rounded-xl shadow-sm border border-slate-600 overflow-hidden">
               <table className="w-full">
                 <thead className="bg-slate-900">
                   <tr>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">No.</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">Date</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">Agent</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">Reason</th>
                     <th className="text-right py-3 px-4 text-sm font-medium text-slate-200">Amount</th>
+                    {userRole === 'Admin' && <th className="text-center py-3 px-4 text-sm font-medium text-slate-200">Actions</th>}
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredFines.map(fine => (
+                  {filteredFines.map((fine, idx) => (
                     <tr key={fine.id} className="border-b border-slate-700 hover:bg-slate-700">
+                      <td className="py-3 px-4 text-slate-300">{idx + 1}</td>
                       <td className="py-3 px-4 text-slate-300">{fine.date}</td>
                       <td className="py-3 px-4 font-medium text-white">{fine.agentName}</td>
                       <td className="py-3 px-4 text-slate-300">{fine.reason}</td>
                       <td className="py-3 px-4 text-right font-semibold text-red-600">{fine.amount.toLocaleString()} PKR</td>
+                      {userRole === 'Admin' && (
+                        <td className="py-3 px-4">
+                          <div className="flex items-center justify-center gap-2">
+                            <button onClick={() => { setEditingFine(fine); setShowAddFine(true); }} className="p-1.5 bg-blue-500/10 text-blue-400 rounded hover:bg-blue-500/20" title="Edit"><Pencil className="w-4 h-4" /></button>
+                            <button onClick={() => handleDeleteFine(fine.id)} className="p-1.5 bg-red-500/10 text-red-400 rounded hover:bg-red-500/20" title="Delete"><Trash2 className="w-4 h-4" /></button>
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -1796,60 +1856,52 @@ const handleEditAgent = async (formData) => {
           </div>
         )}
 
-        {/* Bonuses Tab */}
+       {/* Bonuses Tab */}
         {activeTab === 'bonuses' && (
           <div className="space-y-6">
             <div className="flex justify-between items-center">
               <h2 className="text-xl font-semibold text-white">Bonuses Management</h2>
               {userRole === 'Admin' && (
-                <button
-                  onClick={() => setShowAddBonus(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                >
-                  <Plus className="w-4 h-4" />
-                  Add Bonus
-                </button>
+                <button onClick={() => setShowAddBonus(true)} className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"><Plus className="w-4 h-4" /> Add Bonus</button>
               )}
             </div>
-
-            {/* Search */}
+            {/* Search ... */}
             <div className="bg-slate-800/50 rounded-xl shadow-sm border border-slate-600 p-4">
-              <input
-                type="text"
-                placeholder="Search by agent name..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-white placeholder-slate-400"
-              />
+              <input type="text" placeholder="Search by agent name..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-white" />
             </div>
 
             <div className="bg-slate-800/80 rounded-xl shadow-sm border border-slate-600 overflow-hidden">
               <table className="w-full">
                 <thead className="bg-slate-900">
                   <tr>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">No.</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">Agent</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">Period</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">Type</th>
                     <th className="text-right py-3 px-4 text-sm font-medium text-slate-200">Target</th>
-<th className="text-right py-3 px-4 text-sm font-medium text-slate-200">Actual</th>
-<th className="text-right py-3 px-4 text-sm font-medium text-slate-200">Amount</th>
+                    <th className="text-right py-3 px-4 text-sm font-medium text-slate-200">Actual</th>
+                    <th className="text-right py-3 px-4 text-sm font-medium text-slate-200">Amount</th>
+                    {userRole === 'Admin' && <th className="text-center py-3 px-4 text-sm font-medium text-slate-200">Actions</th>}
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredBonuses.map(bonus => (
+                  {filteredBonuses.map((bonus, idx) => (
                     <tr key={bonus.id} className="border-b border-slate-700 hover:bg-slate-700">
+                      <td className="py-3 px-4 text-slate-300">{idx + 1}</td>
                       <td className="py-3 px-4 font-medium text-white">{bonus.agentName}</td>
                       <td className="py-3 px-4 text-slate-300">{bonus.period}</td>
-                      <td className="py-3 px-4">
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                          bonus.type === 'Weekly' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
-                        }`}>
-                          {bonus.type}
-                        </span>
-                      </td>
+                      <td className="py-3 px-4"><span className={`px-3 py-1 rounded-full text-xs font-medium ${bonus.type === 'Weekly' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>{bonus.type}</span></td>
                       <td className="py-3 px-4 text-right text-slate-100">{bonus.targetSales}</td>
-<td className="py-3 px-4 text-right font-semibold text-green-400">{bonus.actualSales}</td>
+                      <td className="py-3 px-4 text-right font-semibold text-green-400">{bonus.actualSales}</td>
                       <td className="py-3 px-4 text-right font-semibold text-green-400">{bonus.amount.toLocaleString()} PKR</td>
+                      {userRole === 'Admin' && (
+                        <td className="py-3 px-4">
+                          <div className="flex items-center justify-center gap-2">
+                             <button onClick={() => { setEditingBonus(bonus); setShowAddBonus(true); }} className="p-1.5 bg-blue-500/10 text-blue-400 rounded hover:bg-blue-500/20" title="Edit"><Pencil className="w-4 h-4" /></button>
+                             <button onClick={() => handleDeleteBonus(bonus.id)} className="p-1.5 bg-red-500/10 text-red-400 rounded hover:bg-red-500/20" title="Delete"><Trash2 className="w-4 h-4" /></button>
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -1872,21 +1924,23 @@ const handleEditAgent = async (formData) => {
               </button>
             </div>
 
-            <div className="bg-slate-800/80 rounded-xl shadow-sm border border-slate-600 overflow-hidden">
+          <div className="bg-slate-800/80 rounded-xl shadow-sm border border-slate-600 overflow-hidden">
               <table className="w-full">
                 <thead className="bg-slate-900">
                   <tr>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">No.</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">Agent</th>
                     <th className="text-right py-3 px-4 text-sm font-medium text-slate-200">Base Salary</th>
                     <th className="text-right py-3 px-4 text-sm font-medium text-slate-200">Sales</th>
-<th className="text-right py-3 px-4 text-sm font-medium text-slate-200">Bonus</th>
-<th className="text-right py-3 px-4 text-sm font-medium text-slate-200">Fines</th>
-<th className="text-right py-3 px-4 text-sm font-medium text-slate-200 bg-slate-900">Net Salary</th>
+                    <th className="text-right py-3 px-4 text-sm font-medium text-slate-200">Bonus</th>
+                    <th className="text-right py-3 px-4 text-sm font-medium text-slate-200">Fines</th>
+                    <th className="text-right py-3 px-4 text-sm font-medium text-slate-200 bg-slate-900">Net Salary</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {monthlyStats.map(agent => (
+                  {monthlyStats.map((agent, idx) => (
                     <tr key={agent.id} className="border-b border-slate-700 hover:bg-slate-700">
+                      <td className="py-3 px-4 text-slate-300">{idx + 1}</td>
                       <td className="py-3 px-4 font-medium text-white">{agent.name}</td>
                       <td className="py-3 px-4 text-right text-slate-100">{agent.baseSalary.toLocaleString()}</td>
                       <td className="py-3 px-4 text-right font-semibold text-green-600">{agent.totalSales}</td>
@@ -1896,12 +1950,13 @@ const handleEditAgent = async (formData) => {
                     </tr>
                   ))}
                   <tr className="bg-slate-900 font-semibold border-t-2 border-slate-600">
-  <td className="py-4 px-4 text-white">TOTAL</td>
+                    <td className="py-4 px-4 text-white"></td> {/* Empty No. column */}
+                    <td className="py-4 px-4 text-white">TOTAL</td>
                     <td className="py-4 px-4 text-right text-slate-100">{monthlyStats.reduce((s, a) => s + a.baseSalary, 0).toLocaleString()}</td>
-<td className="py-4 px-4 text-right text-green-400">{monthlyStats.reduce((s, a) => s + a.totalSales, 0)}</td>
-<td className="py-4 px-4 text-right text-green-400">+{monthlyStats.reduce((s, a) => s + a.totalBonuses, 0).toLocaleString()}</td>
-<td className="py-4 px-4 text-right text-red-400">-{monthlyStats.reduce((s, a) => s + a.totalFines, 0).toLocaleString()}</td>
-<td className="py-4 px-4 text-right font-bold text-blue-400 bg-slate-900">{monthlyStats.reduce((s, a) => s + a.netSalary, 0).toLocaleString()} PKR</td>
+                    <td className="py-4 px-4 text-right text-green-400">{monthlyStats.reduce((s, a) => s + a.totalSales, 0)}</td>
+                    <td className="py-4 px-4 text-right text-green-400">+{monthlyStats.reduce((s, a) => s + a.totalBonuses, 0).toLocaleString()}</td>
+                    <td className="py-4 px-4 text-right text-red-400">-{monthlyStats.reduce((s, a) => s + a.totalFines, 0).toLocaleString()}</td>
+                    <td className="py-4 px-4 text-right font-bold text-blue-400 bg-slate-900">{monthlyStats.reduce((s, a) => s + a.netSalary, 0).toLocaleString()} PKR</td>
                   </tr>
                 </tbody>
               </table>
@@ -1909,20 +1964,27 @@ const handleEditAgent = async (formData) => {
           </div>
         )}
         {/* NEW MONTHLY SALES MATRIX TAB */}
+        {/* Monthly Matrix Tab */}
         {activeTab === 'monthly_matrix' && (
           <div className="space-y-6">
-            <div className="flex justify-between items-center">
-               <h2 className="text-xl text-white font-bold">Daily Sales Breakdown ({selectedMonth})</h2>
-               <div className="text-sm text-slate-400">
-                 Cycle: {dateRange.start.toDateString()} - {dateRange.end.toDateString()}
-               </div>
-            </div>
-            
-            <div className="bg-slate-800 rounded-xl overflow-x-auto border border-slate-600">
-               <table className="w-full text-slate-300 border-collapse">
+             <div className="flex justify-between items-center">
+                <h2 className="text-xl text-white font-bold">Daily Sales Breakdown ({selectedMonth})</h2>
+                <div className="text-sm text-slate-400">
+                  Cycle: {dateRange.start.toDateString()} - {dateRange.end.toDateString()}
+                </div>
+             </div>
+             
+             <div className="bg-slate-800 rounded-xl overflow-x-auto border border-slate-600">
+                <table className="w-full text-slate-300 border-collapse">
                   <thead>
                     <tr>
+                      {/* [NEW] Row Number Header */}
+                      <th className="p-3 text-center bg-slate-900 border-b border-r border-slate-700 min-w-[50px]">No.</th>
+                      
+                      {/* Agent Name (Sticky Left) */}
                       <th className="p-3 text-left bg-slate-900 border-b border-r border-slate-700 sticky left-0 z-10 min-w-[150px]">Agent Name</th>
+                      
+                      {/* Date Columns */}
                       {getDaysArray(dateRange.start, dateRange.end).map(dateStr => {
                         const d = new Date(dateStr);
                         return (
@@ -1936,16 +1998,23 @@ const handleEditAgent = async (formData) => {
                     </tr>
                   </thead>
                   <tbody>
-                    {agents.filter(a => a.status === 'Active').map(agent => {
+                    {/* [FIX] Added idx for row numbers */}
+                    {agents.filter(a => a.status === 'Active').map((agent, idx) => {
                       const agentSales = sales.filter(s => 
-  s.agentName === agent.name && 
-  (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer')
-);
+                          s.agentName === agent.name && 
+                          (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer')
+                      );
                       let rowTotal = 0;
                       
                       return (
                         <tr key={agent.id} className="hover:bg-slate-700">
+                          {/* [NEW] Row Number Cell */}
+                          <td className="p-3 text-center border-r border-slate-700 bg-slate-800/50">{idx + 1}</td>
+
+                          {/* Agent Name (Sticky Left) */}
                           <td className="p-3 font-medium text-white border-r border-slate-700 bg-slate-800 sticky left-0">{agent.name}</td>
+                          
+                          {/* Daily Counts */}
                           {getDaysArray(dateRange.start, dateRange.end).map(dateStr => {
                             const dailyCount = agentSales.filter(s => s.date === dateStr).length;
                             rowTotal += dailyCount;
@@ -1961,7 +2030,7 @@ const handleEditAgent = async (formData) => {
                     })}
                   </tbody>
                </table>
-            </div>
+             </div>
           </div>
         )}
       </div>
@@ -1973,10 +2042,10 @@ const handleEditAgent = async (formData) => {
       {showEditAgent && <AgentModal onClose={() => { setShowEditAgent(false); setEditingAgent(null); }} onSubmit={handleEditAgent} agent={editingAgent} isEdit={true} />}
       {showAddSale && <SaleModal agents={agents} currentUser={currentUser} userRole={userRole} onClose={() => setShowAddSale(false)} onSubmit={handleAddSale} />}
       {editSale && <SaleModal agents={agents} currentUser={currentUser} userRole={userRole} onClose={() => setEditSale(null)} onSubmit={handleEditSale} sale={editSale} isEdit={true} />}
-      {showAddFine && <FineModal agents={agents} onClose={() => setShowAddFine(false)} onSubmit={handleAddFine} />}
-      {showAddBonus && <BonusModal agents={agents} onClose={() => setShowAddBonus(false)} onSubmit={handleAddBonus} />}
+      {showAddFine && <FineModal agents={agents} onClose={() => { setShowAddFine(false); setEditingFine(null); }} onSubmit={editingFine ? handleEditFine : handleAddFine} fine={editingFine} isEdit={!!editingFine} />}
+      {showAddBonus && <BonusModal agents={agents} onClose={() => { setShowAddBonus(false); setEditingBonus(null); }} onSubmit={editingBonus ? handleEditBonus : handleAddBonus} bonus={editingBonus} isEdit={!!editingBonus} />}
       {showImportModal && <ImportModal importType={importType} onClose={() => setShowImportModal(false)} onImport={handleImport} setLateTime={setLateTime} currentGlobalLateTime={lateTime} />}
-      {showAddEmployee && <HREmployeeModal agents={agents} onClose={() => setShowAddEmployee(false)} onSubmit={handleAddEmployee} />}
+      {showAddEmployee && <HREmployeeModal onClose={() => { setShowAddEmployee(false); setEditingHR(null); }} onSubmit={editingHR ? handleEditHR : handleAddEmployee} employee={editingHR} isEdit={!!editingHR} />}
       
       {/* Late Time Modal */}
       {showLateTimeModal && <LateTimeModal currentLateTime={lateTime} onClose={() => setShowLateTimeModal(false)} onSubmit={handleSetLateTime} />}
