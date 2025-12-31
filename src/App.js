@@ -14,6 +14,8 @@ import ImportModal from './components/modals/ImportModal';
 import HREmployeeModal from './components/modals/HREmployeeModal';
 import LateTimeModal from './components/modals/LateTimeModal';
 
+import SimpleAddModal from './components/modals/SimpleAddModal';
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import * as XLSX from 'xlsx';
@@ -23,12 +25,6 @@ import {
   Pencil, Trash2, UserX, RotateCcw // <--- Added these new icons
 } from 'lucide-react';
 
-// Sample Data (Kept for reference as requested)
-const initialAgents = [];
-const initialSales = [];
-const initialAttendance = [];
-const initialFines = [];
-const initialBonuses = [];
 
 const AgentPayrollSystem = () => {
   // Login States
@@ -48,6 +44,14 @@ const AgentPayrollSystem = () => {
   const [fines, setFines] = useState([]);
   const [bonuses, setBonuses] = useState([]);
   const [hrRecords, setHrRecords] = useState([]); // [NEW] HR State
+
+  // Inside AgentPayrollSystem component
+const [teams, setTeams] = useState(['Team A', 'Team B', 'Team C']);
+const [centers, setCenters] = useState(['Phase 4 - HomeWarranty', 'Phase 4 - 5th Floor', 'Phase 7']);
+
+// Modal visibility states
+const [showAddTeamModal, setShowAddTeamModal] = useState(false);
+const [showAddCenterModal, setShowAddCenterModal] = useState(false);
   
   // [SMART DATE STATE] Automatically detects Jan 2026 cycle if today > Dec 20
   const [selectedMonth, setSelectedMonth] = useState(() => {
@@ -106,6 +110,27 @@ const AgentPayrollSystem = () => {
   // [FIX] Late Time State (Persisted in Local Storage)
   const [lateTime, setLateTime] = useState(() => localStorage.getItem('ams_late_time') || '09:30');
   const [showLateTimeModal, setShowLateTimeModal] = useState(false);
+
+// Inside App.js
+const handleAddTeam = async (teamName) => {
+    if (teamName && !teams.includes(teamName)) {
+      const { error } = await supabase.from('teams').insert([{ name: teamName }]);
+      if (!error) setTeams([...teams, teamName]);
+      else if (error.code === '23505') alert("Team already exists in database.");
+    }
+    setShowAddTeamModal(false);
+  };
+
+const handleAddCenter = async (centerName) => {
+    if (centerName && !centers.includes(centerName)) {
+      // [FIXED] Now adds to Supabase 'centers' table
+      const { error } = await supabase.from('centers').insert([{ name: centerName }]);
+      if (!error) setCenters([...centers, centerName]);
+      else if (error.code === '23505') alert("Center already exists in database.");
+      else alert("Error: " + error.message);
+    }
+    setShowAddCenterModal(false);
+  };
 
   // Handler to save late time
   const handleSetLateTime = (newTime) => {
@@ -178,6 +203,12 @@ const AgentPayrollSystem = () => {
       // 6. [NEW] Fetch HR Records
       const { data: hrData } = await supabase.from('hr_records').select('*');
       if (hrData) setHrRecords(hrData);
+
+      const { data: teamData } = await supabase.from('teams').select('name');
+    if (teamData) setTeams(teamData.map(t => t.name));
+
+    const { data: centerData } = await supabase.from('centers').select('name');
+    if (centerData) setCenters(centerData.map(c => c.name));
   };
 
   useEffect(() => {
@@ -274,7 +305,11 @@ const DateFilterBar = ({ filterType, setFilterType, dateVal, setDateVal, endVal,
   // Search and Filter States
   const [searchQuery, setSearchQuery] = useState('');
   const [teamFilter, setTeamFilter] = useState('All');
-  const [statusFilter, setStatusFilter] = useState('All');
+  
+const [agentStatusFilter, setAgentStatusFilter] = useState('All');
+const [salesStatusFilter, setSalesStatusFilter] = useState('All');
+const [attendanceStatusFilter, setAttendanceStatusFilter] = useState('All');
+  
   // [FIX] Replaced Shift with Center
   const [centerFilter, setCenterFilter] = useState('All');
   const [evaluators, setEvaluators] = useState(['John Doe', 'Jane Smith']);
@@ -326,21 +361,25 @@ const DateFilterBar = ({ filterType, setFilterType, dateVal, setDateVal, endVal,
     }
   };
 
-  const handleLogout = () => {
-    setIsLoggedIn(false);
-    setLoginData({ name: '', password: '' });
-    setUserRole('');
-    setCurrentUser(null);
-    setActiveTab('dashboard');
-    setSearchQuery('');
-    setTeamFilter('All');
-    setStatusFilter('All');
-    
-    // [FIX] Clear session AND tab preference
-    localStorage.removeItem('ams_user');
-    localStorage.removeItem('ams_role');
-    localStorage.removeItem('ams_active_tab'); // <-- Add this line
-  };
+const handleLogout = () => {
+  setIsLoggedIn(false);
+  setLoginData({ name: '', password: '' });
+  setUserRole('');
+  setCurrentUser(null);
+  setActiveTab('dashboard');
+  setSearchQuery('');
+  setTeamFilter('All');
+  setCenterFilter('All');
+  
+  // [FIX] Reset the three new independent status filters
+  setAgentStatusFilter('All');
+  setSalesStatusFilter('All');
+  setAttendanceStatusFilter('All');
+  
+  localStorage.removeItem('ams_user');
+  localStorage.removeItem('ams_role');
+  localStorage.removeItem('ams_active_tab');
+};
 
 // --- FILTERING LOGIC ---
 
@@ -445,43 +484,57 @@ const DateFilterBar = ({ filterType, setFilterType, dateVal, setDateVal, endVal,
   }, [agents, sales, getActiveDateRange, validAgentNames]);
 
   // 5. Sales Table (Respects Team/Center)
-  const filteredSales = useMemo(() => {
-    const { start, end } = getActiveDateRange;
-    return sales.filter(sale => {
-      const matchesSearch = sale.agentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                            sale.campaignType?.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesDate = sale.date >= start && sale.date <= end;
-      const matchesStatus = statusFilter === 'All' || statusFilter === 'All Status' || sale.status === statusFilter;
-      // Check if agent is in allowed list (Team/Center)
-      const matchesTeamCenter = validAgentNames.has(sale.agentName);
+const filteredSales = useMemo(() => {
+  const { start, end } = getActiveDateRange;
+  return sales.filter(sale => {
+    const matchesSearch = 
+      sale.agentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      sale.customerName?.toLowerCase().includes(searchQuery.toLowerCase());
       
-      return matchesSearch && matchesDate && matchesStatus && matchesTeamCenter;
-    });
-  }, [sales, searchQuery, getActiveDateRange, statusFilter, validAgentNames]);
+    const matchesDate = sale.date >= start && sale.date <= end;
+    
+    // [FIX] Use salesStatusFilter and check against the disposition field
+    const matchesStatus = salesStatusFilter === 'All' || sale.disposition === salesStatusFilter;
+    
+    const matchesTeamCenter = validAgentNames.has(sale.agentName);
+    
+    return matchesSearch && matchesDate && matchesStatus && matchesTeamCenter;
+  });
+}, [sales, searchQuery, getActiveDateRange, salesStatusFilter, validAgentNames]);
 
   // 6. Attendance Table (Respects Team/Center)
-  const filteredAttendance = useMemo(() => {
-    const { start, end } = getActiveDateRange;
-    return attendance.filter(record => {
-      const matchesSearch = record.agentName.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesDate = record.date >= start && record.date <= end;
-      const matchesTeamCenter = validAgentNames.has(record.agentName);
-      return matchesSearch && matchesDate && matchesTeamCenter;
-    });
-  }, [attendance, searchQuery, getActiveDateRange, validAgentNames]);
+const filteredAttendance = useMemo(() => {
+  const { start, end } = getActiveDateRange;
+  
+  return attendance.filter(record => {
+    const matchesSearch = record.agentName.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesDate = record.date >= start && record.date <= end;
+    const matchesTeamCenter = validAgentNames.has(record.agentName);
+    
+    // [FIX] Independent Attendance Filter Logic
+    let matchesStatus = true;
+    if (attendanceStatusFilter === 'Present') matchesStatus = record.status === 'Present';
+    else if (attendanceStatusFilter === 'Absent') matchesStatus = record.status === 'Absent';
+    else if (attendanceStatusFilter === 'Late') matchesStatus = record.status === 'Present' && record.late === true;
+    else if (attendanceStatusFilter === 'OnTime') matchesStatus = record.status === 'Present' && record.late === false;
+
+    return matchesSearch && matchesDate && matchesTeamCenter && matchesStatus;
+  });
+}, [attendance, searchQuery, getActiveDateRange, validAgentNames, attendanceStatusFilter]);
 
   // 7. Agents Table (Respects Team/Center)
-  const filteredAgents = useMemo(() => {
-    return agents.filter(agent => {
-       const matchesSearch = agent.name.toLowerCase().includes(searchQuery.toLowerCase());
-       const matchesStatus = statusFilter === 'All' || statusFilter === 'All Status' || agent.status === statusFilter;
-       // We use validAgentNames logic here explicitly to match the dropdowns
-       const matchesTeam = teamFilter === 'All' || teamFilter === 'All Teams' || agent.team === teamFilter;
-       const matchesCenter = centerFilter === 'All' || centerFilter === 'All Centers' || agent.center === centerFilter;
-       
-       return matchesSearch && matchesStatus && matchesTeam && matchesCenter;
-    });
-  }, [agents, searchQuery, statusFilter, teamFilter, centerFilter]);
+const filteredAgents = useMemo(() => {
+  return agents.filter(agent => {
+    const matchesSearch = agent.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesTeam = teamFilter === 'All' || agent.team === teamFilter;
+    const matchesCenter = centerFilter === 'All' || agent.center === centerFilter;
+    
+    // [FIX] Use agentStatusFilter
+    const matchesStatus = agentStatusFilter === 'All' || agent.status === agentStatusFilter;
+    
+    return matchesSearch && matchesTeam && matchesCenter && matchesStatus;
+  });
+}, [agents, searchQuery, teamFilter, centerFilter, agentStatusFilter]);
 
   // 8. Fines (Respects Team/Center)
   const filteredFines = useMemo(() => {
@@ -1076,8 +1129,6 @@ const handleEditAgent = async (formData) => {
                   onClick={() => {
                     setActiveTab(tab);
                     setSearchQuery('');
-                    setTeamFilter('All');
-                    setStatusFilter('All');
                   }}
                   className={`px-6 py-3 text-sm font-medium capitalize transition-colors whitespace-nowrap ${
   activeTab === tab
@@ -1142,12 +1193,22 @@ const handleEditAgent = async (formData) => {
         {activeTab === 'dashboard' && (
           <div className="space-y-6">
             {/* [NEW] Add Filter Bar Here */}
-    <DateFilterBar 
-        filterType={filterType} setFilterType={setFilterType}
-        dateVal={customStartDate} setDateVal={setCustomStartDate}
-        endVal={customEndDate} setEndVal={setCustomEndDate}
-        selectedMonth={selectedMonth} handleMonthChange={handleMonthChange}
-    />
+<DateFilterBar 
+            teams={teams}
+            centers={centers}
+            teamFilter={teamFilter}
+            setTeamFilter={setTeamFilter}
+            centerFilter={centerFilter}
+            setCenterFilter={setCenterFilter}
+            filterType={filterType}
+            setFilterType={setFilterType}
+            dateVal={customStartDate}
+            setDateVal={setCustomStartDate}
+            endVal={customEndDate}
+            setEndVal={setCustomEndDate}
+            selectedMonth={selectedMonth}
+            handleMonthChange={(e) => {/* your month change logic */}}
+        />
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {userRole === 'Admin' && (
@@ -1297,6 +1358,13 @@ const handleEditAgent = async (formData) => {
               <div className="flex gap-3">
                 {userRole === 'Admin' && (
                   <>
+
+                  <button onClick={() => setShowAddCenterModal(true)} className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors">
+        <Plus className="w-4 h-4" /> Add Center
+      </button>
+      <button onClick={() => setShowAddTeamModal(true)} className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors">
+        <Plus className="w-4 h-4" /> Add Team
+      </button>
                     <button
                       onClick={() => { setImportType('agents'); setShowImportModal(true); }}
                       className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
@@ -1316,51 +1384,56 @@ const handleEditAgent = async (formData) => {
               </div>
             </div>
 
-            {/* Search and Filters */}
           {/* Search and Filters */}
             <div className="bg-slate-800/50 rounded-xl shadow-sm border border-slate-600 p-4">
-              <div className="grid grid-cols-4 gap-4">
-                <input
-                  type="text"
-                  placeholder="Search agents..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <select
-                  value={teamFilter}
-                  onChange={(e) => setTeamFilter(e.target.value)}
-                  className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option>All Teams</option>
-                  <option>Team A</option>
-                  <option>Team B</option>
-                  <option>Team C</option>
-                </select>
+  <div className="grid grid-cols-4 gap-4">
+    {/* 1. Search Input */}
+    <input
+      type="text"
+      placeholder="Search agents..."
+      value={searchQuery}
+      onChange={(e) => setSearchQuery(e.target.value)}
+      className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+    />
 
-                {/* [FIX] Center Filter instead of Shift */}
-                <select
-                  value={centerFilter}
-                  onChange={(e) => setCenterFilter(e.target.value)}
-                  className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option>All Centers</option>
-                  <option>Phase 4 - HomeWarranty</option>
-                  <option>Phase 4 - 5th Floor</option>
-                  <option>Phase 7</option>
-                </select>
+    {/* 2. Dynamic Team Filter */}
+    <select
+      value={teamFilter}
+      onChange={(e) => setTeamFilter(e.target.value)}
+      className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+    >
+      <option value="All">All Teams</option>
+      {/* [FIX] Map through dynamic teams state */}
+      {teams.map(t => (
+        <option key={t} value={t}>{t}</option>
+      ))}
+    </select>
 
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option>All Status</option>
-                  <option>Active</option>
-                  <option>Inactive</option>
-                </select>
-              </div>
-            </div>
+    {/* 3. Dynamic Center Filter */}
+    <select
+      value={centerFilter}
+      onChange={(e) => setCenterFilter(e.target.value)}
+      className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+    >
+      <option value="All">All Centers</option>
+      {/* [FIX] Map through dynamic centers state */}
+      {centers.map(c => (
+        <option key={c} value={c}>{c}</option>
+      ))}
+    </select>
+
+    {/* 4. Status Filter */}
+    <select
+  value={agentStatusFilter}
+  onChange={(e) => setAgentStatusFilter(e.target.value)}
+  className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+>
+  <option value="All">All Status</option>
+  <option value="Active">Active</option>
+  <option value="Left">Inactive/Left</option>
+</select>
+  </div>
+</div>
 
             {/* Agents Table */}
             <div className="bg-slate-800/80 rounded-xl shadow-sm border border-slate-600 overflow-hidden">
@@ -1496,33 +1569,82 @@ const handleEditAgent = async (formData) => {
               </div>
             </div>
 {/* [NEW] Add Filter Bar Here */}
-    <DateFilterBar 
-        filterType={filterType} setFilterType={setFilterType}
-        dateVal={customStartDate} setDateVal={setCustomStartDate}
-        endVal={customEndDate} setEndVal={setCustomEndDate}
-        selectedMonth={selectedMonth} handleMonthChange={handleMonthChange}
+<DateFilterBar 
+    teams={teams}               // <--- CRITICAL: Passing the list
+    centers={centers}           // <--- CRITICAL: Passing the list
+    filterType={filterType} 
+    setFilterType={setFilterType}
+    dateVal={customStartDate} 
+    setDateVal={setCustomStartDate}
+    endVal={customEndDate} 
+    setEndVal={setCustomEndDate}
+    selectedMonth={selectedMonth} 
+    handleMonthChange={handleMonthChange}
+    teamFilter={teamFilter} 
+    setTeamFilter={setTeamFilter}
+    centerFilter={centerFilter} 
+    setCenterFilter={setCenterFilter}
+/>
+            {/* Sales Tab Search and Filters */}
+<div className="bg-slate-800/50 rounded-xl shadow-sm border border-slate-600 p-4 mb-6">
+  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+    {/* 1. Search Input */}
+    <input
+      type="text"
+      placeholder="Search by agent, customer, or phone..."
+      value={searchQuery}
+      onChange={(e) => setSearchQuery(e.target.value)}
+      className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
     />
-            {/* Search and Filters */}
-            <div className="bg-slate-800/50 rounded-xl shadow-sm border border-slate-600 p-4">
-              <div className="grid grid-cols-2 gap-4">
-                <input
-                  type="text"
-                  placeholder="Search by agent or campaign..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option>All Status</option>
-                  <option>Sale</option>
-                  <option>Unsuccessful</option>
-                </select>
-              </div>
-            </div>
+
+    {/* 2. Dynamic Team Filter */}
+    <select
+      value={teamFilter}
+      onChange={(e) => setTeamFilter(e.target.value)}
+      className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+    >
+      <option value="All">All Teams</option>
+      {teams.map(t => (
+        <option key={t} value={t}>{t}</option>
+      ))}
+    </select>
+
+    {/* 3. Dynamic Center Filter */}
+    <select
+      value={centerFilter}
+      onChange={(e) => setCenterFilter(e.target.value)}
+      className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+    >
+      <option value="All">All Centers</option>
+      {centers.map(c => (
+        <option key={c} value={c}>{c}</option>
+      ))}
+    </select>
+
+<select
+  value={salesStatusFilter}
+  onChange={(e) => setSalesStatusFilter(e.target.value)}
+  className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+>
+  <option value="All">All Dispositions</option>
+  <optgroup label="Success">
+    <option value="HW- Xfer">HW- Xfer</option>
+    <option value="HW-IBXfer">HW-IBXfer</option>
+    <option value="HW-Xfer-CDR">HW-Xfer-CDR</option>
+  </optgroup>
+  <optgroup label="Unsuccessful">
+    <option value="Unsuccessful">Unsuccessful</option>
+    <option value="HUWT">HUWT</option>
+    <option value="DNC">DNC</option>
+    <option value="DNQ">DNQ</option>
+    <option value="DNQ-Dup">DNQ-Dup</option>
+    <option value="DNQ-Webform">DNQ-Webform</option>
+    <option value="Review Pending">Review Pending</option>
+  </optgroup>
+</select>
+  </div>
+</div>
+
           <div className="bg-slate-800/80 rounded-xl shadow-sm border border-slate-600 overflow-x-auto">
               <table className="w-full min-w-max">
                 <thead className="bg-slate-900">
@@ -1578,17 +1700,21 @@ const handleEditAgent = async (formData) => {
                             onChange={(e) => updateSaleDisposition(sale.id, e.target.value)}
                             className="w-full px-1 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
                           >
-                            <option value="">-</option>
-                            <option>HW- Xfer</option>
-		<option>HW-IBXfer</option>
-		<option>Unsuccessful</option>
-		<option>HUWT</option>
-		<option>DNC</option>
-		<option>DNQ</option>
-		<option>DNQ-Dup</option>
-		<option>HW-Xfer-CDR</option>
-		<option>DNQ-Webform</option>
-		<option>Review Pending</option>
+                            <option value="All">All Dispositions</option>
+  <optgroup label="Success">
+    <option value="HW- Xfer">HW- Xfer</option>
+    <option value="HW-IBXfer">HW-IBXfer</option>
+    <option value="HW-Xfer-CDR">HW-Xfer-CDR</option>
+  </optgroup>
+  <optgroup label="Unsuccessful">
+    <option value="Unsuccessful">Unsuccessful</option>
+    <option value="HUWT">HUWT</option>
+    <option value="DNC">DNC</option>
+    <option value="DNQ">DNQ</option>
+    <option value="DNQ-Dup">DNQ-Dup</option>
+    <option value="DNQ-Webform">DNQ-Webform</option>
+    <option value="Review Pending">Review Pending</option>
+  </optgroup>
                           </select>
                         </td>
                       ) : (
@@ -1755,22 +1881,72 @@ const handleEditAgent = async (formData) => {
               </div>
             </div>
 {/* [NEW] Add Filter Bar Here */}
-    <DateFilterBar 
-        filterType={filterType} setFilterType={setFilterType}
-        dateVal={customStartDate} setDateVal={setCustomStartDate}
-        endVal={customEndDate} setEndVal={setCustomEndDate}
-        selectedMonth={selectedMonth} handleMonthChange={handleMonthChange}
+<DateFilterBar 
+    teams={teams}               // <--- CRITICAL: Passing the list
+    centers={centers}           // <--- CRITICAL: Passing the list
+    filterType={filterType} 
+    setFilterType={setFilterType}
+    dateVal={customStartDate} 
+    setDateVal={setCustomStartDate}
+    endVal={customEndDate} 
+    setEndVal={setCustomEndDate}
+    selectedMonth={selectedMonth} 
+    handleMonthChange={handleMonthChange}
+    teamFilter={teamFilter} 
+    setTeamFilter={setTeamFilter}
+    centerFilter={centerFilter} 
+    setCenterFilter={setCenterFilter}
+/>
+            {/* Attendance Tab Search and Filters */}
+<div className="bg-slate-800/50 rounded-xl shadow-sm border border-slate-600 p-4 mb-6">
+  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+    {/* 1. Search Input */}
+    <input
+      type="text"
+      placeholder="Search by agent name..."
+      value={searchQuery}
+      onChange={(e) => setSearchQuery(e.target.value)}
+      className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
     />
-            {/* Search Section */}
-            <div className="bg-slate-800/50 rounded-xl shadow-sm border border-slate-600 p-4">
-              <input
-                type="text"
-                placeholder="Search by agent name..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-white placeholder-slate-400"
-              />
-            </div>
+
+    {/* 2. Dynamic Team Filter */}
+    <select
+      value={teamFilter}
+      onChange={(e) => setTeamFilter(e.target.value)}
+      className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+    >
+      <option value="All">All Teams</option>
+      {teams.map(t => (
+        <option key={t} value={t}>{t}</option>
+      ))}
+    </select>
+
+    {/* 3. Dynamic Center Filter */}
+    <select
+      value={centerFilter}
+      onChange={(e) => setCenterFilter(e.target.value)}
+      className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+    >
+      <option value="All">All Centers</option>
+      {centers.map(c => (
+        <option key={c} value={c}>{c}</option>
+      ))}
+    </select>
+
+    <select
+  value={attendanceStatusFilter}
+  onChange={(e) => setAttendanceStatusFilter(e.target.value)}
+  className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+>
+  <option value="All">All Status</option>
+  <option value="Present">Present</option>
+  <option value="Absent">Absent</option>
+  <option value="Late">Late</option>
+  <option value="OnTime">On Time</option>
+</select>
+
+  </div>
+</div>
 
             {/* Table Section */}
             <div className="bg-slate-800/80 rounded-xl shadow-sm border border-slate-600 overflow-hidden">
@@ -1911,58 +2087,134 @@ const handleEditAgent = async (formData) => {
         )}
 
         {/* Payroll Tab */}
-        {activeTab === 'payroll' && (
-          <div className="space-y-6">
-            <div className="flex justify-between items-center">
-              <h2 className="text-xl font-semibold text-white">Monthly Payroll - {selectedMonth}</h2>
-              <button
-                onClick={exportToCSV}
-                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-              >
-                <Download className="w-4 h-4" />
-                Export to CSV
-              </button>
-            </div>
+{activeTab === 'payroll' && (
+  <div className="space-y-6">
+    <div className="flex justify-between items-center">
+      <h2 className="text-xl font-semibold text-white">Monthly Payroll - {selectedMonth}</h2>
+      <button
+        onClick={exportToCSV}
+        className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+      >
+        <Download className="w-4 h-4" />
+        Export to CSV
+      </button>
+    </div>
 
-          <div className="bg-slate-800/80 rounded-xl shadow-sm border border-slate-600 overflow-hidden">
-              <table className="w-full">
-                <thead className="bg-slate-900">
-                  <tr>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">No.</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">Agent</th>
-                    <th className="text-right py-3 px-4 text-sm font-medium text-slate-200">Base Salary</th>
-                    <th className="text-right py-3 px-4 text-sm font-medium text-slate-200">Sales</th>
-                    <th className="text-right py-3 px-4 text-sm font-medium text-slate-200">Bonus</th>
-                    <th className="text-right py-3 px-4 text-sm font-medium text-slate-200">Fines</th>
-                    <th className="text-right py-3 px-4 text-sm font-medium text-slate-200 bg-slate-900">Net Salary</th>
+    {/* SEARCH & FILTER Bar */}
+    <div className="bg-slate-800/50 rounded-xl shadow-sm border border-slate-600 p-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <input
+          type="text"
+          placeholder="Search by agent name..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <select
+          value={teamFilter}
+          onChange={(e) => setTeamFilter(e.target.value)}
+          className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="All">All Teams</option>
+          {teams.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <select
+          value={centerFilter}
+          onChange={(e) => setCenterFilter(e.target.value)}
+          className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="All">All Centers</option>
+          {centers.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <select
+          value={agentStatusFilter}
+          onChange={(e) => setAgentStatusFilter(e.target.value)}
+          className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="All">All Status</option>
+          <option value="Active">Active Only</option>
+          <option value="Left">Left Only</option>
+        </select>
+      </div>
+    </div>
+
+    {/* Table Section */}
+    <div className="bg-slate-800/80 rounded-xl shadow-sm border border-slate-600 overflow-hidden">
+      <table className="w-full">
+        <thead className="bg-slate-900">
+          <tr>
+            <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">No.</th>
+            <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">Agent</th>
+            <th className="text-center py-3 px-4 text-sm font-medium text-slate-200">Status</th>
+            <th className="text-right py-3 px-4 text-sm font-medium text-slate-200">Base Salary</th>
+            <th className="text-right py-3 px-4 text-sm font-medium text-slate-200">Sales</th>
+            <th className="text-right py-3 px-4 text-sm font-medium text-slate-200">Bonus</th>
+            <th className="text-right py-3 px-4 text-sm font-medium text-slate-200">Fines</th>
+            <th className="text-right py-3 px-4 text-sm font-medium text-slate-200 bg-slate-900">Net Salary</th>
+          </tr>
+        </thead>
+        <tbody>
+          {(() => {
+            // [NEW] Define the filtered list once so totals and rows match exactly
+            const displayedPayroll = monthlyStats.filter(agent => {
+              const matchesSearch = agent.name.toLowerCase().includes(searchQuery.toLowerCase());
+              const matchesTeam = teamFilter === 'All' || agent.team === teamFilter;
+              const matchesCenter = centerFilter === 'All' || agent.center === centerFilter;
+              const matchesStatus = agentStatusFilter === 'All' || agent.status === agentStatusFilter;
+              return matchesSearch && matchesTeam && matchesCenter && matchesStatus;
+            });
+
+            return (
+              <>
+                {displayedPayroll.map((agent, idx) => (
+                  <tr key={agent.id} className="border-b border-slate-700 hover:bg-slate-700">
+                    <td className="py-3 px-4 text-slate-300">{idx + 1}</td>
+                    <td className="py-3 px-4 font-medium text-white">{agent.name}</td>
+                    <td className="py-3 px-4 text-center">
+                      <span className={`px-2 py-1 rounded-full text-[10px] font-medium ${
+                        agent.status === 'Active' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+                      }`}>
+                        {agent.status}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-right text-slate-100">{agent.baseSalary.toLocaleString()}</td>
+                    <td className="py-3 px-4 text-right font-semibold text-green-600">{agent.totalSales}</td>
+                    <td className="py-3 px-4 text-right text-green-600">+{agent.totalBonuses.toLocaleString()}</td>
+                    <td className="py-3 px-4 text-right text-red-600">-{agent.totalFines.toLocaleString()}</td>
+                    <td className="py-3 px-4 text-right font-bold text-blue-400 bg-slate-900">{agent.netSalary.toLocaleString()} PKR</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {monthlyStats.map((agent, idx) => (
-                    <tr key={agent.id} className="border-b border-slate-700 hover:bg-slate-700">
-                      <td className="py-3 px-4 text-slate-300">{idx + 1}</td>
-                      <td className="py-3 px-4 font-medium text-white">{agent.name}</td>
-                      <td className="py-3 px-4 text-right text-slate-100">{agent.baseSalary.toLocaleString()}</td>
-                      <td className="py-3 px-4 text-right font-semibold text-green-600">{agent.totalSales}</td>
-                      <td className="py-3 px-4 text-right text-green-600">+{agent.totalBonuses.toLocaleString()}</td>
-                      <td className="py-3 px-4 text-right text-red-600">-{agent.totalFines.toLocaleString()}</td>
-                      <td className="py-3 px-4 text-right font-bold text-blue-400 bg-slate-900">{agent.netSalary.toLocaleString()} PKR</td>
-                    </tr>
-                  ))}
-                  <tr className="bg-slate-900 font-semibold border-t-2 border-slate-600">
-                    <td className="py-4 px-4 text-white"></td> {/* Empty No. column */}
-                    <td className="py-4 px-4 text-white">TOTAL</td>
-                    <td className="py-4 px-4 text-right text-slate-100">{monthlyStats.reduce((s, a) => s + a.baseSalary, 0).toLocaleString()}</td>
-                    <td className="py-4 px-4 text-right text-green-400">{monthlyStats.reduce((s, a) => s + a.totalSales, 0)}</td>
-                    <td className="py-4 px-4 text-right text-green-400">+{monthlyStats.reduce((s, a) => s + a.totalBonuses, 0).toLocaleString()}</td>
-                    <td className="py-4 px-4 text-right text-red-400">-{monthlyStats.reduce((s, a) => s + a.totalFines, 0).toLocaleString()}</td>
-                    <td className="py-4 px-4 text-right font-bold text-blue-400 bg-slate-900">{monthlyStats.reduce((s, a) => s + a.netSalary, 0).toLocaleString()} PKR</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
+                ))}
+
+                {/* [FIXED] Total row now correctly calculates based on 'displayedPayroll' */}
+                <tr className="bg-slate-900 font-semibold border-t-2 border-slate-600">
+                  <td className="py-4 px-4 text-white"></td>
+                  <td className="py-4 px-4 text-white">TOTAL</td>
+                  <td className="py-4 px-4 text-white"></td>
+                  <td className="py-4 px-4 text-right text-slate-100">
+                    {displayedPayroll.reduce((s, a) => s + (a.baseSalary || 0), 0).toLocaleString()}
+                  </td>
+                  <td className="py-4 px-4 text-right text-green-400">
+                    {displayedPayroll.reduce((s, a) => s + (a.totalSales || 0), 0)}
+                  </td>
+                  <td className="py-4 px-4 text-right text-green-400">
+                    +{displayedPayroll.reduce((s, a) => s + (a.totalBonuses || 0), 0).toLocaleString()}
+                  </td>
+                  <td className="py-4 px-4 text-right text-red-400">
+                    -{displayedPayroll.reduce((s, a) => s + (a.totalFines || 0), 0).toLocaleString()}
+                  </td>
+                  <td className="py-4 px-4 text-right font-bold text-blue-400 bg-slate-900">
+                    {displayedPayroll.reduce((s, a) => s + (a.netSalary || 0), 0).toLocaleString()} PKR
+                  </td>
+                </tr>
+              </>
+            );
+          })()}
+        </tbody>
+      </table>
+    </div>
+  </div>
+)}
+
         {/* NEW MONTHLY SALES MATRIX TAB */}
         {/* Monthly Matrix Tab */}
         {activeTab === 'monthly_matrix' && (
@@ -2038,8 +2290,17 @@ const handleEditAgent = async (formData) => {
       {/* Modals */}
       {/* Add this with the other modals */}
       {/* Modals Section - MUST BE INSIDE THE MAIN DIV */}
-      {showAddAgent && <AgentModal onClose={() => setShowAddAgent(false)} onSubmit={handleAddAgent} />}
-      {showEditAgent && <AgentModal onClose={() => { setShowEditAgent(false); setEditingAgent(null); }} onSubmit={handleEditAgent} agent={editingAgent} isEdit={true} />}
+      
+      {showEditAgent && (
+  <AgentModal 
+    onClose={() => { setShowEditAgent(false); setEditingAgent(null); }} 
+    onSubmit={handleEditAgent} 
+    agent={editingAgent} 
+    isEdit={true} 
+    teams={teams}     // <--- PASS THIS
+    centers={centers} // <--- PASS THIS
+  />
+)}
       {showAddSale && <SaleModal agents={agents} currentUser={currentUser} userRole={userRole} onClose={() => setShowAddSale(false)} onSubmit={handleAddSale} />}
       {editSale && <SaleModal agents={agents} currentUser={currentUser} userRole={userRole} onClose={() => setEditSale(null)} onSubmit={handleEditSale} sale={editSale} isEdit={true} />}
       {showAddFine && <FineModal agents={agents} onClose={() => { setShowAddFine(false); setEditingFine(null); }} onSubmit={editingFine ? handleEditFine : handleAddFine} fine={editingFine} isEdit={!!editingFine} />}
@@ -2049,6 +2310,11 @@ const handleEditAgent = async (formData) => {
       
       {/* Late Time Modal */}
       {showLateTimeModal && <LateTimeModal currentLateTime={lateTime} onClose={() => setShowLateTimeModal(false)} onSubmit={handleSetLateTime} />}
+
+{/* Bottom of App.js return statement */}
+{showAddTeamModal && <SimpleAddModal title="Add Team" onClose={() => setShowAddTeamModal(false)} onSubmit={handleAddTeam} placeholder="Team Name" />}
+      {showAddCenterModal && <SimpleAddModal title="Add Center" onClose={() => setShowAddCenterModal(false)} onSubmit={handleAddCenter} placeholder="Center Name" />}
+      {showAddAgent && <AgentModal teams={teams} centers={centers} onClose={() => setShowAddAgent(false)} onSubmit={handleAddAgent} />}
 
     </div> // <--- THIS must be the very last line before );
   );
