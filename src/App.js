@@ -17,7 +17,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import * as XLSX from 'xlsx';
 import { 
-  Users, DollarSign, Calendar, AlertCircle, TrendingUp, Download, 
+  Users,Edit, DollarSign, Calendar, AlertCircle, TrendingUp, Download, 
   Plus, X, Upload, LogOut, Lock, Clock,
   Pencil, Trash2, UserX, Shield, RotateCcw // <--- Added these new icons
 } from 'lucide-react';
@@ -504,95 +504,105 @@ const handleLogout = () => {
 
   const dateRange = useMemo(() => getPayrollRange(selectedMonth), [selectedMonth]);
 
-// 2. Monthly Stats (Calculates Prorated Salary + Bank Info + Sales-based Attendance)
-// 2. Monthly Stats (Calculates Prorated Salary + Smart Attendance + Bank Info)
+// 2. Monthly Stats (Calculates LPD, Daily Breakdown, Salary, etc.)
   const monthlyStats = useMemo(() => {
-    // 1. Get Cycle Dates (e.g., Dec 21 - Jan 20)
-    const { start, end } = getPayrollRange(selectedMonth); 
-    
-    // 2. Calculate Total Business Days (Mon-Fri) in this cycle
+    const { start, end } = getPayrollRange(selectedMonth);
     const totalWorkingDays = countWorkingDays(start, end);
-
-    // 3. Filter Agents based on selection
     const filteredAgentsList = agents.filter(a => validAgentNames.has(a.name));
 
     const agentStats = filteredAgentsList.map(agent => {
-        // --- A. Sales Stats ---
-        // Filter sales within the date range
+        // --- A. Get Data for this Agent ---
+        // 1. Filter Sales for this month
         const approvedSales = sales.filter(s => 
             s.agentName === agent.name && 
             (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer') && 
             new Date(s.date) >= start && new Date(s.date) <= end
         );
-        
+
+        // 2. Filter Attendance for this month
+        const agentAttendance = attendance.filter(att => 
+            att.agentName === agent.name &&
+            new Date(att.date) >= start && new Date(att.date) <= end
+        );
+
+        // --- B. Calculate Daily Metrics (The New Logic) ---
+        let dialingDays = 0;
+        let daysOn0 = 0;
+        let daysOn1 = 0;
+        let daysOn2 = 0;
+        let daysOn3 = 0; // Counts days with exactly 3 sales
+
+        // Iterate through every day of the selected month range
+        let loopDate = new Date(start);
+        while (loopDate <= end) {
+            const dateStr = loopDate.toISOString().split('T')[0]; // YYYY-MM-DD
+
+            // 1. Was the agent marked present?
+            const attRecord = agentAttendance.find(a => a.date === dateStr);
+            const isMarkedPresent = attRecord && (attRecord.status === 'Present' || attRecord.status === 'Late');
+
+            // 2. How many sales did they make TODAY?
+            const dailySalesCount = approvedSales.filter(s => s.date === dateStr).length;
+
+            // 3. Is this a "Dialing Day"? (Present OR had Sales)
+            const isWorkingDay = isMarkedPresent || dailySalesCount > 0;
+
+            if (isWorkingDay) {
+                dialingDays++; // Increment total working days
+
+                // Categorize performance
+                if (dailySalesCount === 0) daysOn0++;
+                else if (dailySalesCount === 1) daysOn1++;
+                else if (dailySalesCount === 2) daysOn2++;
+                else if (dailySalesCount === 3) daysOn3++;
+                // Note: Days with 4+ sales are counted in 'dialingDays' but not in these specific buckets
+            }
+
+            // Move to next day
+            loopDate.setDate(loopDate.getDate() + 1);
+        }
+
+        // --- C. Calculate Totals & LPD ---
         const totalSales = approvedSales.length;
-        
-        // --- B. Financials (Bonus & Fines) ---
-        const agentBonuses = bonuses.filter(b => 
-            b.agentName === agent.name && 
-            b.month === selectedMonth 
-        ).reduce((sum, b) => sum + (b.amount || 0), 0);
+        // LPD = Total Sales / Dialing Days (Avoid division by zero)
+        const lpd = dialingDays > 0 ? (totalSales / dialingDays).toFixed(2) : "0.00";
 
-        const agentFines = fines.filter(f => 
-            f.agentName === agent.name && 
-            f.month === selectedMonth 
-        ).reduce((sum, f) => sum + (f.amount || 0), 0);
+        // --- D. Financials ---
+        const agentBonuses = bonuses.filter(b => b.agentName === agent.name && b.month === selectedMonth)
+            .reduce((sum, b) => sum + (b.amount || 0), 0);
+        const agentFines = fines.filter(f => f.agentName === agent.name && f.month === selectedMonth)
+            .reduce((sum, f) => sum + (f.amount || 0), 0);
 
-        // --- C. Smart Attendance Calculation (Attendance OR Sales) ---
-        
-        // 1. Get dates from Attendance (Present/Late)
-        const attendanceDates = attendance
-            .filter(att => 
-                att.agentName === agent.name &&
-                new Date(att.date) >= start && new Date(att.date) <= end &&
-                (att.status === 'Present' || att.status === 'Late')
-            )
-            .map(att => att.date); // Assumes format YYYY-MM-DD
-
-        // 2. Get dates from Sales (If they made a sale, they were present)
-        const salesDates = approvedSales.map(s => s.date); // Assumes format YYYY-MM-DD
-
-        // 3. Merge into a SET to remove duplicates (e.g., marked present AND made a sale)
-        const uniqueDaysWorked = new Set([...attendanceDates, ...salesDates]);
-        
-        // This is the new "Days Present" count
-        const daysPresent = uniqueDaysWorked.size;
-
-        // --- D. Prorated Salary Calculation ---
-        // Formula: (Base / WorkingDays) * ActualDaysWorked
+        // Salary Calculation
         const baseSalary = agent.baseSalary || 0;
         let earnedBase = 0;
-
         if (totalWorkingDays > 0) {
             const dailyRate = baseSalary / totalWorkingDays;
-            earnedBase = Math.round(dailyRate * daysPresent);
+            earnedBase = Math.round(dailyRate * dialingDays); // using dialingDays as daysPresent
         } else {
             earnedBase = baseSalary;
         }
-
-        // --- E. Fetch Bank Details from HR ---
-        const hrRecord = hrRecords.find(h => 
-            (agent.cnic && h.cnic === agent.cnic) || 
-            (h.agent_name.toLowerCase() === agent.name.toLowerCase())
-        );
-
-        const bankName = hrRecord?.bank_name || '-';
-        const accountNo = hrRecord?.account_number || '-';
-
-        // --- F. Final Net Salary ---
-        const netSalary = earnedBase + agentBonuses - agentFines;
         
+        const hrRecord = hrRecords.find(h => (agent.cnic && h.cnic === agent.cnic) || (h.agent_name.toLowerCase() === agent.name.toLowerCase()));
+        const netSalary = earnedBase + agentBonuses - agentFines;
+
         return {
             ...agent,
             totalSales,
+            lpd,             // New Column
+            dialingDays,     // New Column
+            daysOn0,         // New Column
+            daysOn1,         // New Column
+            daysOn2,         // New Column
+            daysOn3,         // New Column
             totalFines: agentFines || 0,
             totalBonuses: agentBonuses || 0,
-            daysPresent,       // Now includes days with Sales!
+            daysPresent: dialingDays, 
             totalWorkingDays,  
             earnedBase,        
             netSalary: netSalary > 0 ? netSalary : 0, 
-            bankName,          
-            accountNo          
+            bankName: hrRecord?.bank_name || '-',          
+            accountNo: hrRecord?.account_number || '-'          
         };
     });
     
@@ -662,6 +672,26 @@ const filteredSales = useMemo(() => {
     return matchesSearch && matchesDate && matchesStatus && matchesTeamCenter;
   });
 }, [sales, searchQuery, getActiveDateRange, salesStatusFilter, validAgentNames]);
+
+  // MOVE THIS TO THE TOP LEVEL OF YOUR COMPONENT
+const salesStats = useMemo(() => {
+  const stats = { unsuccessful: 0, dncDnq: 0, sales: 0, pending: 0 };
+
+  filteredSales.forEach(sale => {
+    const disp = sale.disposition;
+    if (['HW- Xfer', 'HW-IBXfer', 'HW-Xfer-CDR'].includes(disp)) {
+      stats.sales++;
+    } else if (['DNC', 'DNQ', 'DNQ-Webform'].includes(disp)) {
+      stats.dncDnq++;
+    } else if (['Review Pending', 'Pending Review'].includes(disp)) {
+      stats.pending++;
+    } else if (disp === 'Unsuccessful') {
+      stats.unsuccessful++;
+    }
+  });
+
+  return stats;
+}, [filteredSales]); 
 
   // 6. Attendance Table (Respects Team/Center)
 const filteredAttendance = useMemo(() => {
@@ -747,8 +777,10 @@ const handleSaveAgent = async (e) => {
         cnic: editingAgent.cnic,
         password: editingAgent.password || '123',
         status: editingAgent.status || 'Active',
-        active_date: editingAgent.active_date || new Date().toISOString().split('T')[0],
-        // If editing, keep existing leftDate, else null
+        
+        // [FIX] Changed 'active_date' to 'activeDate' to match your Database column
+        activeDate: editingAgent.active_date || editingAgent.activeDate || new Date().toISOString().split('T')[0],
+        
         leftDate: editingAgent.leftDate || null 
     };
 
@@ -758,7 +790,10 @@ const handleSaveAgent = async (e) => {
         father_name: editingAgent.father_name || '',
         cnic: editingAgent.cnic,
         designation: 'Agent',
-        joining_date: editingAgent.active_date || new Date().toISOString().split('T')[0],
+        
+        // [NOTE] HR table usually uses joining_date, so this is likely correct for HR
+        joining_date: editingAgent.active_date || editingAgent.activeDate || new Date().toISOString().split('T')[0],
+        
         bank_name: editingAgent.bank_name || '',
         account_number: editingAgent.account_number || '',
         status: editingAgent.status || 'Active'
@@ -768,7 +803,6 @@ const handleSaveAgent = async (e) => {
         setLoading(true);
 
         // --- Step A: Upsert to Agents Table ---
-        // We use CNIC as the unique key to update if exists, or insert if new
         const { error: agentError } = await supabase
             .from('agents')
             .upsert(agentPayload, { onConflict: 'cnic' });
@@ -776,18 +810,16 @@ const handleSaveAgent = async (e) => {
         if (agentError) throw agentError;
 
         // --- Step B: Upsert to HR Records ---
-        // We try to match by CNIC. 
-        // Note: If you change CNIC, it treats it as a new person (database limitation).
         const { error: hrError } = await supabase
             .from('hr_records')
             .upsert(hrPayload, { onConflict: 'cnic' });
 
         if (hrError) throw hrError;
 
-        alert('Agent saved & synced to HR records successfully!');
+        alert('Agent saved & synced successfully!');
         setShowAddAgent(false);
         setEditingAgent(null);
-        fetchData(); // Refresh Data
+        fetchData(); 
 
     } catch (error) {
         console.error("Save Error:", error.message);
@@ -1359,36 +1391,49 @@ const handleImport = (file, lateTimeVal) => {
     a.click();
   };
 
-// LOGIN SCREEN
+// LOGIN SCREEN (Modern Dark Theme)
   if (!isLoggedIn) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
-        <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md">
-          <div className="flex justify-center mb-6">
-            <div className="bg-blue-100 p-4 rounded-full">
-              <Lock className="w-10 h-10 text-blue-600" />
+      <div className="min-h-screen flex items-center justify-center bg-[#0f172a] relative overflow-hidden">
+        {/* Background Decorative Glows */}
+        <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-blue-600/20 rounded-full blur-[100px] opacity-50 pointer-events-none"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-purple-600/20 rounded-full blur-[100px] opacity-50 pointer-events-none"></div>
+
+        {/* Login Card */}
+        <div className="bg-slate-900/80 border border-slate-800 p-10 rounded-3xl shadow-2xl w-full max-w-md backdrop-blur-xl relative z-10">
+          
+          {/* Logo / Icon Area */}
+          <div className="flex justify-center mb-8">
+            <div className="bg-gradient-to-tr from-blue-600 to-blue-400 p-4 rounded-2xl shadow-[0_0_20px_rgba(37,99,235,0.4)]">
+              <Lock className="w-8 h-8 text-white" />
             </div>
           </div>
-          <h1 className="text-3xl font-bold text-center text-slate-800 mb-2">Welcome Back</h1>
-          <p className="text-center text-slate-500 mb-8">Login to Shark Management System</p>
+
+          {/* Header Text */}
+          <div className="text-center mb-10">
+            <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">Welcome Back</h1>
+            <p className="text-slate-400 text-sm font-medium">Enter your credentials to access the workspace</p>
+          </div>
           
-          <form onSubmit={handleLogin} className="space-y-5">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Username</label>
+          {/* Form */}
+          <form onSubmit={handleLogin} className="space-y-6">
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider ml-1">Username</label>
               <input 
                 type="text" 
-                className="w-full px-4 py-3 border border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition bg-slate-700 text-white placeholder-slate-400"
-                placeholder="Enter username"
+                className="w-full px-4 py-3.5 bg-slate-950/50 border border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-white placeholder-slate-600 text-sm"
+                placeholder="e.g. Admin"
                 value={loginData.name}
                 onChange={e => setLoginData({...loginData, name: e.target.value})}
                 required
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Password</label>
+            
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider ml-1">Password</label>
               <input 
                 type="password" 
-                className="w-full px-4 py-3 border border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition bg-slate-700 text-white placeholder-slate-400"
+                className="w-full px-4 py-3.5 bg-slate-950/50 border border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-white placeholder-slate-600 text-sm"
                 placeholder="••••••••"
                 value={loginData.password}
                 onChange={e => setLoginData({...loginData, password: e.target.value})}
@@ -1396,21 +1441,23 @@ const handleImport = (file, lateTimeVal) => {
               />
             </div>
 
+            {/* Error Message */}
             {loginError && (
-              <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 p-3 rounded-lg border border-red-200">
-                <AlertCircle className="w-5 h-5" />
+              <div className="flex items-center gap-3 text-red-400 text-sm bg-red-500/10 p-4 rounded-xl border border-red-500/20">
+                <AlertCircle className="w-5 h-5 shrink-0" />
                 <span className="font-medium">{loginError}</span>
               </div>
             )}
 
+            {/* Submit Button */}
             <button 
               type="submit"
-              className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+              disabled={loading}
+              className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white py-4 rounded-xl font-bold text-sm tracking-wide shadow-lg hover:shadow-blue-500/25 transition-all transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-70 disabled:cursor-not-allowed mt-4"
             >
-              Sign In
+              {loading ? 'Authenticating...' : 'Sign In'}
             </button>
           </form>
-          {/* Demo Credentials DIV removed from here */}
         </div>
       </div>
     );
@@ -1893,323 +1940,293 @@ const handleImport = (file, lateTimeVal) => {
     </div>
 )}
 
-        {/* Sales Tab */}
-        {activeTab === 'sales' && (
-          <div className="space-y-6">
-            <div className="flex justify-between items-center">
-              <h2 className="text-xl font-semibold text-white">Sales Management</h2>
-              <div className="flex gap-3">
-                {userRole === 'Admin' && (
-                  <>
-                    <button
-                      onClick={() => { setImportType('sales'); setShowImportModal(true); }}
-                      className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                    >
-                      <Upload className="w-4 h-4" />
-                      Import CSV
-                    </button>
-                    <button
-                      onClick={() => {
-                        const name = window.prompt('Enter evaluator name:');
-                        if (name && name.trim()) {
-                          setEvaluators(prev => [...prev, name.trim()]);
-                        }
-                      }}
-                      className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Add Evaluator
-                    </button>
-                  </>
-                )}
-                {(userRole === 'Admin' || userRole === 'Agent') && (
-                  <button
-                    onClick={() => setShowAddSale(true)}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Submit Sale
-                  </button>
-                )}
-              </div>
-            </div>
-{/* [NEW] Add Filter Bar Here */}
-<DateFilterBar 
-    filterType={filterType} 
-    setFilterType={setFilterType}
-    dateVal={customStartDate} 
-    setDateVal={setCustomStartDate}
-    endVal={customEndDate} 
-    setEndVal={setCustomEndDate}
-    selectedMonth={selectedMonth} 
-    handleMonthChange={handleMonthChange}
-/>
-            {/* Sales Tab Search and Filters */}
-<div className="bg-slate-800/50 rounded-xl shadow-sm border border-slate-600 p-4 mb-6">
-  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-    {/* 1. Search Input */}
-    <input
-      type="text"
-      placeholder="Search by agent, customer, or phone..."
-      value={searchQuery}
-      onChange={(e) => setSearchQuery(e.target.value)}
-      className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        {/* Sales TAB */}
+
+{activeTab === 'sales' && (
+  <div className="space-y-6">
+    {/* Header Section */}
+    <div className="flex justify-between items-center">
+      <h2 className="text-xl font-semibold text-white">Sales Management</h2>
+      <div className="flex gap-3">
+        {userRole === 'Admin' && (
+          <>
+            <button
+              onClick={() => { setImportType('sales'); setShowImportModal(true); }}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+            >
+              <Upload className="w-4 h-4" /> Import CSV
+            </button>
+            <button
+              onClick={() => {
+                const name = window.prompt('Enter evaluator name:');
+                if (name && name.trim()) setEvaluators(prev => [...prev, name.trim()]);
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Plus className="w-4 h-4" /> Add Evaluator
+            </button>
+          </>
+        )}
+        {(userRole === 'Admin' || userRole === 'Agent') && (
+          <button
+            onClick={() => setShowAddSale(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus className="w-4 h-4" /> Submit Sale
+          </button>
+        )}
+      </div>
+    </div>
+
+    {/* DISPOSITION DASHBOARD CARDS (RESTORED) */}
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="bg-green-500/10 border border-green-500/20 p-4 rounded-xl">
+        <p className="text-xs text-green-400 font-bold uppercase">Success Sales</p>
+        <p className="text-2xl font-black text-green-500">{salesStats.sales}</p>
+      </div>
+      <div className="bg-yellow-500/10 border border-yellow-500/20 p-4 rounded-xl">
+        <p className="text-xs text-yellow-400 font-bold uppercase">Unsuccessful</p>
+        <p className="text-2xl font-black text-yellow-500">{salesStats.unsuccessful}</p>
+      </div>
+      <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-xl">
+        <p className="text-xs text-red-400 font-bold uppercase">DNC / DNQ</p>
+        <p className="text-2xl font-black text-red-500">{salesStats.dncDnq}</p>
+      </div>
+      <div className="bg-orange-500/10 border border-orange-500/20 p-4 rounded-xl">
+        <p className="text-xs text-orange-400 font-bold uppercase">Pending Review</p>
+        <p className="text-2xl font-black text-orange-500">{salesStats.pending}</p>
+      </div>
+    </div>
+
+    {/* Date Filter Bar */}
+    <DateFilterBar 
+        filterType={filterType} setFilterType={setFilterType}
+        dateVal={customStartDate} setDateVal={setCustomStartDate}
+        endVal={customEndDate} setEndVal={setCustomEndDate}
+        selectedMonth={selectedMonth} handleMonthChange={handleMonthChange}
     />
 
-    {/* 2. Dynamic Team Filter */}
-    <select
-      value={teamFilter}
-      onChange={(e) => setTeamFilter(e.target.value)}
-      className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-    >
-      <option value="All">All Teams</option>
-      {teams.map(t => (
-        <option key={t} value={t}>{t}</option>
-      ))}
-    </select>
-
-    {/* 3. Dynamic Center Filter */}
-    <select
-      value={centerFilter}
-      onChange={(e) => setCenterFilter(e.target.value)}
-      className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-    >
-      <option value="All">All Centers</option>
-      {centers.map(c => (
-        <option key={c} value={c}>{c}</option>
-      ))}
-    </select>
-
-<select
-  value={salesStatusFilter}
-  onChange={(e) => setSalesStatusFilter(e.target.value)}
-  className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
->
-  <option value="All">All Dispositions</option>
-  <optgroup label="Success">
-    <option value="HW- Xfer">HW- Xfer</option>
-    <option value="HW-IBXfer">HW-IBXfer</option>
-    <option value="HW-Xfer-CDR">HW-Xfer-CDR</option>
-  </optgroup>
-  <optgroup label="Unsuccessful">
-    <option value="Unsuccessful">Unsuccessful</option>
-    <option value="HUWT">HUWT</option>
-    <option value="DNC">DNC</option>
-    <option value="DNQ">DNQ</option>
-    <option value="DNQ-Dup">DNQ-Dup</option>
-    <option value="DNQ-Webform">DNQ-Webform</option>
-    <option value="Review Pending">Review Pending</option>
-  </optgroup>
-</select>
-  </div>
-</div>
-
-          <div className="bg-slate-800/80 rounded-xl shadow-sm border border-slate-600 overflow-x-auto">
-              <table className="w-full min-w-max">
-                <thead className="bg-slate-900">
-                  <tr>
-                    {/* [NEW] Row Number Header */}
-                    <th className="text-left py-3 px-2 text-xs font-medium text-slate-200">No.</th>
-                    <th className="text-left py-3 px-2 text-xs font-medium text-slate-200">Timestamp</th>
-                    <th className="text-left py-3 px-2 text-xs font-medium text-slate-200">Agent Name</th>
-                    <th className="text-left py-3 px-2 text-xs font-medium text-slate-200">Customer Name</th>
-                    <th className="text-left py-3 px-2 text-xs font-medium text-slate-200">Phone Number</th>
-                    <th className="text-left py-3 px-2 text-xs font-medium text-slate-200">State</th>
-                    <th className="text-left py-3 px-2 text-xs font-medium text-slate-200">Zip</th>
-                    <th className="text-left py-3 px-2 text-xs font-medium text-slate-200">Address</th>
-                    <th className="text-left py-3 px-2 text-xs font-medium text-slate-200">Campaign Type</th>
-                    <th className="text-left py-3 px-2 text-xs font-medium text-slate-200">Center</th>
-                    <th className="text-left py-3 px-2 text-xs font-medium text-slate-200">Team Lead</th>
-                    <th className="text-left py-3 px-2 text-xs font-medium text-slate-200">Comments</th>
-                    <th className="text-left py-3 px-2 text-xs font-medium text-slate-200">List ID</th>
-                    <th className="text-left py-3 px-2 text-xs font-medium text-slate-200">Disposition</th>
-                    <th className="text-left py-3 px-2 text-xs font-medium text-slate-200">Duration</th>
-                    <th className="text-left py-3 px-2 text-xs font-medium text-slate-200">Xfer Time</th>
-                    <th className="text-left py-3 px-2 text-xs font-medium text-slate-200">Xfer Attempts</th>
-                    <th className="text-left py-3 px-2 text-xs font-medium text-slate-200">Feedback (Before Xfer)</th>
-                    <th className="text-left py-3 px-2 text-xs font-medium text-slate-200">Feedback (After Xfer)</th>
-                    <th className="text-left py-3 px-2 text-xs font-medium text-slate-200">Grading</th>
-                    <th className="text-left py-3 px-2 text-xs font-medium text-slate-200">Dock Details</th>
-                    <th className="text-left py-3 px-2 text-xs font-medium text-slate-200">Evaluator</th>
-                    {(userRole === 'Admin' || userRole === 'QA') && <th className="text-center py-3 px-2 text-xs font-medium text-slate-200">Actions</th>}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredSales.map((sale, idx) => (
-                    <tr key={sale.id} className="border-b border-slate-700 hover:bg-slate-700">
-                      {/* [NEW] Row Number Cell */}
-                      <td className="py-2 px-2 text-xs text-slate-300">{idx + 1}</td>
-                      <td className="py-2 px-2 text-xs text-slate-300">{sale.timestamp || sale.date}</td>
-                      <td className="py-2 px-2 text-xs font-medium text-white">{sale.agentName}</td>
-                      <td className="py-2 px-2 text-xs text-slate-300">{sale.customerName || '-'}</td>
-                      <td className="py-2 px-2 text-xs text-slate-300">{sale.phoneNumber || '-'}</td>
-                      <td className="py-2 px-2 text-xs text-slate-300">{sale.state || '-'}</td>
-                      <td className="py-2 px-2 text-xs text-slate-300">{sale.zip || '-'}</td>
-                      <td className="py-2 px-2 text-xs text-slate-300">{sale.address || '-'}</td>
-                      <td className="py-2 px-2 text-xs text-slate-300">{sale.campaignType || '-'}</td>
-                      <td className="py-2 px-2 text-xs text-slate-300">{sale.center || '-'}</td>
-                      <td className="py-2 px-2 text-xs text-slate-300">{sale.teamLead || '-'}</td>
-                      <td className="py-2 px-2 text-xs text-slate-300">{sale.comments || '-'}</td>
-                      <td className="py-2 px-2 text-xs text-slate-300">{sale.listId || '-'}</td>
-                      {/* (Keep the rest of your Sales columns exactly as they were...) */}
-                      {(userRole === 'Admin' || userRole === 'QA') ? (
-                        <td className="py-2 px-2">
-                          <select
-                            value={sale.disposition || ''}
-                            onChange={(e) => updateSaleDisposition(sale.id, e.target.value)}
-                            className="w-full px-1 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                          >
-                            <option value="All">All Dispositions</option>
-  <optgroup label="Success">
-    <option value="HW- Xfer">HW- Xfer</option>
-    <option value="HW-IBXfer">HW-IBXfer</option>
-    <option value="HW-Xfer-CDR">HW-Xfer-CDR</option>
-  </optgroup>
-  <optgroup label="Unsuccessful">
-    <option value="Unsuccessful">Unsuccessful</option>
-    <option value="HUWT">HUWT</option>
-    <option value="DNC">DNC</option>
-    <option value="DNQ">DNQ</option>
-    <option value="DNQ-Dup">DNQ-Dup</option>
-    <option value="DNQ-Webform">DNQ-Webform</option>
-    <option value="Review Pending">Review Pending</option>
-  </optgroup>
-                          </select>
-                        </td>
-                      ) : (
-                        <td className="py-2 px-2 text-xs text-slate-300">{sale.disposition || '-'}</td>
-                      )}
-
-
-                      <td className="py-2 px-2">
-                        {(userRole === 'Admin' || userRole === 'QA') ? (
-                          <input
-                            type="text"
-                            value={sale.duration || ''}
-                            onChange={(e) => updateSaleField(sale.id, 'duration', e.target.value)}
-                            className="w-full px-1 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                          />
-                        ) : (
-                          <span className="text-xs text-slate-300">{sale.duration || '-'}</span>
-                        )}
-                      </td>
-                      <td className="py-2 px-2">
-                        {(userRole === 'Admin' || userRole === 'QA') ? (
-                          <input
-                            type="text"
-                            value={sale.xferTime || ''}
-                            onChange={(e) => updateSaleField(sale.id, 'xferTime', e.target.value)}
-                            className="w-full px-1 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                          />
-                        ) : (
-                          <span className="text-xs text-slate-300">{sale.xferTime || '-'}</span>
-                        )}
-                      </td>
-                      <td className="py-2 px-2">
-                        {(userRole === 'Admin' || userRole === 'QA') ? (
-                          <select
-                            value={sale.xferAttempts || ''}
-                            onChange={(e) => updateSaleField(sale.id, 'xferAttempts', e.target.value)}
-                            className="w-full px-1 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                          >
-                            <option value="">-</option>
-                            <option value="1">1</option>
-                            <option value="2">2</option>
-                            <option value="3">3</option>
-                            <option value="4">4</option>
-                            <option value="5">5</option>
-                          </select>
-                        ) : (
-                          <span className="text-xs text-slate-300">{sale.xferAttempts || '-'}</span>
-                        )}
-                      </td>
-                      <td className="py-2 px-2">
-    {(userRole === 'Admin' || userRole === 'QA') ? (
-        <textarea
-        value={sale.feedbackBeforeXfer || ''}
-        onChange={(e) => updateSaleField(sale.id, 'feedbackBeforeXfer', e.target.value)}
-        rows={4} // Shows 4 lines of height by default
-        className="w-full min-w-[250px] px-2 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
+    {/* Filters Section */}
+    <div className="bg-slate-800/50 rounded-xl shadow-sm border border-slate-600 p-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <input
+          type="text"
+          placeholder="Search agent, customer, phone..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500"
         />
-    ) : (
-        <div className="text-xs text-slate-300 whitespace-pre-wrap min-w-[250px] max-w-md">
-        {sale.feedbackBeforeXfer || '-'}
-        </div>
-    )}
-</td>
-                      <td className="py-2 px-2">
-                        {(userRole === 'Admin' || userRole === 'QA') ? (
-                          <input
-                            type="text"
-                            value={sale.feedbackAfterXfer || ''}
-                            onChange={(e) => updateSaleField(sale.id, 'feedbackAfterXfer', e.target.value)}
-                            className="w-full px-1 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                          />
-                        ) : (
-                          <span className="text-xs text-slate-300">{sale.feedbackAfterXfer || '-'}</span>
-                        )}
-                      </td>
-                      <td className="py-2 px-2">
-                        {(userRole === 'Admin' || userRole === 'QA') ? (
-                          <select
-                            value={sale.grading || ''}
-                            onChange={(e) => updateSaleField(sale.id, 'grading', e.target.value)}
-                            className="w-full px-1 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                          >
-                            <option value="">-</option>
-                            <option value="Good">Good</option>
-                            <option value="Bad">Bad</option>
-                            <option value="Worst">Worst</option>
-                          </select>
-                        ) : (
-                          <span className="text-xs text-slate-300">{sale.grading || '-'}</span>
-                        )}
-                      </td>
-                      <td className="py-2 px-2">
-                        {(userRole === 'Admin' || userRole === 'QA') ? (
-                          <input
-                            type="text"
-                            value={sale.dockDetails || ''}
-                            onChange={(e) => updateSaleField(sale.id, 'dockDetails', e.target.value)}
-                            className="w-full px-1 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                          />
-                        ) : (
-                          <span className="text-xs text-slate-300">{sale.dockDetails || '-'}</span>
-                        )}
-                      </td>
-                      <td className="py-2 px-2">
-                        {(userRole === 'Admin' || userRole === 'QA') ? (
-                          <select
-                            value={sale.evaluator || ''}
-                            onChange={(e) => updateSaleField(sale.id, 'evaluator', e.target.value)}
-                            className="w-full px-1 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                          >
-                            <option value="">-</option>
-                            {evaluators.map(e => <option key={e} value={e}>{e}</option>)}
-                          </select>
-                        ) : (
-                          <span className="text-xs text-slate-300">{sale.evaluator || '-'}</span>
-                        )}
-                      </td>
+        <select value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="All">All Teams</option>
+          {teams.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <select value={centerFilter} onChange={(e) => setCenterFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="All">All Centers</option>
+          {centers.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <select value={salesStatusFilter} onChange={(e) => setSalesStatusFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="All">All Dispositions</option>
+          <optgroup label="Success">
+            <option value="HW- Xfer">HW- Xfer</option>
+            <option value="HW-IBXfer">HW-IBXfer</option>
+            <option value="HW-Xfer-CDR">HW-Xfer-CDR</option>
+          </optgroup>
+          <optgroup label="Unsuccessful">
+            <option value="Unsuccessful">Unsuccessful</option>
+            <option value="DNC">DNC</option>
+            <option value="DNQ">DNQ</option>
+            <option value="DNQ-Webform">DNQ-Webform</option>
+            <option value="Review Pending">Review Pending</option>
+          </optgroup>
+        </select>
+      </div>
+    </div>
 
-                      {(userRole === 'Admin' || userRole === 'QA') && (
-                        <td className="py-2 px-2 text-center">
-                          <button 
-		onClick={() => setEditSale(sale)} 
-		className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200"
-			>
-			Edit
-			</button>
-                        </td>
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+    {/* DATA TABLE (FULL COLUMNS & EDITABLE) */}
+    <div className="bg-slate-800/80 rounded-xl border border-slate-600 overflow-auto max-h-[70vh]">
+      <table className="w-full min-w-max border-collapse">
+        <thead className="sticky top-0 z-20">
+          <tr className="bg-slate-900 border-b border-slate-700">
+            <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">No.</th>
+            <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Timestamp</th>
+            <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase sticky left-0 bg-slate-900">Agent Name</th>
+            <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Customer Name</th>
+            <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Phone Number</th>
+            <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">State</th>
+            <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Zip</th>
+            <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Address</th>
+            <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase text-center">Campaign</th>
+            <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Center</th>
+            <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Team Lead</th>
+            <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Comments</th>
+            <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">List ID</th>
+            <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase min-w-[150px]">Disposition</th>
+            <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Duration</th>
+            <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Xfer Time</th>
+            <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Xfer Attempts</th>
+            <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase min-w-[250px]">Feedback (Before)</th>
+            <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Feedback (After)</th>
+            <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Grading</th>
+            <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Dock Details</th>
+            <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Evaluator</th>
+            {(userRole === 'Admin' || userRole === 'QA') && <th className="text-center py-4 px-3 text-xs font-bold text-slate-400 uppercase">Actions</th>}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-700/50">
+          {filteredSales.map((sale, idx) => {
+            const disp = sale.disposition;
+            let rowColor = "hover:bg-slate-700/50"; 
+            if (['HW- Xfer', 'HW-IBXfer', 'HW-Xfer-CDR'].includes(disp)) rowColor = "bg-green-900/10 hover:bg-green-900/20";
+            else if (['DNC', 'DNQ', 'DNQ-Dup', 'DNQ-Webform'].includes(disp)) rowColor = "bg-red-900/10 hover:bg-red-900/20";
+            else if (['Review Pending', 'Pending Review'].includes(disp)) rowColor = "bg-orange-900/10 hover:bg-orange-900/20";
+            else if (disp === 'Unsuccessful') rowColor = "bg-yellow-900/10 hover:bg-yellow-900/20";
 
-          </div>
-        )}
+            return (
+              <tr key={sale.id} className={`${rowColor} transition-colors`}>
+                <td className="py-3 px-3 text-xs text-slate-400 font-mono">{idx + 1}</td>
+                <td className="py-3 px-3 text-xs text-slate-300 whitespace-nowrap">{sale.timestamp || sale.date}</td>
+                <td className="py-3 px-3 text-xs font-bold text-white sticky left-0 bg-inherit">{sale.agentName}</td>
+                <td className="py-3 px-3 text-xs text-slate-300">{sale.customerName || '-'}</td>
+                <td className="py-3 px-3 text-xs text-slate-300 font-mono">{sale.phoneNumber || '-'}</td>
+                <td className="py-3 px-3 text-xs text-slate-400">{sale.state || '-'}</td>
+                <td className="py-3 px-3 text-xs text-slate-400">{sale.zip || '-'}</td>
+                <td className="py-3 px-3 text-xs text-slate-400">{sale.address || '-'}</td>
+                <td className="py-3 px-3 text-xs text-slate-400 text-center">{sale.campaignType || '-'}</td>
+                <td className="py-3 px-3 text-xs text-slate-400">{sale.center || '-'}</td>
+                <td className="py-3 px-3 text-xs text-slate-400">{sale.teamLead || '-'}</td>
+                <td className="py-3 px-3 text-xs text-slate-400">{sale.comments || '-'}</td>
+                <td className="py-3 px-3 text-xs text-slate-400">{sale.listId || '-'}</td>
+                
+                {/* Editable Disposition */}
+                <td className="py-3 px-3">
+                  {(userRole === 'Admin' || userRole === 'QA') ? (
+                    <select
+                      value={sale.disposition || ''}
+                      onChange={(e) => updateSaleDisposition(sale.id, e.target.value)}
+                      className="w-full px-2 py-1 text-xs bg-slate-900/50 text-white border border-slate-600 rounded outline-none focus:ring-1 focus:ring-blue-500"
+                    >
+                      <option value="">Select...</option>
+                      <optgroup label="Success">
+                        <option value="HW- Xfer">HW- Xfer</option>
+                        <option value="HW-IBXfer">HW-IBXfer</option>
+                        <option value="HW-Xfer-CDR">HW-Xfer-CDR</option>
+                      </optgroup>
+                      <optgroup label="Unsuccessful">
+                        <option value="Unsuccessful">Unsuccessful</option>
+                        <option value="HUWT">HUWT</option>
+                        <option value="DNC">DNC</option>
+                        <option value="DNQ">DNQ</option>
+                        <option value="DNQ-Dup">DNQ-Dup</option>
+                        <option value="DNQ-Webform">DNQ-Webform</option>
+                        <option value="Review Pending">Review Pending</option>
+                      </optgroup>
+                    </select>
+                  ) : (
+                    <span className="text-xs font-bold px-2 py-1 rounded bg-slate-900/50 border border-slate-700">{sale.disposition || '-'}</span>
+                  )}
+                </td>
+
+                {/* Editable Duration */}
+                <td className="py-2 px-2">
+                  {(userRole === 'Admin' || userRole === 'QA') ? (
+                    <input type="text" value={sale.duration || ''} onChange={(e) => updateSaleField(sale.id, 'duration', e.target.value)} className="w-full px-1 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded" />
+                  ) : (
+                    <span className="text-xs text-slate-300">{sale.duration || '-'}</span>
+                  )}
+                </td>
+
+                {/* Editable Xfer Time */}
+                <td className="py-2 px-2">
+                  {(userRole === 'Admin' || userRole === 'QA') ? (
+                    <input type="text" value={sale.xferTime || ''} onChange={(e) => updateSaleField(sale.id, 'xferTime', e.target.value)} className="w-full px-1 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded" />
+                  ) : (
+                    <span className="text-xs text-slate-300">{sale.xferTime || '-'}</span>
+                  )}
+                </td>
+
+                {/* Editable Xfer Attempts */}
+                <td className="py-2 px-2">
+                  {(userRole === 'Admin' || userRole === 'QA') ? (
+                    <select value={sale.xferAttempts || ''} onChange={(e) => updateSaleField(sale.id, 'xferAttempts', e.target.value)} className="w-full px-1 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded">
+                      <option value="">-</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option>
+                    </select>
+                  ) : (
+                    <span className="text-xs text-slate-300">{sale.xferAttempts || '-'}</span>
+                  )}
+                </td>
+
+                {/* Editable Feedback (Before) Paragraph Box */}
+                <td className="py-3 px-3">
+                  {(userRole === 'Admin' || userRole === 'QA') ? (
+                    <textarea 
+                      value={sale.feedbackBeforeXfer || ''} 
+                      onChange={(e) => updateSaleField(sale.id, 'feedbackBeforeXfer', e.target.value)} 
+                      rows={3} 
+                      className="w-full min-w-[250px] px-2 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded resize-y" 
+                    />
+                  ) : (
+                    <div className="text-xs text-slate-300 whitespace-pre-wrap min-w-[250px]">{sale.feedbackBeforeXfer || '-'}</div>
+                  )}
+                </td>
+
+                {/* Editable Feedback (After) */}
+                <td className="py-2 px-2">
+                  {(userRole === 'Admin' || userRole === 'QA') ? (
+                    <input type="text" value={sale.feedbackAfterXfer || ''} onChange={(e) => updateSaleField(sale.id, 'feedbackAfterXfer', e.target.value)} className="w-full px-1 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded" />
+                  ) : (
+                    <span className="text-xs text-slate-300">{sale.feedbackAfterXfer || '-'}</span>
+                  )}
+                </td>
+
+                {/* Editable Grading */}
+                <td className="py-3 px-3">
+                  {(userRole === 'Admin' || userRole === 'QA') ? (
+                    <select value={sale.grading || ''} onChange={(e) => updateSaleField(sale.id, 'grading', e.target.value)} className="w-full px-1 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded">
+                      <option value="">-</option><option value="Good">Good</option><option value="Bad">Bad</option><option value="Worst">Worst</option>
+                    </select>
+                  ) : (
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${sale.grading === 'Good' ? 'bg-green-500/20 text-green-400' : sale.grading === 'Bad' ? 'bg-red-500/20 text-red-400' : 'text-slate-500'}`}>
+                      {sale.grading || '-'}
+                    </span>
+                  )}
+                </td>
+
+                {/* Editable Dock Details */}
+                <td className="py-2 px-2">
+                  {(userRole === 'Admin' || userRole === 'QA') ? (
+                    <input type="text" value={sale.dockDetails || ''} onChange={(e) => updateSaleField(sale.id, 'dockDetails', e.target.value)} className="w-full px-1 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded" />
+                  ) : (
+                    <span className="text-xs text-slate-300">{sale.dockDetails || '-'}</span>
+                  )}
+                </td>
+
+                {/* Editable Evaluator */}
+                <td className="py-2 px-2">
+                  {(userRole === 'Admin' || userRole === 'QA') ? (
+                    <select value={sale.evaluator || ''} onChange={(e) => updateSaleField(sale.id, 'evaluator', e.target.value)} className="w-full px-1 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded">
+                      <option value="">-</option>
+                      {evaluators.map(e => <option key={e} value={e}>{e}</option>)}
+                    </select>
+                  ) : (
+                    <span className="text-xs text-slate-300">{sale.evaluator || '-'}</span>
+                  )}
+                </td>
+
+                {(userRole === 'Admin' || userRole === 'QA') && (
+                  <td className="py-3 px-3 text-center">
+                    <button onClick={() => setEditSale(sale)} className="p-1.5 bg-blue-500/20 text-blue-400 rounded-lg hover:bg-blue-500/30 transition-colors">
+                      <Edit className="w-4 h-4" />
+                    </button>
+                  </td>
+                )}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  </div>
+)}
 
 {/* Attendance Tab */}
         {activeTab === 'attendance' && (
@@ -2601,76 +2618,139 @@ const handleImport = (file, lateTimeVal) => {
   </div>
 )}
 
-        {/* NEW MONTHLY SALES MATRIX TAB */}
         {/* Monthly Matrix Tab */}
-        {activeTab === 'monthly_matrix' && (
-          <div className="space-y-6">
-             <div className="flex justify-between items-center">
-                <h2 className="text-xl text-white font-bold">Daily Sales Breakdown ({selectedMonth})</h2>
-                <div className="text-sm text-slate-400">
-                  Cycle: {dateRange.start.toDateString()} - {dateRange.end.toDateString()}
-                </div>
-             </div>
-             
-             <div className="bg-slate-800 rounded-xl overflow-x-auto border border-slate-600">
-                <table className="w-full text-slate-300 border-collapse">
-                  <thead>
-                    <tr>
-                      {/* [NEW] Row Number Header */}
-                      <th className="p-3 text-center bg-slate-900 border-b border-r border-slate-700 min-w-[50px]">No.</th>
-                      
-                      {/* Agent Name (Sticky Left) */}
-                      <th className="p-3 text-left bg-slate-900 border-b border-r border-slate-700 sticky left-0 z-10 min-w-[150px]">Agent Name</th>
-                      
-                      {/* Date Columns */}
-                      {getDaysArray(dateRange.start, dateRange.end).map(dateStr => {
-                        const d = new Date(dateStr);
-                        return (
-                          <th key={dateStr} className="p-2 text-center bg-slate-900 border-b border-slate-700 min-w-[40px]">
-                            <div className="text-xs text-slate-500">{d.toLocaleDateString('en-US', { weekday: 'narrow' })}</div>
-                            <div className="font-bold text-white">{d.getDate()}</div>
-                          </th>
-                        );
-                      })}
-                      <th className="p-3 text-center bg-slate-900 border-b border-l border-slate-700 font-bold text-green-400">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {/* [FIX] Added idx for row numbers */}
-                    {agents.filter(a => a.status === 'Active').map((agent, idx) => {
-                      const agentSales = sales.filter(s => 
-                          s.agentName === agent.name && 
-                          (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer')
-                      );
-                      let rowTotal = 0;
-                      
-                      return (
-                        <tr key={agent.id} className="hover:bg-slate-700">
-                          {/* [NEW] Row Number Cell */}
-                          <td className="p-3 text-center border-r border-slate-700 bg-slate-800/50">{idx + 1}</td>
 
-                          {/* Agent Name (Sticky Left) */}
-                          <td className="p-3 font-medium text-white border-r border-slate-700 bg-slate-800 sticky left-0">{agent.name}</td>
-                          
-                          {/* Daily Counts */}
-                          {getDaysArray(dateRange.start, dateRange.end).map(dateStr => {
-                            const dailyCount = agentSales.filter(s => s.date === dateStr).length;
-                            rowTotal += dailyCount;
-                            return (
-                              <td key={dateStr} className={`p-2 text-center border-b border-slate-700 ${dailyCount > 0 ? 'bg-green-900/20 text-green-400 font-bold' : 'text-slate-600'}`}>
-                                {dailyCount > 0 ? dailyCount : '-'}
-                              </td>
-                            );
-                          })}
-                          <td className="p-3 text-center border-l border-slate-700 font-bold text-white bg-slate-800/50">{rowTotal}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-               </table>
-             </div>
-          </div>
-        )}
+{activeTab === 'monthly_matrix' && (
+  <div className="space-y-6">
+    <div className="flex justify-between items-center">
+      <div>
+        <h2 className="text-xl text-white font-bold">Team Performance Matrix ({selectedMonth})</h2>
+        <p className="text-xs text-slate-400 mt-1 uppercase tracking-wider">Grouped by Team • Daily Breakdown • Sales Frequency</p>
+      </div>
+      <div className="text-sm text-slate-400 font-medium">
+        Cycle: {getPayrollRange(selectedMonth).start.toDateString()} - {getPayrollRange(selectedMonth).end.toDateString()}
+      </div>
+    </div>
+    
+    <div className="bg-slate-900 rounded-xl border border-slate-700 shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
+      <div className="overflow-auto relative">
+        <table className="w-full text-slate-300 border-collapse table-fixed">
+          <thead className="sticky top-0 z-40 shadow-md">
+            <tr className="bg-slate-950">
+              <th className="p-3 text-center border-b border-r border-slate-800 sticky left-0 z-50 bg-slate-950 w-12">No.</th>
+              <th className="p-3 text-left border-b border-r border-slate-800 sticky left-12 z-50 bg-slate-950 w-44">Agent Name</th>
+              
+              {/* Metric Headers */}
+              <th className="p-2 text-center border-b border-r border-slate-800 bg-blue-900/40 text-blue-400 text-[10px] font-bold w-14">LPD</th>
+              <th className="p-2 text-center border-b border-r border-slate-800 bg-slate-800 text-slate-400 text-[10px] w-12">DAYS</th>
+              <th className="p-2 text-center border-b border-slate-800 bg-red-900/20 text-red-400 text-[10px] w-10">0s</th>
+              <th className="p-2 text-center border-b border-slate-800 bg-orange-900/20 text-orange-400 text-[10px] w-10">1s</th>
+              <th className="p-2 text-center border-b border-slate-800 bg-yellow-900/20 text-yellow-400 text-[10px] w-10">2s</th>
+              <th className="p-2 text-center border-b border-r border-slate-800 bg-green-900/20 text-green-400 text-[10px] w-10">3s</th>
+
+              {/* Date Columns */}
+              {getDaysArray(getPayrollRange(selectedMonth).start, getPayrollRange(selectedMonth).end).map(dateStr => {
+                const d = new Date(dateStr);
+                const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+                return (
+                  <th key={dateStr} className={`p-2 text-center border-b border-slate-800 w-10 ${isWeekend ? 'bg-slate-800/50' : 'bg-slate-900'}`}>
+                    <div className="text-[10px] text-slate-500 uppercase">{d.toLocaleDateString('en-US', { weekday: 'narrow' })}</div>
+                    <div className={`text-xs font-bold ${isWeekend ? 'text-slate-500' : 'text-white'}`}>{d.getDate()}</div>
+                  </th>
+                );
+              })}
+              <th className="p-3 text-center bg-slate-950 border-b border-l border-slate-800 font-bold text-green-400 sticky right-0 z-40 w-16 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">TOTAL</th>
+            </tr>
+          </thead>
+          
+          <tbody className="divide-y divide-slate-800">
+            {teams.map(teamName => {
+              const teamAgents = monthlyStats.filter(s => s.team === teamName);
+              if (teamAgents.length === 0) return null;
+
+              // Calculate Team Totals
+              const teamTotalSales = teamAgents.reduce((sum, a) => sum + a.totalSales, 0);
+              const teamTotalDays = teamAgents.reduce((sum, a) => sum + a.dialingDays, 0);
+              const teamAvgLPD = teamTotalDays > 0 ? (teamTotalSales / teamTotalDays).toFixed(2) : "0.00";
+
+              return (
+                <React.Fragment key={teamName}>
+                  {/* Team Header Row */}
+                  <tr className="bg-slate-800/80 sticky top-[53px] z-30">
+                    <td colSpan={2} className="p-2 px-4 border-r border-slate-700 font-black text-blue-400 uppercase tracking-widest text-sm sticky left-0 z-30 bg-slate-800">
+                      {teamName}
+                    </td>
+                    <td className="text-center font-bold text-blue-300 border-r border-slate-700 bg-slate-800">{teamAvgLPD}</td>
+                    <td className="text-center text-slate-400 border-r border-slate-700 bg-slate-800">{teamTotalDays}</td>
+                    <td colSpan={4} className="bg-slate-800 border-r border-slate-700"></td>
+                    {getDaysArray(getPayrollRange(selectedMonth).start, getPayrollRange(selectedMonth).end).map(d => (
+                      <td key={d} className="bg-slate-800/30 border-b border-slate-700"></td>
+                    ))}
+                    <td className="text-center font-black text-green-400 sticky right-0 z-30 bg-slate-800 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
+                      {teamTotalSales}
+                    </td>
+                  </tr>
+
+                  {/* Agent Rows for this Team */}
+                  {teamAgents.map((stat, idx) => {
+                    const agentSales = sales.filter(s => 
+                      s.agentName === stat.name && 
+                      (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer')
+                    );
+
+                    return (
+                      <tr key={stat.id} className="hover:bg-blue-900/10 transition-colors group">
+                        <td className="p-2 text-center border-r border-slate-800 bg-slate-900 text-slate-600 font-mono text-[10px] sticky left-0 z-10 group-hover:text-white">{idx + 1}</td>
+                        <td className="p-2 px-3 font-medium text-slate-200 border-r border-slate-800 bg-slate-900 sticky left-12 z-10 truncate text-xs">{stat.name}</td>
+                        
+                        <td className="p-1 text-center border-r border-slate-800 bg-blue-500/5 font-bold text-blue-400 text-xs">{stat.lpd}</td>
+                        <td className="p-1 text-center border-r border-slate-800 text-slate-400 text-[10px]">{stat.dialingDays}</td>
+                        <td className="p-1 text-center text-red-400/50 text-[10px]">{stat.daysOn0}</td>
+                        <td className="p-1 text-center text-orange-300/80 text-[10px]">{stat.daysOn1}</td>
+                        <td className="p-1 text-center text-yellow-300/80 text-[10px]">{stat.daysOn2}</td>
+                        <td className="p-1 text-center border-r border-slate-800 text-green-400 font-bold text-[10px]">{stat.daysOn3}</td>
+
+                        {getDaysArray(getPayrollRange(selectedMonth).start, getPayrollRange(selectedMonth).end).map(dateStr => {
+                          const dailyCount = agentSales.filter(s => s.date === dateStr).length;
+                          return (
+                            <td key={dateStr} className={`p-1 text-center border-b border-slate-800 text-[11px] ${dailyCount > 0 ? 'bg-green-500/10 text-green-400 font-bold' : 'text-slate-700'}`}>
+                              {dailyCount > 0 ? dailyCount : '·'}
+                            </td>
+                          );
+                        })}
+                        <td className="p-2 text-center font-bold text-white bg-slate-900 sticky right-0 z-10 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
+                          {stat.totalSales}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </React.Fragment>
+              );
+            })}
+          </tbody>
+
+          {/* Grand Total Row at Bottom */}
+          <tfoot className="sticky bottom-0 z-40 shadow-[0_-4px_10px_rgba(0,0,0,0.5)]">
+            <tr className="bg-slate-950 border-t-2 border-blue-500 font-black text-white">
+              <td colSpan={2} className="p-3 text-left sticky left-0 bg-slate-950 z-50 uppercase tracking-tighter">Grand Total</td>
+              <td className="text-center text-blue-400 bg-slate-950">
+                {(monthlyStats.reduce((s, a) => s + a.totalSales, 0) / (monthlyStats.reduce((s, a) => s + a.dialingDays, 0) || 1)).toFixed(2)}
+              </td>
+              <td className="text-center text-slate-400 bg-slate-950">{monthlyStats.reduce((s, a) => s + a.dialingDays, 0)}</td>
+              <td colSpan={4} className="bg-slate-950"></td>
+              {getDaysArray(getPayrollRange(selectedMonth).start, getPayrollRange(selectedMonth).end).map(d => (
+                <td key={d} className="bg-slate-950"></td>
+              ))}
+              <td className="p-3 text-center text-green-400 text-lg sticky right-0 bg-slate-950 z-50 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
+                {monthlyStats.reduce((s, a) => s + a.totalSales, 0)}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+)}
       </div>
 
       {/* Modals */}
