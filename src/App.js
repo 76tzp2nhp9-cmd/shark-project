@@ -16,6 +16,7 @@ import SimpleAddModal from './components/modals/SimpleAddModal';
 import React, { useState, useMemo, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import * as XLSX from 'xlsx';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import { 
   Users,Edit, DollarSign, Calendar, AlertCircle, TrendingUp, Download, 
   Plus, X, Upload, LogOut, Lock, Clock,
@@ -1467,6 +1468,7 @@ const handleImport = (file, lateTimeVal) => {
   // Main Return Agent Payroll System
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+      <SpeedInsights />
       {/* Header */}
       <div className="bg-slate-800 border-b border-slate-700 shadow-sm sticky top-0 z-20">
         <div className="max-w-7xl mx-auto px-6 py-4">
