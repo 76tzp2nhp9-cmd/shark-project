@@ -208,6 +208,33 @@ const SaleModal = ({ agents, currentUser, userRole, onClose, onSubmit, sale = nu
                       <option value="">-</option><option>Good</option><option>Bad</option><option>Worst</option>
                    </select>
                 </div>
+                
+
+<div className="grid grid-cols-2 gap-4">
+    <div>
+        <label className={labelClass}>Fine Amount</label>
+        <input 
+            type="text" 
+            inputMode="numeric" 
+            placeholder="500" 
+            className={inputClass} 
+            value={formData.dockDetails} 
+            // Strict number only for Amount
+            onChange={(e) => setFormData({ ...formData, dockDetails: e.target.value.replace(/\D/g, '') })} 
+        />
+    </div>
+    <div>
+        <label className={labelClass}>Fine Reason</label>
+        <input 
+            type="text" 
+            placeholder="e.g. Misbehavior / Late" 
+            className={inputClass} 
+            value={formData.dockReason || ''} 
+            onChange={(e) => setFormData({ ...formData, dockReason: e.target.value })} 
+        />
+    </div>
+</div>
+
                 <div>
                    <label className={labelClass}>Evaluator</label>
                    <input type="text" className={inputClass} value={formData.evaluator} onChange={(e) => setFormData({ ...formData, evaluator: e.target.value })} />
