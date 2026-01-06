@@ -1,5 +1,5 @@
 // --- Imports for Helper Functions ---
-import { getPayrollRange, getDaysArray, formatTime } from './utils/helpers';
+import { getPayrollRange, getDaysArray, formatTime, getStandardMonthRange } from './utils/helpers';
 
 // --- Imports for UI Components ---
 import StatCard from './components/StatCard';
@@ -44,6 +44,7 @@ const AgentPayrollSystem = () => {
 
   // Login States
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [designationFilter, setDesignationFilter] = useState('All');
   const [userRole, setUserRole] = useState('');
   const [currentUser, setCurrentUser] = useState(null);
   const [loginData, setLoginData] = useState({ name: '', password: '' });
@@ -164,7 +165,7 @@ const AgentPayrollSystem = () => {
     setShowAddCenterModal(false);
   };
 
-// Handler to save late time (Database + Local)
+  // Handler to save late time (Database + Local)
   const handleSetLateTime = async (newTime) => {
     // 1. Optimistic Update (Updates UI immediately)
     setLateTime(newTime);
@@ -574,69 +575,104 @@ const AgentPayrollSystem = () => {
 
   const dateRange = useMemo(() => getPayrollRange(selectedMonth), [selectedMonth]);
 
-// 2. Monthly Stats (Final Strict Fix)
+// 2. Monthly Stats (Merged: Promoted Agents + Accurate Old Calculation Logic)
   const monthlyStats = useMemo(() => {
     // 1. Define Cycle Boundaries
     const { start, end } = getPayrollRange(selectedMonth);
-    
-    // Normalize to Midnight for accurate comparison
-    const cycleStart = new Date(start); cycleStart.setHours(0,0,0,0);
-    const cycleEnd = new Date(end); cycleEnd.setHours(23,59,59,999);
 
+    // Normalize to Midnight for accurate comparison
+    const cycleStart = new Date(start); cycleStart.setHours(0, 0, 0, 0);
+    const cycleEnd = new Date(end); cycleEnd.setHours(23, 59, 59, 999);
     const totalWorkingDays = countWorkingDays(start, end);
 
     // --- HELPER: Safe Date Parser ---
     const parseDate = (val) => {
-        if (!val) return null;
-        const d = new Date(val);
-        if (isNaN(d.getTime())) return null;
-        d.setHours(0,0,0,0);
-        return d;
+      if (!val) return null;
+      const d = new Date(val);
+      if (isNaN(d.getTime())) return null;
+      d.setHours(0, 0, 0, 0);
+      return d;
     };
 
-    // [FIX] Filter Agents (Robust)
-    const filteredAgentsList = agents.filter(a => {
-      // 1. Team/Center Check
-      if (!validAgentNames.has(a.name)) return false;
+    // ---------------------------------------------------------
+    // STEP A: CREATE MERGED LIST (Enable Promoted Agents)
+    // ---------------------------------------------------------
+    let combinedList = [...agents];
 
-      // 2. Joining Date Check (Hide Future Hires)
+    // Find HR records who are NOT in agents list but HAVE sales this month
+    const relevantSales = sales.filter(s => new Date(s.date) >= start && new Date(s.date) <= end);
+    const activeSalesMap = new Map(); 
+    
+    relevantSales.forEach(s => {
+       if (!activeSalesMap.has(s.agentName)) {
+           activeSalesMap.set(s.agentName, { team: s.team || s.teamLead, center: s.center });
+       }
+    });
+
+    hrRecords.forEach(hr => {
+      const isAgent = agents.some(a => a.cnic === hr.cnic);
+      const salesInfo = activeSalesMap.get(hr.agent_name);
+
+      if (!isAgent && salesInfo) {
+        combinedList.push({
+          name: hr.agent_name,
+          cnic: hr.cnic,
+          team: salesInfo.team || hr.team || 'Unassigned', 
+          center: salesInfo.center || hr.center || 'Phase 7',
+          activeDate: hr.joining_date,
+          status: 'Promoted', // Internal flag
+          designation: hr.designation,
+          baseSalary: 0
+        });
+      }
+    });
+
+    // ---------------------------------------------------------
+    // STEP B: ROBUST FILTERING (Restored from Your Old Code)
+    // ---------------------------------------------------------
+    const filteredAgentsList = combinedList.filter(a => {
+      // 1. Team/Center Check (Adapted to allow Promoted Agents)
+      const matchTeam = teamFilter === 'All' || teamFilter === 'All Teams' || a.team === teamFilter;
+      const matchCenter = centerFilter === 'All' || centerFilter === 'All Centers' || a.center === centerFilter;
+      if (!matchTeam || !matchCenter) return false;
+
+      // 2. Joining Date Check (From Your Accurate Code)
       const hrRec = hrRecords.find(h => h.cnic === a.cnic);
-      // Check HR joining date first, then Agent activeDate
       const joinStr = hrRec?.joining_date || a.activeDate || a.active_date;
       const joinDate = parseDate(joinStr);
 
       // If joined AFTER this cycle ended -> HIDE
       if (joinDate && joinDate.getTime() > cycleEnd.getTime()) {
-          return false;
+        return false;
       }
 
-      // 3. Left Date Check (Hide Past Leavers)
-      // Check if status is Left in EITHER table
-      const isLeft = a.status === 'Left' || hrRec?.status === 'Left';
+      // 3. Left Date Check (From Your Accurate Code)
+      // (Only check strict left date if they are NOT 'Promoted')
+      if (a.status !== 'Promoted') {
+          const isLeft = a.status === 'Left' || hrRec?.status === 'Left';
 
-      if (isLeft) {
-        // [CRITICAL] Check 'leftDate' specifically as requested
-        const dateValue = a.leftDate || a.left_date || hrRec?.leftDate || hrRec?.left_date;
-        const leaveDate = parseDate(dateValue);
-        
-        if (leaveDate) {
-            // STRICT RULE: If they left strictly BEFORE the cycle started -> HIDE
-            // Example: Left Dec 24. 
-            // - Jan Cycle (Dec 21 - Jan 20): Dec 24 < Dec 21? NO. -> SHOW.
-            // - Feb Cycle (Jan 21 - Feb 20): Dec 24 < Jan 21? YES. -> HIDE.
-            if (leaveDate.getTime() < cycleStart.getTime()) {
+          if (isLeft) {
+            const dateValue = a.leftDate || a.left_date || hrRec?.leftDate || hrRec?.left_date;
+            const leaveDate = parseDate(dateValue);
+
+            if (leaveDate) {
+              // STRICT RULE: If they left strictly BEFORE the cycle started -> HIDE
+              if (leaveDate.getTime() < cycleStart.getTime()) {
                 return false;
+              }
+            } else {
+              // SAFETY: If status is 'Left' but NO DATE is found, hide to prevent ghosts
+              return false;
             }
-        } else {
-            // SAFETY: If status is 'Left' but NO DATE is found, 
-            // hide them to prevent "Ghost Agents" in future months.
-            return false;
-        }
+          }
       }
 
       return true;
     });
 
+    // ---------------------------------------------------------
+    // STEP C: ACCURATE CALCULATIONS (Restored Loop Logic)
+    // ---------------------------------------------------------
     const agentStats = filteredAgentsList.map(agent => {
       // Get approved sales for this date range
       const approvedSales = sales.filter(s =>
@@ -650,21 +686,23 @@ const AgentPayrollSystem = () => {
         new Date(att.date) >= start && new Date(att.date) <= end
       );
 
-      // Daily Breakdown
+      // Daily Breakdown (Restored Exact Loop from Your Code)
       let dialingDays = 0;
-      let daysOn0 = 0, daysOn1 = 0, daysOn2 = 0, daysOn3 = 0; 
+      let daysOn0 = 0, daysOn1 = 0, daysOn2 = 0, daysOn3 = 0;
 
       let loopDate = new Date(start);
       while (loopDate <= end) {
         const dateStr = loopDate.toISOString().split('T')[0];
 
+        // [RESTORED] No extra "isBeforeJoining" check here, matching your accurate code
         const attRecord = agentAttendance.find(a => a.date === dateStr);
         const isMarkedPresent = attRecord && (attRecord.status === 'Present' || attRecord.status === 'Late');
         const dailySalesCount = approvedSales.filter(s => s.date === dateStr).length;
+        
         const isWorkingDay = isMarkedPresent || dailySalesCount > 0;
 
         if (isWorkingDay) {
-          dialingDays++; 
+          dialingDays++;
           if (dailySalesCount === 0) daysOn0++;
           else if (dailySalesCount === 1) daysOn1++;
           else if (dailySalesCount === 2) daysOn2++;
@@ -683,7 +721,7 @@ const AgentPayrollSystem = () => {
       let earnedBase = 0;
       if (totalWorkingDays > 0) {
         const dailyRate = baseSalary / totalWorkingDays;
-        earnedBase = Math.round(dailyRate * dialingDays); 
+        earnedBase = Math.round(dailyRate * dialingDays);
       } else {
         earnedBase = baseSalary;
       }
@@ -691,16 +729,18 @@ const AgentPayrollSystem = () => {
       const hrRecord = hrRecords.find(h => (agent.cnic && h.cnic === agent.cnic) || (h.agent_name.toLowerCase() === agent.name.toLowerCase()));
       const netSalary = earnedBase + agentBonuses - agentFines;
 
-      // Find the Left Date for Display
-      const finalLeftDate = agent.leftDate || agent.left_date || hrRecord?.leftDate || null;
+      // Find Final Left Date
+      const finalLeftDate = agent.status === 'Promoted' ? null : (agent.leftDate || agent.left_date || hrRecord?.leftDate || null);
 
       return {
         ...agent,
         leftDate: finalLeftDate,
+        isPromoted: agent.status === 'Promoted',
+        designation: agent.designation || hrRecord?.designation || 'Agent',
         totalSales: approvedSales.length,
         lpd: dialingDays > 0 ? (approvedSales.length / dialingDays).toFixed(2) : "0.00",
-        dialingDays,     
-        daysOn0, daysOn1, daysOn2, daysOn3,         
+        dialingDays,
+        daysOn0, daysOn1, daysOn2, daysOn3,
         totalFines: agentFines || 0,
         totalBonuses: agentBonuses || 0,
         daysPresent: dialingDays,
@@ -713,7 +753,41 @@ const AgentPayrollSystem = () => {
     });
 
     return agentStats.sort((a, b) => b.totalSales - a.totalSales);
-  }, [agents, sales, fines, bonuses, attendance, hrRecords, selectedMonth, validAgentNames]);
+  }, [agents, sales, fines, bonuses, attendance, hrRecords, selectedMonth, teamFilter, centerFilter]);
+
+  const managementStats = useMemo(() => {
+    const agentRange = getPayrollRange(selectedMonth); // 21st - 20th
+    const standardRange = getStandardMonthRange(selectedMonth); // 1st - 31st
+
+    // This filters HR records for anyone whose designation is NOT 'Agent'
+    const managers = hrRecords.filter(rec => rec.designation !== 'Agent');
+
+    return managers.map(mgr => {
+      // Check which cycle criteria they follow (based on your DB column)
+      const isAgentCycle = mgr.payroll_cycle_type === 'Agent Cycle';
+      const { start, end } = isAgentCycle ? agentRange : standardRange;
+
+      const totalWorkingDays = countWorkingDays(start, end);
+
+      const attRecords = attendance.filter(att =>
+        att.agentName === mgr.agent_name &&
+        new Date(att.date) >= start &&
+        new Date(att.date) <= end
+      );
+
+      const daysPresent = attRecords.filter(a => a.status === 'Present' || a.status === 'Late').length;
+      
+      // [FIXED] Read directly from HR Record (base_salary)
+    // We fallback to 0 if missing. 
+    // Note: Supabase returns snake_case 'base_salary'.
+    // Make sure this line matches the DB column name
+const baseSalary = mgr.base_salary || mgr.baseSalary || 0;
+
+      const earnedBase = totalWorkingDays > 0 ? Math.round((baseSalary / totalWorkingDays) * daysPresent) : 0;
+
+      return { ...mgr, baseSalary, daysPresent, totalWorkingDays, earnedBase, netSalary: earnedBase };
+    });
+  }, [hrRecords, agents, attendance, selectedMonth]);
 
   // 9. Bonuses (Respects Team/Center)
   const filteredBonuses = useMemo(() => {
@@ -862,61 +936,75 @@ const AgentPayrollSystem = () => {
     });
   }, [fines, searchQuery, selectedMonth, validAgentNames]);
 
-  // 10. HR (Respects Team, Center, AND Status)
+
+// 10. HR (Respects Team, Center, Status AND Designation)
   const filteredHR = useMemo(() => {
     return hrRecords.filter(rec => {
       // 1. Search
       const matchesSearch = rec.agent_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (rec.cnic && rec.cnic.includes(searchQuery));
 
-      // 2. Team & Center (We check if the agent name exists in the valid list for the selected Team/Center)
-      // Note: validAgentNames is already calculated based on teamFilter and centerFilter
+      // 2. Team & Center 
       const matchesTeamCenter = validAgentNames.has(rec.agent_name) || (teamFilter === 'All' && centerFilter === 'All');
 
-      // 3. Status Filter (Active vs Left)
+      // 3. Status Filter
       const matchesStatus = agentStatusFilter === 'All' || rec.status === agentStatusFilter;
 
-      return matchesSearch && matchesTeamCenter && matchesStatus;
-    });
-  }, [hrRecords, searchQuery, validAgentNames, teamFilter, centerFilter, agentStatusFilter]);
+      // 4. [UPDATED] Designation Filter Logic
+      let matchesDesignation = true;
+      if (designationFilter === 'All') {
+        matchesDesignation = true;
+      } else if (designationFilter === 'All Management') {
+        // Show everyone who is NOT an Agent
+        matchesDesignation = rec.designation !== 'Agent';
+      } else {
+        // Show specific designation (e.g., "HR", "QA")
+        matchesDesignation = rec.designation === designationFilter;
+      }
 
-  const handleSaveAgent = async (e) => {
+      return matchesSearch && matchesTeamCenter && matchesStatus && matchesDesignation;
+    });
+  }, [hrRecords, searchQuery, validAgentNames, teamFilter, centerFilter, agentStatusFilter, designationFilter]);
+
+ const handleSaveAgent = async (e) => {
     e.preventDefault();
     setLoading(true);
 
     try {
       // 1. Prepare Data
-      const joiningDate = editingAgent.active_date || new Date().toISOString().split('T')[0];
+      const joiningDate = editingAgent.active_date || editingAgent.activeDate || new Date().toISOString().split('T')[0];
       const validName = editingAgent.name ? editingAgent.name.trim() : "Unknown";
       const validCnic = editingAgent.cnic ? editingAgent.cnic.trim() : "";
 
       if (!validCnic) throw new Error("CNIC is required.");
 
-      // --- AGENT PAYLOAD (Keep baseSalary here) ---
+      // --- AGENT PAYLOAD ---
       const agentPayload = {
         name: validName,
         cnic: validCnic,
-        Phone: editingAgent.contact_number || '',
+        Phone: editingAgent.contact_number || editingAgent.Phone || '',
         email: editingAgent.email || '',
         address: editingAgent.address || '',
         password: editingAgent.password || '123',
         team: editingAgent.team || 'Unassigned',
         center: editingAgent.center || 'Phase 7',
-        baseSalary: editingAgent.baseSalary ? parseInt(editingAgent.baseSalary) : 0, // Saved here
+        baseSalary: editingAgent.baseSalary ? parseInt(editingAgent.baseSalary) : 0,
         activeDate: joiningDate,
         status: editingAgent.status || 'Active',
+        // If status is Active, clear the leftDate. If Left, set it.
         leftDate: editingAgent.status === 'Left' ? editingAgent.leftDate : null
       };
 
-      // --- HR PAYLOAD (REMOVED baseSalary to fix crash) ---
+      // --- HR PAYLOAD ---
       const hrPayload = {
         agent_name: validName,
         father_name: editingAgent.father_name || '',
         cnic: validCnic,
-        Phone: editingAgent.contact_number || '',
+        Phone: editingAgent.contact_number || editingAgent.Phone || '',
         email: editingAgent.email || '',
         address: editingAgent.address || '',
-        // baseSalary removed from here
+        // Ensure base_salary is saved to HR table too
+        base_salary: editingAgent.baseSalary ? parseInt(editingAgent.baseSalary) : 0,
         joining_date: joiningDate,
         bank_name: editingAgent.bank_name || '',
         account_number: editingAgent.account_number || '',
@@ -925,56 +1013,73 @@ const AgentPayrollSystem = () => {
       };
 
       if (showEditAgent) {
-        // === UPDATE ===
-        const { error: agentError } = await supabase.from('agents').update(agentPayload).eq('cnic', editingAgent.cnic);
+        // === UPDATE MODE ===
+        // Use upsert to handle cases where UI might be out of sync
+        const { error: agentError } = await supabase.from('agents').upsert(agentPayload, { onConflict: 'cnic' });
         if (agentError) throw new Error(`Agent Update Failed: ${agentError.message}`);
 
         const { error: hrError } = await supabase.from('hr_records').upsert(hrPayload, { onConflict: 'cnic' });
-        if (hrError) throw new Error(`HR Update Failed: ${hrError.message}`);
+        if (hrError) console.warn(`HR Sync Warning: ${hrError.message}`);
 
         // Update UI
         setAgents(prev => prev.map(a => a.cnic === editingAgent.cnic ? { ...a, ...agentPayload } : a));
-
-        // When updating local HR state, we can keep baseSalary in memory for display purposes, 
-        // even if it's not in the HR DB table.
         setHrRecords(prev => {
           const exists = prev.find(h => h.cnic === editingAgent.cnic);
-          const uiPayload = { ...hrPayload, baseSalary: agentPayload.baseSalary }; // Merge for UI only
-
+          const uiPayload = { ...hrPayload, baseSalary: agentPayload.baseSalary };
           if (exists) return prev.map(h => h.cnic === editingAgent.cnic ? { ...h, ...uiPayload } : h);
           return [...prev, { ...uiPayload, id: Math.random() }];
         });
 
       } else {
-        // === CREATE ===
-        const exists = agents.some(a => a.cnic === editingAgent.cnic);
-        if (exists) throw new Error("An agent with this CNIC already exists.");
+        // === CREATE MODE ===
+        
+        // [FIX] Removed the "Check if exists" block. 
+        // We use UPSERT immediately. This fixes the "Already Exists" error for zombie records.
+        
+        // 1. Upsert Agent
+        const { data: savedAgent, error: agentError } = await supabase
+          .from('agents')
+          .upsert(agentPayload, { onConflict: 'cnic' })
+          .select();
 
-        // 1. Insert Agent
-        const { data: newAgent, error: agentError } = await supabase.from('agents').insert([agentPayload]).select();
         if (agentError) throw new Error(`Agent DB Error: ${agentError.message}`);
 
-        // 2. Insert HR Record
-        const { data: newHR, error: hrError } = await supabase.from('hr_records').insert([hrPayload]).select();
+        // 2. Upsert HR Record
+        const { data: savedHR, error: hrError } = await supabase
+          .from('hr_records')
+          .upsert(hrPayload, { onConflict: 'cnic' })
+          .select();
 
         if (hrError) {
-          console.error("FULL HR ERROR:", hrError);
-          throw new Error(`HR DB Error: ${hrError.message}`);
+          console.error("HR Sync Error:", hrError);
+          // Alert user but don't crash, as Agent was created/updated successfully
+          alert(`Agent saved, but HR sync warning: ${hrError.message}`);
         }
 
-        // 3. Update UI
-        if (newAgent) setAgents(prev => [...prev, ...newAgent]);
-        // For local state, we manually add baseSalary back so it shows in the table immediately
-        if (newHR) {
-          const hrWithSalary = { ...newHR[0], baseSalary: agentPayload.baseSalary };
-          setHrRecords(prev => [...prev, hrWithSalary]);
+        // 3. Update UI (Check for duplicates in local state before adding)
+        if (savedAgent && savedAgent.length > 0) {
+            setAgents(prev => {
+                const exists = prev.some(a => a.cnic === validCnic);
+                // If it existed (zombie), update it. If new, add it.
+                if (exists) return prev.map(a => a.cnic === validCnic ? savedAgent[0] : a);
+                return [...prev, savedAgent[0]];
+            });
+        }
+        
+        if (savedHR && savedHR.length > 0) {
+          const hrWithSalary = { ...savedHR[0], baseSalary: agentPayload.baseSalary };
+          setHrRecords(prev => {
+             const exists = prev.some(h => h.cnic === validCnic);
+             if (exists) return prev.map(h => h.cnic === validCnic ? hrWithSalary : h);
+             return [...prev, hrWithSalary];
+          });
         }
       }
 
       setShowAddAgent(false);
       setShowEditAgent(false);
       setEditingAgent(null);
-      alert("Success! Agent and HR Record saved.");
+      alert("Success! Agent saved.");
 
     } catch (error) {
       console.error("Save Error:", error);
@@ -1280,12 +1385,20 @@ const AgentPayrollSystem = () => {
     if (!error) { setBonuses([...bonuses, ...data]); setShowAddBonus(false); }
   };
 
-  const handleSaveHR = async (e) => {
+const handleSaveHR = async (e) => {
     e.preventDefault();
     setLoading(true);
+    console.log("🚀 Starting Save Process...");
 
     try {
-      // 1. HR Payload (NO baseSalary)
+      // 1. Sanitize Data
+      const designationClean = (editingHR.designation || 'Agent').trim();
+      // Case-insensitive check: "Agent", "agent", "AGENT" are all valid
+      const isAgent = designationClean.toLowerCase() === 'agent'; 
+      
+      console.log("📝 Designation:", designationClean, "| Is Agent?", isAgent);
+
+      // 2. Prepare HR Payload (With Salary Fix)
       const hrPayload = {
         agent_name: editingHR.agent_name,
         father_name: editingHR.father_name || '',
@@ -1293,58 +1406,122 @@ const AgentPayrollSystem = () => {
         Phone: editingHR.contact_number,
         email: editingHR.email,
         address: editingHR.address,
-        designation: editingHR.designation,
+        designation: designationClean, 
         joining_date: editingHR.joining_date,
         bank_name: editingHR.bank_name || '',
         account_number: editingHR.account_number || '',
-        status: editingHR.status || 'Active'
+        status: editingHR.status || 'Active',
+        payroll_cycle_type: editingHR.payroll_cycle_type || 'Agent Cycle',
+        // [FIX] Save to 'base_salary' column
+        base_salary: editingHR.baseSalary ? parseInt(editingHR.baseSalary) : 0 
       };
 
-      // 2. Agent Payload (INCLUDES baseSalary)
-      // This ensures the salary is saved to the correct table
+      console.log("📦 Sending HR Payload to DB:", hrPayload);
+
+      // 3. Prepare Agent Payload (Only used if isAgent is true)
       const agentSyncPayload = {
         name: editingHR.agent_name,
-        baseSalary: parseInt(editingHR.baseSalary) || 0, // Saved to Agents Table
+        baseSalary: parseInt(editingHR.baseSalary) || 0,
         Phone: editingHR.contact_number,
         email: editingHR.email,
         address: editingHR.address,
-        status: editingHR.status || 'Active'
+        status: editingHR.status || 'Active',
+        team: editingHR.team || 'Unassigned',
+        center: editingHR.center || 'Phase 7'
       };
 
       if (editingHR.id) {
-        // === UPDATE ===
-        // Update HR Table (No Salary)
-        const { error } = await supabase.from('hr_records').update(hrPayload).eq('id', editingHR.id);
-        if (error) throw new Error(`HR Update Failed: ${error.message}`);
+        //Options: === UPDATE EXISTING ===
+        console.log("🔄 Updating Existing Record ID:", editingHR.id);
+        
+        // A. Update HR Table (Always)
+        const { error: hrError } = await supabase
+          .from('hr_records')
+          .update(hrPayload)
+          .eq('id', editingHR.id);
 
-        // Sync Agent Table (With Salary)
-        if (editingHR.cnic) {
-          await supabase.from('agents').update(agentSyncPayload).eq('cnic', editingHR.cnic);
+        if (hrError) throw new Error(`HR Update Failed: ${hrError.message}`);
+
+        // B. Handle Agents Table Logic
+        if (isAgent && editingHR.cnic) {
+          // 1. If Designation IS 'Agent' -> Sync Update to agents table
+          const { error: agentError } = await supabase
+            .from('agents')
+            .upsert({ ...agentSyncPayload, cnic: editingHR.cnic }, { onConflict: 'cnic' });
+            
+          if (agentError) console.warn("⚠️ Agent update warning:", agentError.message);
+          else console.log("✅ Agent Record Synced");
+        } 
+        else if (!isAgent && editingHR.cnic) {
+          // 2. [NEW] If Designation is NOT 'Agent' -> DELETE from agents table
+          console.log("🗑️ Designation changed from Agent. Removing from Agents table...");
+          const { error: deleteError } = await supabase
+            .from('agents')
+            .delete()
+            .eq('cnic', editingHR.cnic);
+
+          if (deleteError) console.error("❌ Failed to remove from Agents table:", deleteError.message);
+          
+          // Remove from local agents state immediately
+          setAgents(prev => prev.filter(a => a.cnic !== editingHR.cnic));
         }
-
-        // Update UI
-        // We merge salary back into local state so you can see it in the table
-        setHrRecords(prev => prev.map(h => h.id === editingHR.id ? { ...h, ...hrPayload, baseSalary: agentSyncPayload.baseSalary } : h));
-        setAgents(prev => prev.map(a => a.cnic === editingHR.cnic ? { ...a, ...agentSyncPayload } : a));
+        
+        // Update Local HR State
+        setHrRecords(prev => prev.map(h => h.id === editingHR.id ? { ...h, ...hrPayload, baseSalary: hrPayload.base_salary } : h));
+        
+        // Update Local Agents State (If they are still an agent)
+        if (isAgent) {
+          setAgents(prev => {
+             // Check if agent exists in list
+             const exists = prev.some(a => a.cnic === editingHR.cnic);
+             if (exists) {
+                 return prev.map(a => a.cnic === editingHR.cnic ? { ...a, ...agentSyncPayload } : a);
+             } else {
+                 // If we just turned them INTO an agent, add them to the list
+                 return [...prev, { ...agentSyncPayload, cnic: editingHR.cnic }];
+             }
+          });
+        }
 
       } else {
-        // === CREATE ===
-        const { data: newHR, error } = await supabase.from('hr_records').insert([hrPayload]).select();
-        if (error) throw new Error(`HR Insert Failed: ${error.message}`);
+        //Options: === CREATE NEW ===
+        console.log("✨ Creating New Record...");
 
-        // Sync to Agents
-        if (editingHR.cnic) {
-          await supabase.from('agents').update(agentSyncPayload).eq('cnic', editingHR.cnic);
+        // A. Insert into HR Table
+        const { data: newHR, error: hrError } = await supabase
+          .from('hr_records')
+          .insert([hrPayload])
+          .select();
+
+        if (hrError) throw new Error(`HR Insert Failed: ${hrError.message}`);
+
+        // B. Insert into Agents Table (ONLY IF DESIGNATION IS AGENT)
+        if (isAgent && editingHR.cnic) {
+          const agentInsertPayload = {
+            ...agentSyncPayload,
+            cnic: editingHR.cnic,
+            password: '123', // Default Password
+            activeDate: editingHR.joining_date,
+            leftDate: null
+          };
+
+          const { error: agentError } = await supabase
+            .from('agents')
+            .upsert(agentInsertPayload, { onConflict: 'cnic' });
+
+          if (agentError) console.error("❌ Agent Insert Failed:", agentError.message);
+          else console.log("✅ New Agent Record Created");
+          
+          // Refresh Agent List
+          const { data: refreshedAgents } = await supabase.from('agents').select('*');
+          if (refreshedAgents) setAgents(refreshedAgents);
         }
 
+        // Add to Local HR State
         if (newHR) {
-          const hrWithSalary = { ...newHR[0], baseSalary: agentSyncPayload.baseSalary };
+          const hrWithSalary = { ...newHR[0], baseSalary: hrPayload.base_salary };
           setHrRecords(prev => [...prev, hrWithSalary]);
         }
-
-        // Refresh agents to capture the updated salary/info
-        const { data: updatedAgents } = await supabase.from('agents').select('*');
-        if (updatedAgents) setAgents(updatedAgents);
       }
 
       alert('Record saved successfully!');
@@ -1352,7 +1529,7 @@ const AgentPayrollSystem = () => {
       setEditingHR(null);
 
     } catch (error) {
-      console.error('Error:', error.message);
+      console.error("🚨 SAVE ERROR:", error);
       alert('Error: ' + error.message);
     } finally {
       setLoading(false);
@@ -1569,7 +1746,7 @@ const AgentPayrollSystem = () => {
         }
 
         // --- 3. IMPORT ATTENDANCE ---
-      // --- 3. IMPORT ATTENDANCE (FIXED) ---
+        // --- 3. IMPORT ATTENDANCE (FIXED) ---
         else if (importType === 'attendance') {
           const dataRows = rows.slice(1);
           const dateMap = {};
@@ -1577,14 +1754,14 @@ const AgentPayrollSystem = () => {
           dataRows.forEach(rawLine => {
             const row = safeRow(rawLine);
             // Column 2 is Name, Column 3 is the Date/Time string
-            const name = row[2] ? row[2].trim() : ''; 
+            const name = row[2] ? row[2].trim() : '';
             const timeStr = row[3] || '';
 
             if (name && timeStr) {
               // Robust Regex for "MM/DD/YYYY HH:MM AM/PM"
               // Capture Groups: [1]Month, [2]Day, [3]Year, [4]Time, [5]AM/PM
               const match = timeStr.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}:\d{2})(?::\d{2})?\s?(AM|PM)/i);
-              
+
               if (match) {
                 const month = match[1].padStart(2, '0');
                 const day = match[2].padStart(2, '0');
@@ -1599,22 +1776,22 @@ const AgentPayrollSystem = () => {
                 let [hours, minutes] = timeRaw.split(':').map(Number);
                 if (ampm === 'PM' && hours < 12) hours += 12;
                 if (ampm === 'AM' && hours === 12) hours = 0;
-                
+
                 const time = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
 
                 // 3. Add to Map (Group by Date -> Agent)
                 const nameKey = name.toLowerCase();
-                
+
                 if (!dateMap[date]) dateMap[date] = {};
                 if (!dateMap[date][nameKey]) dateMap[date][nameKey] = new Set();
-                
+
                 dateMap[date][nameKey].add(time);
               }
             }
           });
 
           // Process Map into Database Rows
-          const activeAgents = agents; 
+          const activeAgents = agents;
           const newAttendance = [];
           const threshold = lateTimeVal || lateTime;
 
@@ -1622,12 +1799,12 @@ const AgentPayrollSystem = () => {
             Object.keys(dateMap[date]).forEach(importedNameLower => {
               // Find the agent in your DB (Case-insensitive)
               const agent = activeAgents.find(a => a.name.toLowerCase() === importedNameLower);
-              
+
               if (agent) {
                 const times = Array.from(dateMap[date][importedNameLower]).sort();
                 const loginTime = times[0];
                 const logoutTime = times.length > 1 ? times[times.length - 1] : loginTime;
-                
+
                 const status = 'Present';
                 const isLate = (loginTime > threshold);
 
@@ -1645,8 +1822,8 @@ const AgentPayrollSystem = () => {
 
           // Filter Duplicates before inserting
           const uniqueAttendance = newAttendance.filter(newItem => {
-            const isDuplicate = attendance.some(existing => 
-              existing.agentName === newItem.agentName && 
+            const isDuplicate = attendance.some(existing =>
+              existing.agentName === newItem.agentName &&
               existing.date === newItem.date
             );
             return !isDuplicate;
@@ -1712,12 +1889,13 @@ const AgentPayrollSystem = () => {
     }
   };
 
-  // 2. Mark as Left / Reactivate (Smart Sync)
+
+// 2. Mark as Left / Reactivate (Saves Date to BOTH tables)
   const handleToggleHRStatus = async (id, currentStatus, cnic, agentName) => {
     if (!id) return alert("Error: Record ID is missing.");
 
     const newStatus = currentStatus === 'Active' ? 'Left' : 'Active';
-    // Only set leftDate if we are marking as Left
+    // Calculate date: Today if leaving, NULL if reactivating
     const leftDateVal = newStatus === 'Left' ? new Date().toISOString().split('T')[0] : null;
 
     const confirmMsg = newStatus === 'Left'
@@ -1728,31 +1906,31 @@ const AgentPayrollSystem = () => {
       try {
         setLoading(true);
 
-        // A. Update HR Record
+        // A. Update HR Record (Now saving leftDate here too!)
         const { error: hrError } = await supabase
           .from('hr_records')
-          .update({ status: newStatus })
+          .update({ 
+            status: newStatus, 
+            left_date: leftDateVal // Make sure your DB column is 'left_date' or 'leftDate'
+          })
           .eq('id', id);
 
         if (hrError) throw hrError;
 
-        // B. Sync with Agents Table
-        // Try deleting by CNIC first, if valid
+        // B. Sync with Agents Table (Only if they exist there)
         let agentUpdateQuery = supabase.from('agents').update({ status: newStatus, leftDate: leftDateVal });
 
         if (cnic && cnic.trim() !== '') {
           await agentUpdateQuery.eq('cnic', cnic);
         } else if (agentName) {
-          // Fallback: If CNIC is missing, match by Name
-          console.warn("Syncing by Name because CNIC is missing...");
           await agentUpdateQuery.eq('name', agentName);
         }
 
         // C. Update Local State (Both Tabs)
-        setHrRecords(prev => prev.map(h => h.id === id ? { ...h, status: newStatus } : h));
+        // We now update 'left_date' in local HR state immediately
+        setHrRecords(prev => prev.map(h => h.id === id ? { ...h, status: newStatus, left_date: leftDateVal } : h));
 
         setAgents(prev => prev.map(a => {
-          // Check if this is the agent we modified
           const isMatch = (cnic && a.cnic === cnic) || (agentName && a.name === agentName);
           if (isMatch) {
             return { ...a, status: newStatus, leftDate: leftDateVal };
@@ -1770,7 +1948,6 @@ const AgentPayrollSystem = () => {
       }
     }
   };
-
   // 3. Delete Record (Smart Sync)
   const handleDeleteHR = async (id, cnic, agentName) => {
     if (window.confirm(`CRITICAL: Permanently delete ${agentName}? \nThis removes them from BOTH HR and Agent lists.`)) {
@@ -2022,6 +2199,16 @@ const AgentPayrollSystem = () => {
                 HR Team
               </button>
             )}
+
+            {(userRole === 'Admin' || userRole === 'HR') && (
+              <button
+                onClick={() => { setActiveTab('management_payroll'); setSearchQuery(''); }}
+                className={`px-6 py-3 text-sm font-medium capitalize whitespace-nowrap transition-colors ${activeTab === 'management_payroll' ? 'border-b-2 border-blue-400 text-blue-400' : 'text-slate-400 hover:text-white'}`}
+              >
+                Management Payroll
+              </button>
+            )}
+
           </div>
         </div>
       </div>
@@ -2147,7 +2334,8 @@ const AgentPayrollSystem = () => {
                     id: null,
                     agent_name: '',
                     father_name: '',
-                    designation: '',
+                    designation: 'Agent',
+                    payroll_cycle_type: 'Agent Cycle',
                     contact_number: '',
                     email: '',
                     address: '',
@@ -2169,16 +2357,41 @@ const AgentPayrollSystem = () => {
 
             {/* Filter Grid */}
             <div className="bg-slate-800/50 rounded-xl shadow-sm border border-slate-600 p-4 mb-6">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4"> {/* Changed cols-4 to cols-5 */}
+
+                {/* Existing Search Input */}
                 <input type="text" placeholder="Search by name or CNIC..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+
+                {/* Existing Team Filter */}
                 <select value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
                   <option value="All">All Teams</option>
                   {teams.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
+
+                {/* Existing Center Filter */}
                 <select value={centerFilter} onChange={(e) => setCenterFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
                   <option value="All">All Centers</option>
                   {centers.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
+
+               {/* Designation Filter */}
+                <select 
+                  value={designationFilter} 
+                  onChange={(e) => setDesignationFilter(e.target.value)} 
+                  className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="All">All Designations</option>
+                  
+                  {/* [NEW] Add this option */}
+                  <option value="All Management">All Management</option>
+                  
+                  {/* Dynamically list unique designations from DB */}
+                  {[...new Set(hrRecords.map(h => h.designation))].filter(Boolean).sort().map(d => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
+
+                {/* Existing Status Filter */}
                 <select value={agentStatusFilter} onChange={(e) => setAgentStatusFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
                   <option value="All">All Status</option>
                   <option value="Active">Active Only</option>
@@ -2234,15 +2447,24 @@ const AgentPayrollSystem = () => {
                         <td className="py-3 px-4 text-slate-300 text-sm">{rec.designation}</td>
                         <td className="py-3 px-4 text-slate-300 text-sm">{agentProfile.team || '-'}</td>
                         <td className="py-3 px-4 text-slate-300 text-xs">{agentProfile.center || '-'}</td>
-                        <td className="py-3 px-4 text-slate-300 text-sm font-mono">{agentProfile.baseSalary || '-'}</td>
+                        {/* [FIXED] Salary Display (Checks HR Record first for Management) */}
+<td className="py-3 px-4 text-right text-slate-100 font-mono">
+  {rec.base_salary 
+    ? parseInt(rec.base_salary).toLocaleString() 
+    : (agentProfile.baseSalary ? agentProfile.baseSalary.toLocaleString() : 0)
+  }
+</td>
                         <td className="py-3 px-4 text-slate-400 text-xs font-mono">{rec.cnic}</td>
 
-                        {/* [CHANGED] Joining Date + Left Date (fetched from Agent Profile) */}
+                        {/* [FIXED] Joining Date + Left Date (Check both HR and Agent records) */}
                         <td className="py-3 px-4">
                           <div className="text-slate-300 text-sm">{rec.joining_date}</div>
-                          {rec.status === 'Left' && agentProfile.leftDate && (
+                          
+                          {/* Show Left Date if status is Left */}
+                          {rec.status === 'Left' && (
                             <div className="text-[10px] text-red-400 font-medium mt-0.5">
-                              Left: {agentProfile.leftDate}
+                              {/* Check Agent Profile first, then fallback to HR Record */}
+                              Left: {agentProfile.leftDate || rec.left_date || rec.leftDate || 'N/A'}
                             </div>
                           )}
                         </td>
@@ -2264,9 +2486,10 @@ const AgentPayrollSystem = () => {
                                 address: rec.address || linkedAgent.address || '',
                                 team: rec.team || linkedAgent.team || '',
                                 center: rec.center || linkedAgent.center || '',
-                                baseSalary: rec.baseSalary || linkedAgent.baseSalary || '',
+                                baseSalary: rec.base_salary || rec.baseSalary || linkedAgent.baseSalary || '',
                                 bank_name: rec.bank_name || linkedAgent.bank_name || '',
-                                account_number: rec.account_number || linkedAgent.account_number || ''
+                                account_number: rec.account_number || linkedAgent.account_number || '',
+                                payroll_cycle_type: rec.payroll_cycle_type || 'Agent Cycle'
                               });
                               setShowAddEmployee(true);
                             }} className="p-1.5 bg-blue-500/10 text-blue-400 rounded hover:bg-blue-500/20 transition-colors" title="Edit">
@@ -2457,6 +2680,9 @@ const AgentPayrollSystem = () => {
         {activeTab === 'sales' && (
           <div className="space-y-6">
 
+
+
+
             {/* Header Section */}
             <div className="flex justify-between items-center">
               <h2 className="text-xl font-semibold text-white">Sales Management</h2>
@@ -2636,11 +2862,11 @@ const AgentPayrollSystem = () => {
                               </optgroup>
                             </select>
                           ) : (
-                           <span className={`text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wide
-                              ${['HW- Xfer', 'HW-IBXfer', 'HW-Xfer-CDR'].includes(sale.disposition) ? 'bg-green-500/20 text-green-400' : 
+                            <span className={`text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wide
+                              ${['HW- Xfer', 'HW-IBXfer', 'HW-Xfer-CDR'].includes(sale.disposition) ? 'bg-green-500/20 text-green-400' :
                                 ['Unsuccessful', 'HUWT'].includes(sale.disposition) ? 'bg-yellow-500/20 text-yellow-400' :
-                                ['Review Pending', 'Pending Review'].includes(sale.disposition) ? 'bg-orange-500/20 text-orange-400' :
-                                'bg-red-500/20 text-red-400'}`}>
+                                  ['Review Pending', 'Pending Review'].includes(sale.disposition) ? 'bg-orange-500/20 text-orange-400' :
+                                    'bg-red-500/20 text-red-400'}`}>
                               {sale.disposition || '-'}
                             </span>
                           )}
@@ -2850,6 +3076,49 @@ const AgentPayrollSystem = () => {
                       </tr>
                     );
                   })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'management_payroll' && (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h2 className="text-xl font-semibold text-white">Management Payroll - {selectedMonth}</h2>
+            </div>
+
+            <div className="bg-slate-800/80 rounded-xl border border-slate-600 overflow-hidden shadow-lg">
+              <table className="w-full text-left">
+                <thead className="bg-slate-900 border-b border-slate-700">
+                  <tr className="text-slate-200 text-xs uppercase tracking-wider">
+                    <th className="p-4">Employee</th>
+                    <th className="p-4">Designation</th>
+                    <th className="p-4">Cycle Type</th>
+                    <th className="p-4 text-center">Attendance</th>
+                    <th className="p-4 text-right">Base Salary</th>
+                    <th className="p-4 text-right">Earned Base</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-700">
+                  {managementStats.map((mgr, idx) => (
+                    <tr key={mgr.cnic || idx} className="hover:bg-slate-700/50 transition-colors">
+                      <td className="p-4 text-white font-medium">{mgr.agent_name}</td>
+                      <td className="p-4 text-slate-400 text-sm">{mgr.designation}</td>
+                      <td className="p-4">
+                        <span className={`px-2 py-1 rounded text-[10px] font-bold ${mgr.payroll_cycle_type === 'Agent Cycle' ? 'bg-orange-500/10 text-orange-400' : 'bg-purple-500/10 text-purple-400'}`}>
+                          {mgr.payroll_cycle_type}
+                        </span>
+                      </td>
+                      <td className="p-4 text-center">
+                        <span className="bg-blue-500/10 text-blue-400 px-3 py-1 rounded-full text-xs font-mono">
+                          {mgr.daysPresent} / {mgr.totalWorkingDays}
+                        </span>
+                      </td>
+                      <td className="p-4 text-right text-slate-300 font-mono">{mgr.baseSalary?.toLocaleString()}</td>
+                      <td className="p-4 text-right text-green-400 font-bold font-mono">{mgr.earnedBase?.toLocaleString()} PKR</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -3166,7 +3435,7 @@ const AgentPayrollSystem = () => {
                           <td className="py-3 px-4 font-medium text-white">
                             {agent.name}
                             <div className={`text-[10px] mt-0.5 ${agent.status === 'Active' ? 'text-green-400' : 'text-red-400'}`}>
-    {agent.status}</div>
+                              {agent.status}</div>
                           </td>
 
                           {/* Bank Details Cell */}
@@ -3238,7 +3507,7 @@ const AgentPayrollSystem = () => {
 
         {/* Monthly Matrix Tab */}
 
-      {activeTab === 'monthly_matrix' && (
+        {activeTab === 'monthly_matrix' && (
           <div className="space-y-6">
             <div className="flex justify-between items-center">
               <div>
@@ -3285,20 +3554,21 @@ const AgentPayrollSystem = () => {
                     {(() => {
                       const globalWorkDays = new Set();
                       const { start, end } = getPayrollRange(selectedMonth);
-                      
+
                       sales.forEach(s => {
                         if (new Date(s.date) >= start && new Date(s.date) <= end) {
-                           if (s.status === 'Sale' || ['HW- Xfer', 'HW-IBXfer'].includes(s.disposition)) {
-                              globalWorkDays.add(s.date);
-                           }
+                          if (s.status === 'Sale' || ['HW- Xfer', 'HW-IBXfer'].includes(s.disposition)) {
+                            globalWorkDays.add(s.date);
+                          }
                         }
                       });
+const uniqueTeams = [...new Set([...teams, ...monthlyStats.map(s => s.team)])].filter(Boolean).sort();
 
-                      return teams.map(teamName => {
+                      return uniqueTeams.map(teamName => {
                         const teamAgents = monthlyStats.filter(s => s.team === teamName);
                         if (teamAgents.length === 0) return null;
 
-                        const teamAllSales = sales.filter(s => 
+                        const teamAllSales = sales.filter(s =>
                           (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer') &&
                           teamAgents.some(a => a.name === s.agentName)
                         );
@@ -3316,14 +3586,14 @@ const AgentPayrollSystem = () => {
                               <td className="text-center font-bold text-blue-300 border-r border-slate-700 bg-slate-800">{teamAvgLPD}</td>
                               <td className="text-center text-slate-400 border-r border-slate-700 bg-slate-800">{teamTotalDays}</td>
                               <td colSpan={4} className="bg-slate-800 border-r border-slate-700"></td>
-                              
+
                               {getDaysArray(getPayrollRange(selectedMonth).start, getPayrollRange(selectedMonth).end).map(d => {
-                                  const dailyCount = teamAllSales.filter(s => s.date === d).length;
-                                  return (
-                                    <td key={d} className={`text-center text-[10px] border-b border-slate-700 font-bold ${dailyCount > 0 ? 'text-blue-300 bg-blue-500/10' : 'text-slate-600 bg-slate-800/30'}`}>
-                                      {dailyCount > 0 ? dailyCount : '-'}
-                                    </td>
-                                  );
+                                const dailyCount = teamAllSales.filter(s => s.date === d).length;
+                                return (
+                                  <td key={d} className={`text-center text-[10px] border-b border-slate-700 font-bold ${dailyCount > 0 ? 'text-blue-300 bg-blue-500/10' : 'text-slate-600 bg-slate-800/30'}`}>
+                                    {dailyCount > 0 ? dailyCount : '-'}
+                                  </td>
+                                );
                               })}
 
                               <td className="text-center font-black text-green-400 sticky right-0 z-30 bg-slate-800 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
@@ -3341,7 +3611,7 @@ const AgentPayrollSystem = () => {
                               const hrRec = hrRecords.find(h => h.cnic === stat.cnic) || {};
                               const joinDateStr = hrRec.joining_date || stat.activeDate || stat.active_date;
                               const joinDate = joinDateStr ? new Date(joinDateStr) : null;
-                              if (joinDate) joinDate.setHours(0,0,0,0);
+                              if (joinDate) joinDate.setHours(0, 0, 0, 0);
 
                               const isLeft = stat.status === 'Left';
                               const rowClass = isLeft ? 'bg-red-900/10 hover:bg-red-900/20' : 'hover:bg-blue-900/10';
@@ -3350,13 +3620,21 @@ const AgentPayrollSystem = () => {
                               return (
                                 <tr key={stat.id} className={`${rowClass} transition-colors group`}>
                                   <td className="p-2 text-center border-r border-slate-800 bg-slate-900 text-slate-600 font-mono text-[10px] sticky left-0 z-10 group-hover:text-white">{idx + 1}</td>
-                                  
+
                                   <td className="p-2 px-3 font-medium border-r border-slate-800 bg-slate-900 sticky left-12 z-10 truncate text-xs">
-                                      <div className={nameClass}>{stat.name}</div>
-                                      {isLeft && (
-                                          <div className="text-[9px] text-red-500/80 font-mono mt-0.5">
-                                              LEFT: {stat.leftDate || 'N/A'}
+                                    <div className={nameClass}>{stat.name}</div>
+                                    {/* [NEW] Show Promoted Status */}
+                                      {stat.isPromoted ? (
+                                          <div className="text-[9px] text-red-500 font-bold uppercase mt-0.5 tracking-tighter">
+                                              PROMOTED TO {stat.designation.toUpperCase()}
                                           </div>
+                                      ) : (
+                                          /* Show Left Date only if NOT promoted */
+                                          isLeft && (
+                                            <div className="text-[9px] text-red-500/80 font-mono mt-0.5">
+                                                LEFT: {stat.leftDate || 'N/A'}
+                                            </div>
+                                          )
                                       )}
                                   </td>
 
@@ -3369,14 +3647,14 @@ const AgentPayrollSystem = () => {
 
                                   {getDaysArray(getPayrollRange(selectedMonth).start, getPayrollRange(selectedMonth).end).map(dateStr => {
                                     const currentDate = new Date(dateStr);
-                                    currentDate.setHours(0,0,0,0);
-                                    
+                                    currentDate.setHours(0, 0, 0, 0);
+
                                     // 1. Is this date BEFORE they joined?
                                     const isBeforeJoining = joinDate && currentDate < joinDate;
 
                                     const dailyCount = agentSales.filter(s => s.date === dateStr).length;
-                                    const hasAttendance = attendance.some(a => 
-                                      a.date === dateStr && 
+                                    const hasAttendance = attendance.some(a =>
+                                      a.date === dateStr &&
                                       a.agentName === stat.name &&
                                       (a.status === 'Present' || a.status === 'Late')
                                     );
@@ -3388,17 +3666,17 @@ const AgentPayrollSystem = () => {
                                     if (dailyCount > 0) {
                                       cellContent = dailyCount;
                                       cellClass = 'bg-green-500/10 text-green-400 font-bold';
-                                    } 
+                                    }
                                     // [CHANGED] Only mark 0 or A if they have officially joined
                                     else if (!isBeforeJoining) {
-                                        if (hasAttendance) {
-                                          cellContent = '0';
-                                          cellClass = 'bg-red-500/20 text-red-400 font-bold';
-                                        } 
-                                        else if (isWorkingDay) {
-                                          cellContent = 'A';
-                                          cellClass = 'text-red-500 font-black';
-                                        }
+                                      if (hasAttendance) {
+                                        cellContent = '0';
+                                        cellClass = 'bg-red-500/20 text-red-400 font-bold';
+                                      }
+                                      else if (isWorkingDay) {
+                                        cellContent = 'A';
+                                        cellClass = 'text-red-500 font-black';
+                                      }
                                     }
 
                                     return (
@@ -3407,7 +3685,7 @@ const AgentPayrollSystem = () => {
                                       </td>
                                     );
                                   })}
-                                  
+
                                   <td className="p-2 text-center font-bold text-white bg-slate-900 sticky right-0 z-10 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
                                     {stat.totalSales}
                                   </td>
@@ -3428,19 +3706,19 @@ const AgentPayrollSystem = () => {
                       </td>
                       <td className="text-center text-slate-400 bg-slate-950">{monthlyStats.reduce((s, a) => s + a.dialingDays, 0)}</td>
                       <td colSpan={4} className="bg-slate-950"></td>
-                      
+
                       {getDaysArray(getPayrollRange(selectedMonth).start, getPayrollRange(selectedMonth).end).map(d => {
-                         const dailyGrandTotal = sales.filter(s => 
-                            s.date === d && 
-                            (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer') &&
-                            validAgentNames.has(s.agentName)
-                         ).length;
-                         
-                         return (
-                            <td key={d} className="bg-slate-950 text-center text-xs font-bold text-green-400">
-                                {dailyGrandTotal > 0 ? dailyGrandTotal : ''}
-                            </td>
-                         );
+                        const dailyGrandTotal = sales.filter(s =>
+                          s.date === d &&
+                          (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer') &&
+                          validAgentNames.has(s.agentName)
+                        ).length;
+
+                        return (
+                          <td key={d} className="bg-slate-950 text-center text-xs font-bold text-green-400">
+                            {dailyGrandTotal > 0 ? dailyGrandTotal : ''}
+                          </td>
+                        );
                       })}
 
                       <td className="p-3 text-center text-green-400 text-lg sticky right-0 bg-slate-950 z-50 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
@@ -3776,12 +4054,24 @@ const AgentPayrollSystem = () => {
                     </select>
                   </div>
 
-                  {/* Designation */}
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1 font-medium">Payroll Cycle</label>
+                    <select
+                      value={editingHR?.payroll_cycle_type || 'Agent Cycle'}
+                      onChange={e => setEditingHR({ ...editingHR, payroll_cycle_type: e.target.value })}
+                      className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                    >
+                      <option value="Agent Cycle">Agent Cycle (21st - 20th)</option>
+                      <option value="Standard Month">Standard Month (1st - 31st)</option>
+                    </select>
+                  </div>
+
+                  {/* Designation Input inside showAddEmployee Modal */}
                   <div>
                     <label className="block text-xs text-slate-400 mb-1 font-medium">Designation</label>
                     <input
                       type="text"
-                      value={editingHR?.designation || 'Agent'}
+                      value={editingHR?.designation || ''} // <--- CHANGE THIS LINE (Remove 'Agent')
                       onChange={e => setEditingHR({ ...editingHR, designation: e.target.value })}
                       className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white text-sm focus:ring-2 focus:ring-purple-500 outline-none"
                     />
@@ -3791,11 +4081,20 @@ const AgentPayrollSystem = () => {
                   <div>
                     <label className="block text-xs text-slate-400 mb-1 font-medium">Base Salary (PKR)</label>
                     <input
-                      type="number"
-                      value={editingHR?.baseSalary || ''}
-                      onChange={e => setEditingHR({ ...editingHR, baseSalary: e.target.value })}
-                      className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white text-sm focus:ring-2 focus:ring-purple-500 outline-none"
-                    />
+  type="text" // Change to text prevents scroll wheel changes
+  inputMode="numeric" // Shows number pad on mobile
+  pattern="[0-9]*"
+  placeholder="Salary in PKR"
+  value={editingHR?.baseSalary || ''}
+  onChange={e => {
+    // Only allow numbers
+    const val = e.target.value;
+    if (/^\d*$/.test(val)) {
+      setEditingHR({ ...editingHR, baseSalary: val });
+    }
+  }}
+  className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white text-sm focus:ring-2 focus:ring-purple-500 outline-none"
+/>
                   </div>
                 </div>
               </div>
@@ -3960,4 +4259,4 @@ const AgentPayrollSystem = () => {
 export default AgentPayrollSystem;
 
 
-//--------Starting Changes----------//
+// LEFT STATUS NOT WOKRING ON HR TABLE

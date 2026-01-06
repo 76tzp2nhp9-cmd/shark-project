@@ -55,3 +55,17 @@ export const getDaysArray = (start, end) => {
     h = h ? h : 12; // the hour '0' should be '12'
     return `${h}:${minutes} ${ampm}`;
   };
+
+export const getStandardMonthRange = (monthStr) => {
+  if (!monthStr) return { start: new Date(), end: new Date() };
+  const [monthName, year] = monthStr.split(' ');
+  const date = new Date(`${monthName} 1, ${year}`);
+  
+  // Start is always the 1st of the selected month
+  const start = new Date(date.getFullYear(), date.getMonth(), 1);
+  
+  // End is the last day of the same month
+  const end = new Date(date.getFullYear(), date.getMonth() + 1, 0); 
+  
+  return { start, end };
+};
