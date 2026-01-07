@@ -2532,10 +2532,10 @@ const handleSaveHR = async (e) => {
 
             <button
   onClick={() => setActiveTab('attendance_matrix')}
-  className={`px-4 py-2 rounded-lg font-medium transition-all ${
+  className={`px-6 py-3 text-sm font-medium capitalize whitespace-nowrap transition-colors  ${
     activeTab === 'attendance_matrix'
-      ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20'
-      : 'text-slate-400 hover:text-white hover:bg-slate-800'
+      ? 'border-b-2 border-blue-400 text-blue-400'
+                : 'text-slate-400 hover:text-white'
   }`}
 >
   Attendance Matrix
@@ -3931,19 +3931,20 @@ const formatTo12Hour = (timeStr) => {
                 const teamAgents = agents.filter(a => a.team === teamName && a.status === 'Active');
                 if (teamAgents.length === 0) return null;
 
-                // --- TEAM SUMMARY CALCULATIONS ---
-                const teamTotalPresent = teamAgents.reduce((sum, agent) => {
-                  return sum + attendance.filter(a => a.agentName === agent.name && a.status === 'Present').length;
-                }, 0);
-                
-                const teamTotalLate = teamAgents.reduce((sum, agent) => {
-                   const agentLates = attendance.filter(a => 
-                     a.agentName === agent.name && 
-                     a.status === 'Present' && 
-                     getLateStatus(a.loginTime).isLate // <--- USES NEW HELPER
-                   ).length;
-                   return sum + agentLates;
-                }, 0);
+               // --- TEAM SUMMARY CALCULATIONS ---
+const teamTotalPresent = teamAgents.reduce((sum, agent) => {
+  return sum + attendance.filter(a => 
+    a.agentName?.toString().trim().toLowerCase() === agent.name?.toString().trim().toLowerCase() && 
+    a.status === 'Present'
+  ).length;
+}, 0);
+
+const teamTotalLate = teamAgents.reduce((sum, agent) => {
+   return sum + attendance.filter(a => 
+     a.agentName?.toString().trim().toLowerCase() === agent.name?.toString().trim().toLowerCase() && 
+     getLateStatus(a.loginTime).isLate
+   ).length;
+}, 0);
 
                 return (
                   <React.Fragment key={teamName}>
@@ -3985,7 +3986,11 @@ const formatTo12Hour = (timeStr) => {
                       if (joinDate) joinDate.setHours(0, 0, 0, 0);
 
                       // Metrics Calculation
-                      const agentRecs = attendance.filter(a => a.agentName === agent.name);
+                      // --- AGENT METRICS ---
+// The Fix: Normalize both names before matching
+const agentRecs = attendance.filter(a => 
+  a.agentName?.toString().trim().toLowerCase() === agent.name?.toString().trim().toLowerCase()
+);
                       const presentCount = agentRecs.filter(a => a.status === 'Present').length;
                       const lateCount = agentRecs.filter(a => 
                     a.status === 'Present' && 
@@ -4459,9 +4464,9 @@ const uniqueTeams = [...new Set([...teams, ...monthlyStats.map(s => s.team)])].f
                         if (teamAgents.length === 0) return null;
 
                         const teamAllSales = sales.filter(s =>
-                          (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer') &&
-                          teamAgents.some(a => a.name === s.agentName)
-                        );
+  (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer') &&
+  teamAgents.some(a => a.name?.toString().trim().toLowerCase() === s.agentName?.toString().trim().toLowerCase())
+);
 
                         const teamTotalSales = teamAgents.reduce((sum, a) => sum + a.totalSales, 0);
                         const teamTotalDays = teamAgents.reduce((sum, a) => sum + a.dialingDays, 0);
@@ -4493,9 +4498,9 @@ const uniqueTeams = [...new Set([...teams, ...monthlyStats.map(s => s.team)])].f
 
                             {teamAgents.map((stat, idx) => {
                               const agentSales = sales.filter(s =>
-                                s.agentName === stat.name &&
-                                (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer')
-                              );
+  s.agentName?.toString().trim().toLowerCase() === stat.name?.toString().trim().toLowerCase() &&
+  (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer')
+);
 
                               // [NEW] Get Agent's Join Date for comparison
                               const hrRec = hrRecords.find(h => h.cnic === stat.cnic) || {};
@@ -4544,10 +4549,10 @@ const uniqueTeams = [...new Set([...teams, ...monthlyStats.map(s => s.team)])].f
 
                                     const dailyCount = agentSales.filter(s => s.date === dateStr).length;
                                     const hasAttendance = attendance.some(a =>
-                                      a.date === dateStr &&
-                                      a.agentName === stat.name &&
-                                      (a.status === 'Present' || a.status === 'Late')
-                                    );
+  a.date === dateStr &&
+  a.agentName?.toString().trim().toLowerCase() === stat.name?.toString().trim().toLowerCase() &&
+  (a.status === 'Present' || a.status === 'Late')
+);
                                     const isWorkingDay = globalWorkDays.has(dateStr);
 
                                     let cellContent = '-';
@@ -5083,9 +5088,13 @@ const uniqueTeams = [...new Set([...teams, ...monthlyStats.map(s => s.team)])].f
                   <div>
                     <label className="text-[10px] text-slate-400 block mb-1">Role</label>
                     <select name="role" className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white text-sm focus:border-blue-500 outline-none">
-                      <option value="HR">HR</option>
-                      <option value="QA">QA</option>
+                      {/* Options for Manage Access */}
                       <option value="Admin">Admin</option>
+                      <option value="QA">QA</option>
+                      <option value="HR">HR</option>
+                      <option value="IT">IT</option>
+                      <option value="TL">TL</option>
+
                     </select>
                   </div>
                   <button type="submit" className="bg-green-600 hover:bg-green-500 text-white font-medium py-2 px-4 rounded text-sm transition-colors h-10">
