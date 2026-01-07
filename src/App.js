@@ -16,11 +16,15 @@ import SimpleAddModal from './components/modals/SimpleAddModal';
 import React, { useState, useMemo, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import * as XLSX from 'xlsx';
+
 import {
   Users, Edit, DollarSign, Calendar, AlertCircle, TrendingUp, Download,
   Plus, X, Upload, LogOut, Lock, Clock,
-  Pencil, Trash2, UserX, Shield, RotateCcw // <--- Added these new icons
+  Pencil, Trash2, UserX, Shield, RotateCcw,
+  CheckCircle, XCircle, ThumbsDown, AlertTriangle // <--- ENSURE THESE ARE HERE
 } from 'lucide-react';
+
+
 
 // --- HELPER: Count Business Days (Mon-Fri) ---
 // PASTE THIS RIGHT BEFORE 'const AgentPayrollSystem = ...'
@@ -40,11 +44,96 @@ const countWorkingDays = (start, end) => {
   return count;
 };
 
+  // [NEW] Helper: Convert "January 2026" -> "2026-01" (For Input Value)
+  const getMonthInputValue = (monthStr) => {
+    if (!monthStr) return new Date().toISOString().slice(0, 7);
+    const [month, year] = monthStr.split(' ');
+    const date = new Date(`${month} 1, ${year}`);
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    return `${year}-${m}`;
+  };
+
+  // [NEW] Reusable Date Filter Component
+  const DateFilterBar = ({ filterType, setFilterType, dateVal, setDateVal, endVal, setEndVal, selectedMonth, handleMonthChange }) => {
+    return (
+      <div className="bg-slate-800 p-3 rounded-lg border border-slate-600 flex flex-wrap gap-4 items-center mb-6">
+
+        {/* 1. Filter Type Selector */}
+        <div className="flex items-center gap-2">
+          <span className="text-slate-400 text-sm font-medium"><Calendar className="w-4 h-4 inline" /> Filter:</span>
+          <select
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value)}
+            className="bg-slate-700 text-white text-sm border border-slate-600 rounded px-2 py-1 focus:ring-2 focus:ring-blue-500 outline-none"
+          >
+            <option value="Daily">Daily</option>
+            <option value="Weekly">Weekly</option>
+            <option value="Monthly">Monthly</option>
+            <option value="Custom">Custom Range</option>
+          </select>
+        </div>
+
+        {/* 2. Inputs based on Type */}
+        <div className="flex items-center gap-2">
+
+          {/* Monthly: Show your existing Month Picker */}
+          {filterType === 'Monthly' && (
+            <input
+              type="month"
+              value={getMonthInputValue(selectedMonth)}
+              onChange={handleMonthChange}
+              className="bg-slate-700 text-white text-sm border border-slate-600 rounded px-2 py-1 [color-scheme:dark]"
+            />
+          )}
+
+          {/* Daily or Weekly: Show Single Date Picker */}
+          {(filterType === 'Daily' || filterType === 'Weekly') && (
+            <input
+              type="date"
+              value={dateVal}
+              onChange={(e) => setDateVal(e.target.value)}
+              className="bg-slate-700 text-white text-sm border border-slate-600 rounded px-2 py-1 [color-scheme:dark]"
+            />
+          )}
+
+          {/* Custom: Show Start & End Date Pickers */}
+          {filterType === 'Custom' && (
+            <>
+              <input
+                type="date"
+                value={dateVal}
+                onChange={(e) => setDateVal(e.target.value)}
+                className="bg-slate-700 text-white text-sm border border-slate-600 rounded px-2 py-1 [color-scheme:dark]"
+              />
+              <span className="text-slate-400">-</span>
+              <input
+                type="date"
+                value={endVal}
+                onChange={(e) => setEndVal(e.target.value)}
+                className="bg-slate-700 text-white text-sm border border-slate-600 rounded px-2 py-1 [color-scheme:dark]"
+              />
+            </>
+          )}
+        </div>
+      </div>
+    );
+  };
+
 const AgentPayrollSystem = () => {
+
+  // --- MANAGEMENT SPECIFIC MODALS STATE ---
+  const [showMgmtBonus, setShowMgmtBonus] = useState(false);
+  const [showMgmtFine, setShowMgmtFine] = useState(false);
+
+  // 2. Add State inside your component
+const [showTransactionModal, setShowTransactionModal] = useState(false);
+const [transactionType, setTransactionType] = useState('bonus'); // 'bonus' or 'fine'
 
   // Login States
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [designationFilter, setDesignationFilter] = useState('All');
+  // Add this near your other state variables
+const [user, setUser] = useState(JSON.parse(localStorage.getItem('currentUser')) || null);
   const [userRole, setUserRole] = useState('');
   const [currentUser, setCurrentUser] = useState(null);
   const [loginData, setLoginData] = useState({ name: '', password: '' });
@@ -140,8 +229,8 @@ const AgentPayrollSystem = () => {
     };
   }, [filterType, customStartDate, customEndDate, selectedMonth]);
 
-  // [FIX] Late Time State (Persisted in Local Storage)
-  const [lateTime, setLateTime] = useState(() => localStorage.getItem('ams_late_time') || '09:30');
+  // [FIX] Default to 19:15 (7:15 PM) to match your requested shift start
+  const [lateTime, setLateTime] = useState(() => localStorage.getItem('ams_late_time') || '19:15');
   const [showLateTimeModal, setShowLateTimeModal] = useState(false);
 
   // Inside App.js
@@ -211,15 +300,6 @@ const AgentPayrollSystem = () => {
       await supabase.from('admins').delete().eq('id', id);
       fetchAdmins();
     }
-  };
-
-  // [NEW] Helper: Convert "January 2026" -> "2026-01" (For Input Value)
-  const getMonthInputValue = (monthStr) => {
-    if (!monthStr) return new Date().toISOString().slice(0, 7);
-    const [month, year] = monthStr.split(' ');
-    const date = new Date(`${month} 1, ${year}`);
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    return `${year}-${m}`;
   };
 
   // [NEW] Helper: Convert "2026-01" -> "January 2026" (For App State)
@@ -365,72 +445,6 @@ const AgentPayrollSystem = () => {
   // [NEW] HR Modal State
   const [showAddEmployee, setShowAddEmployee] = useState(false);
 
-  // [NEW] Reusable Date Filter Component
-  const DateFilterBar = ({ filterType, setFilterType, dateVal, setDateVal, endVal, setEndVal, selectedMonth, handleMonthChange }) => {
-    return (
-      <div className="bg-slate-800 p-3 rounded-lg border border-slate-600 flex flex-wrap gap-4 items-center mb-6">
-
-        {/* 1. Filter Type Selector */}
-        <div className="flex items-center gap-2">
-          <span className="text-slate-400 text-sm font-medium"><Calendar className="w-4 h-4 inline" /> Filter:</span>
-          <select
-            value={filterType}
-            onChange={(e) => setFilterType(e.target.value)}
-            className="bg-slate-700 text-white text-sm border border-slate-600 rounded px-2 py-1 focus:ring-2 focus:ring-blue-500 outline-none"
-          >
-            <option value="Daily">Daily</option>
-            <option value="Weekly">Weekly</option>
-            <option value="Monthly">Monthly</option>
-            <option value="Custom">Custom Range</option>
-          </select>
-        </div>
-
-        {/* 2. Inputs based on Type */}
-        <div className="flex items-center gap-2">
-
-          {/* Monthly: Show your existing Month Picker */}
-          {filterType === 'Monthly' && (
-            <input
-              type="month"
-              value={getMonthInputValue(selectedMonth)}
-              onChange={handleMonthChange}
-              className="bg-slate-700 text-white text-sm border border-slate-600 rounded px-2 py-1 [color-scheme:dark]"
-            />
-          )}
-
-          {/* Daily or Weekly: Show Single Date Picker */}
-          {(filterType === 'Daily' || filterType === 'Weekly') && (
-            <input
-              type="date"
-              value={dateVal}
-              onChange={(e) => setDateVal(e.target.value)}
-              className="bg-slate-700 text-white text-sm border border-slate-600 rounded px-2 py-1 [color-scheme:dark]"
-            />
-          )}
-
-          {/* Custom: Show Start & End Date Pickers */}
-          {filterType === 'Custom' && (
-            <>
-              <input
-                type="date"
-                value={dateVal}
-                onChange={(e) => setDateVal(e.target.value)}
-                className="bg-slate-700 text-white text-sm border border-slate-600 rounded px-2 py-1 [color-scheme:dark]"
-              />
-              <span className="text-slate-400">-</span>
-              <input
-                type="date"
-                value={endVal}
-                onChange={(e) => setEndVal(e.target.value)}
-                className="bg-slate-700 text-white text-sm border border-slate-600 rounded px-2 py-1 [color-scheme:dark]"
-              />
-            </>
-          )}
-        </div>
-      </div>
-    );
-  };
-
   // Search and Filter States
   const [searchQuery, setSearchQuery] = useState('');
   const [teamFilter, setTeamFilter] = useState('All');
@@ -556,8 +570,178 @@ const AgentPayrollSystem = () => {
     localStorage.removeItem('ams_role');
     localStorage.removeItem('ams_active_tab');
   };
+  
+// --- MANAGEMENT PAYROLL STATS (Fixed Date Parsing + Visibility) ---
+  const managementPayrollStats = useMemo(() => {
+    // 1. ROBUST DATE PARSING
+    let year, month;
+    
+    // Check if format is "YYYY-MM" (e.g. "2026-01")
+    if (selectedMonth.includes('-')) {
+        const parts = selectedMonth.split('-');
+        year = parseInt(parts[0]);
+        month = parseInt(parts[1]);
+    } else {
+        // Handle "January 2026" format
+        const dateObj = new Date(Date.parse(`1 ${selectedMonth}`)); // Add '1' to make it parseable
+        if (!isNaN(dateObj.getTime())) {
+            year = dateObj.getFullYear();
+            month = dateObj.getMonth() + 1; // getMonth is 0-indexed
+        } else {
+            // Fallback to current date
+            const now = new Date();
+            year = now.getFullYear();
+            month = now.getMonth() + 1;
+        }
+    }
+
+    const currentMonthStr = `${year}-${String(month).padStart(2, '0')}`; // Standardize to YYYY-MM for matching
+
+    if (isNaN(year) || isNaN(month)) return { standard: [], agentCycle: [] };
+
+    // --- HELPER 1: Precise Working Days (Excludes Sat/Sun) ---
+    const getSafeWorkingDays = (start, end) => {
+        if (!start || !end || isNaN(start) || isNaN(end)) return 26; 
+        
+        let count = 0;
+        let curDate = new Date(start);
+        while (curDate <= end) {
+            const dayOfWeek = curDate.getDay();
+            if (dayOfWeek !== 0 && dayOfWeek !== 6) { // 0=Sun, 6=Sat (Exclude Weekends)
+                count++;
+            }
+            curDate.setDate(curDate.getDate() + 1);
+        }
+        return count > 0 ? count : 26; 
+    };
+
+    // --- HELPER 2: Speed Optimization (Maps instead of Loops) ---
+    const attendanceMap = new Map();
+    attendance.forEach(att => {
+        if (att.agentName) {
+            const key = att.agentName.trim().toLowerCase();
+            if (!attendanceMap.has(key)) attendanceMap.set(key, []);
+            attendanceMap.get(key).push(att);
+        }
+    });
+
+    const bonusMap = new Map();
+    // [FIX] Filter bonuses by matching the month string correctly
+    bonuses.filter(b => {
+        // Handle both "January 2026" and "2026-01" in bonus records
+        return b.month === selectedMonth || b.month === currentMonthStr;
+    }).forEach(b => {
+         const key = (b.agentName || '').trim().toLowerCase();
+         bonusMap.set(key, (bonusMap.get(key) || 0) + (b.amount || 0));
+    });
+
+    const fineMap = new Map();
+    fines.filter(f => {
+        return f.month === selectedMonth || f.month === currentMonthStr;
+    }).forEach(f => {
+         const key = (f.agentName || '').trim().toLowerCase();
+         fineMap.set(key, (fineMap.get(key) || 0) + (f.amount || 0));
+    });
+
+    // 2. Process All HR Records
+    const allStats = hrRecords.map(emp => {
+        const cycleType = (emp.payroll_cycle_type || '').toLowerCase().trim();
+        const designation = (emp.designation || '').toLowerCase().trim();
+        const empNameKey = (emp.agent_name || '').trim().toLowerCase();
+
+        // A. Determine Cycle Dates
+        let cycleStart, cycleEnd;
+        if (cycleType === 'agent cycle') {
+            // Agent Cycle: 21st Previous Month to 20th Current Month
+            const prevMonth = month - 1 === 0 ? 12 : month - 1;
+            const prevYear = month - 1 === 0 ? year - 1 : year;
+            cycleStart = new Date(prevYear, prevMonth - 1, 21);
+            cycleEnd = new Date(year, month - 1, 20);
+            cycleEnd.setHours(23, 59, 59, 999);
+        } else {
+            // Standard Cycle: 1st to End of Month
+            cycleStart = new Date(year, month - 1, 1);
+            cycleEnd = new Date(year, month, 0); 
+            cycleEnd.setHours(23, 59, 59, 999);
+        }
+
+        // B. Calculate Working Days
+        const totalWorkingDays = getSafeWorkingDays(cycleStart, cycleEnd);
+
+        // C. Get Attendance
+        const empAttRecords = attendanceMap.get(empNameKey) || [];
+        const daysPresent = empAttRecords.filter(a => {
+            const d = new Date(a.date);
+            return d >= cycleStart && d <= cycleEnd && (a.status === 'Present' || a.status === 'Late');
+        }).length;
+
+        // D. Financials
+        let rawSalary = emp.base_salary || emp.baseSalary || 0;
+        if (typeof rawSalary === 'string') rawSalary = parseInt(rawSalary.replace(/,/g, '')) || 0;
+
+        let earnedBase = 0;
+        if (totalWorkingDays > 0) {
+            earnedBase = Math.round((rawSalary / totalWorkingDays) * daysPresent);
+        } else {
+            earnedBase = rawSalary;
+        }
+
+        const totalBonus = bonusMap.get(empNameKey) || 0;
+        const totalFine = fineMap.get(empNameKey) || 0;
+        const netSalary = earnedBase + totalBonus - totalFine;
+
+        return {
+            ...emp,
+            cycleTypeNormalized: cycleType,
+            designationNormalized: designation,
+            baseSalary: rawSalary, 
+            daysPresent,
+            totalWorkingDays, 
+            earnedBase,
+            totalBonus,
+            totalFine,
+            netSalary
+        };
+    });
+
+    // 3. Filter Lists
+    // EXCLUDE Regular Agents (Only show management/HR/QA etc)
+    const managementStaff = allStats.filter(e => e.designationNormalized !== 'agent');
+
+    return {
+        // Table 1: Standard (Default)
+        standard: managementStaff.filter(e => e.cycleTypeNormalized !== 'agent cycle'),
+        
+        // Table 2: Agent Cycle (Only if explicitly set)
+        agentCycle: managementStaff.filter(e => e.cycleTypeNormalized === 'agent cycle')
+    };
+  }, [hrRecords, selectedMonth, attendance, bonuses, fines]);
+
+  // --- HELPER: Get Management List (Designation != Agent) ---
+  const managementEmployees = useMemo(() => {
+    if (!hrRecords) return [];
+    return hrRecords
+      .filter(emp => {
+        const des = (emp.designation || '').toLowerCase().trim();
+        return des !== 'agent' && des !== '';
+      })
+      .map(emp => emp.agent_name) // Just get the names as simple strings
+      .sort();
+  }, [hrRecords]);
 
   // --- FILTERING LOGIC ---
+
+  // Add this helper inside the component (e.g. near other useMemos)
+const allPossibleSellers = useMemo(() => {
+  // 1. Get all Active Agents
+  const agentNames = agents.map(a => a.name);
+
+  // 2. Get all HR/Management Names
+  const hrNames = hrRecords.map(h => h.agent_name);
+
+  // 3. Merge and Remove Duplicates
+  return [...new Set([...agentNames, ...hrNames])].filter(Boolean).sort();
+}, [agents, hrRecords]);
 
   // 1. Helper: validAgents Set (Optimized for performance)
   // This creates a Set of names of agents who match the selected Team/Center
@@ -575,17 +759,16 @@ const AgentPayrollSystem = () => {
 
   const dateRange = useMemo(() => getPayrollRange(selectedMonth), [selectedMonth]);
 
-// 2. Monthly Stats (Merged: Promoted Agents + Accurate Old Calculation Logic)
+// 2. Monthly Stats (Merged: Promoted Agents + Accurate Old Calc + Agent Restriction)
   const monthlyStats = useMemo(() => {
     // 1. Define Cycle Boundaries
     const { start, end } = getPayrollRange(selectedMonth);
 
-    // Normalize to Midnight for accurate comparison
+    // Normalize to Midnight
     const cycleStart = new Date(start); cycleStart.setHours(0, 0, 0, 0);
     const cycleEnd = new Date(end); cycleEnd.setHours(23, 59, 59, 999);
     const totalWorkingDays = countWorkingDays(start, end);
 
-    // --- HELPER: Safe Date Parser ---
     const parseDate = (val) => {
       if (!val) return null;
       const d = new Date(val);
@@ -628,26 +811,36 @@ const AgentPayrollSystem = () => {
     });
 
     // ---------------------------------------------------------
-    // STEP B: ROBUST FILTERING (Restored from Your Old Code)
+    // STEP B: FILTERING (With Agent Restriction)
     // ---------------------------------------------------------
     const filteredAgentsList = combinedList.filter(a => {
-      // 1. Team/Center Check (Adapted to allow Promoted Agents)
-      const matchTeam = teamFilter === 'All' || teamFilter === 'All Teams' || a.team === teamFilter;
-      const matchCenter = centerFilter === 'All' || centerFilter === 'All Centers' || a.center === centerFilter;
-      if (!matchTeam || !matchCenter) return false;
+      
+      // [CRITICAL FIX] Use 'currentUser' to match your Login Logic
+      if (userRole === 'Agent') {
+         // Fallback to localStorage if state is unavailable on refresh
+         const loggedInCnic = currentUser?.cnic || JSON.parse(localStorage.getItem('ams_user'))?.cnic;
+         
+         // If we can't verify the user, hide the data
+         if (!loggedInCnic || a.cnic !== loggedInCnic) return false;
+      }
+
+      // 1. Team/Center Check (Skip for Agents so they don't filter themselves out)
+      if (userRole !== 'Agent') {
+        const matchTeam = teamFilter === 'All' || teamFilter === 'All Teams' || a.team === teamFilter;
+        const matchCenter = centerFilter === 'All' || centerFilter === 'All Centers' || a.center === centerFilter;
+        if (!matchTeam || !matchCenter) return false;
+      }
 
       // 2. Joining Date Check (From Your Accurate Code)
       const hrRec = hrRecords.find(h => h.cnic === a.cnic);
       const joinStr = hrRec?.joining_date || a.activeDate || a.active_date;
       const joinDate = parseDate(joinStr);
 
-      // If joined AFTER this cycle ended -> HIDE
       if (joinDate && joinDate.getTime() > cycleEnd.getTime()) {
         return false;
       }
 
       // 3. Left Date Check (From Your Accurate Code)
-      // (Only check strict left date if they are NOT 'Promoted')
       if (a.status !== 'Promoted') {
           const isLeft = a.status === 'Left' || hrRec?.status === 'Left';
 
@@ -661,7 +854,7 @@ const AgentPayrollSystem = () => {
                 return false;
               }
             } else {
-              // SAFETY: If status is 'Left' but NO DATE is found, hide to prevent ghosts
+              // SAFETY: No date found -> Hide
               return false;
             }
           }
@@ -674,7 +867,6 @@ const AgentPayrollSystem = () => {
     // STEP C: ACCURATE CALCULATIONS (Restored Loop Logic)
     // ---------------------------------------------------------
     const agentStats = filteredAgentsList.map(agent => {
-      // Get approved sales for this date range
       const approvedSales = sales.filter(s =>
         s.agentName === agent.name &&
         (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer') &&
@@ -694,7 +886,7 @@ const AgentPayrollSystem = () => {
       while (loopDate <= end) {
         const dateStr = loopDate.toISOString().split('T')[0];
 
-        // [RESTORED] No extra "isBeforeJoining" check here, matching your accurate code
+        // [RESTORED] Your exact calculation loop
         const attRecord = agentAttendance.find(a => a.date === dateStr);
         const isMarkedPresent = attRecord && (attRecord.status === 'Present' || attRecord.status === 'Late');
         const dailySalesCount = approvedSales.filter(s => s.date === dateStr).length;
@@ -729,7 +921,6 @@ const AgentPayrollSystem = () => {
       const hrRecord = hrRecords.find(h => (agent.cnic && h.cnic === agent.cnic) || (h.agent_name.toLowerCase() === agent.name.toLowerCase()));
       const netSalary = earnedBase + agentBonuses - agentFines;
 
-      // Find Final Left Date
       const finalLeftDate = agent.status === 'Promoted' ? null : (agent.leftDate || agent.left_date || hrRecord?.leftDate || null);
 
       return {
@@ -753,7 +944,7 @@ const AgentPayrollSystem = () => {
     });
 
     return agentStats.sort((a, b) => b.totalSales - a.totalSales);
-  }, [agents, sales, fines, bonuses, attendance, hrRecords, selectedMonth, teamFilter, centerFilter]);
+  }, [agents, sales, fines, bonuses, attendance, hrRecords, selectedMonth, teamFilter, centerFilter, userRole, currentUser]);
 
   const managementStats = useMemo(() => {
     const agentRange = getPayrollRange(selectedMonth); // 21st - 20th
@@ -853,24 +1044,59 @@ const baseSalary = mgr.base_salary || mgr.baseSalary || 0;
     return stats.sort((a, b) => b.totalSales - a.totalSales);
   }, [agents, sales, monthlyStats, getActiveDateRange, validAgentNames]);
 
-  // 5. Sales Table (Respects Team/Center)
+// 5. Sales Table (Smart Filter: Agents + HR Only)
   const filteredSales = useMemo(() => {
     const { start, end } = getActiveDateRange;
+    
+    // Normalize dates
+    const sDate = new Date(start); sDate.setHours(0,0,0,0);
+    const eDate = new Date(end); eDate.setHours(23,59,59,999);
+
+    // [STEP 1] Create a "White List" of known people
+    // We combine Active Agents AND HR Records.
+    // If a name is not in this list, it's considered "Junk/Random" and hidden.
+    const validPeopleSet = new Set([
+        ...agents.map(a => a.name),          // Active Agents
+        ...hrRecords.map(h => h.agent_name)  // HR/Management
+    ]);
+
     return sales.filter(sale => {
+      // 1. Search Query
+      const query = searchQuery.toLowerCase();
       const matchesSearch =
-        sale.agentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        sale.customerName?.toLowerCase().includes(searchQuery.toLowerCase());
+        (sale.agentName && sale.agentName.toLowerCase().includes(query)) ||
+        (sale.customerName && sale.customerName.toLowerCase().includes(query)) ||
+        (sale.phone && sale.phone.toString().includes(query)) ||
+        (sale.leadId && sale.leadId.toString().includes(query));
 
-      const matchesDate = sale.date >= start && sale.date <= end;
+      if (!matchesSearch) return false;
 
-      // [FIX] Use salesStatusFilter and check against the disposition field
+      // 2. Date Check
+      const saleDate = new Date(sale.date);
+      const matchesDate = saleDate >= sDate && saleDate <= eDate;
+
+      // 3. Status Filter
       const matchesStatus = salesStatusFilter === 'All' || sale.disposition === salesStatusFilter;
 
-      const matchesTeamCenter = validAgentNames.has(sale.agentName);
+      // 4. Team & Center Check
+      const matchesTeam = teamFilter === 'All' || teamFilter === 'All Teams' || sale.team === teamFilter;
+      const matchesCenter = centerFilter === 'All' || centerFilter === 'All Centers' || sale.center === centerFilter;
 
-      return matchesSearch && matchesDate && matchesStatus && matchesTeamCenter;
+      // 5. [THE FIX] Validity Check
+      // Only show this sale if the name belongs to a real person in your system.
+      // This blocks the "random entries" like Sarah/Abdullah/etc.
+      const isRealPerson = validPeopleSet.has(sale.agentName);
+
+      // 6. Permission Check (Agent View)
+      let matchesPermission = true;
+      if (userRole === 'Agent') {
+          const currentName = currentUser?.name || JSON.parse(localStorage.getItem('ams_user'))?.name;
+          if (sale.agentName !== currentName) matchesPermission = false;
+      }
+
+      return matchesDate && matchesStatus && matchesTeam && matchesCenter && matchesPermission && isRealPerson;
     });
-  }, [sales, searchQuery, getActiveDateRange, salesStatusFilter, validAgentNames]);
+  }, [sales, searchQuery, getActiveDateRange, salesStatusFilter, teamFilter, centerFilter, userRole, currentUser, agents, hrRecords]);
 
   // MOVE THIS TO THE TOP LEVEL OF YOUR COMPONENT
   const salesStats = useMemo(() => {
@@ -985,7 +1211,7 @@ const baseSalary = mgr.base_salary || mgr.baseSalary || 0;
         Phone: editingAgent.contact_number || editingAgent.Phone || '',
         email: editingAgent.email || '',
         address: editingAgent.address || '',
-        password: editingAgent.password || '123',
+        password: editingAgent.password || '',
         team: editingAgent.team || 'Unassigned',
         center: editingAgent.center || 'Phase 7',
         baseSalary: editingAgent.baseSalary ? parseInt(editingAgent.baseSalary) : 0,
@@ -1226,6 +1452,102 @@ const baseSalary = mgr.base_salary || mgr.baseSalary || 0;
     }
   };
 
+ // --- ATTENDANCE STATE ---
+  const [showEditAttendanceModal, setShowEditAttendanceModal] = useState(false);
+  const [editingAttendance, setEditingAttendance] = useState(null);
+
+ // --- HANDLER: Quick Add/Update (Mark Present/Absent from Table) ---
+  const handleQuickAttendance = async (employeeName, newStatus, existingId = null) => {
+    // 1. Define Defaults
+    const defaultLogin = "19:00"; 
+    const defaultLogout = "05:00"; 
+    
+    // [FIX] If Absent, send "00:00" to satisfy DB constraint, otherwise use default
+    const loginTime = newStatus === 'Absent' ? "00:00" : defaultLogin;
+    const logoutTime = newStatus === 'Absent' ? "00:00" : defaultLogout;
+    
+    const isLate = false; 
+
+    const payload = {
+      date: customStartDate,
+      agentName: employeeName,
+      status: newStatus,
+      loginTime: loginTime,
+      logoutTime: logoutTime,
+      late: isLate
+    };
+
+    let error;
+    let data;
+
+    if (existingId) {
+      // Update existing record
+      const res = await supabase.from('attendance').update(payload).eq('id', existingId).select();
+      error = res.error;
+      data = res.data;
+      
+      if (!error && data.length > 0) {
+        setAttendance(attendance.map(a => a.id === existingId ? data[0] : a));
+      }
+    } else {
+      // Insert new record
+      const res = await supabase.from('attendance').insert([payload]).select();
+      error = res.error;
+      data = res.data;
+
+      if (!error && data.length > 0) {
+        setAttendance([...attendance, ...data]);
+      }
+    }
+
+    if (error) alert(`Error: ${error.message}`);
+  };
+
+  // --- HANDLER: Edit Modal Update ---
+  const handleUpdateAttendance = async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const status = formData.get('status');
+    
+    let newLogin = formData.get('loginTime');
+    let newLogout = formData.get('logoutTime');
+
+    // [FIX] If setting to Absent, force "00:00" to satisfy DB Not-Null Constraint
+    if (status === 'Absent') {
+        newLogin = "00:00";
+        newLogout = "00:00";
+    }
+
+    // Ensure we don't send empty strings if user cleared the box manually
+    if (!newLogin) newLogin = "00:00";
+    if (!newLogout) newLogout = "00:00";
+
+    // Auto-calculate late
+    const isLate = (status === 'Present' || status === 'Late') && newLogin > "19:15"; 
+
+    const updatedRecord = {
+      loginTime: newLogin,
+      logoutTime: newLogout,
+      status: status,
+      late: isLate
+    };
+
+    const { error } = await supabase
+      .from('attendance')
+      .update(updatedRecord)
+      .eq('id', editingAttendance.id);
+
+    if (error) {
+      alert("Error updating attendance: " + error.message);
+    } else {
+      setAttendance(attendance.map(a => 
+        a.id === editingAttendance.id ? { ...a, ...updatedRecord } : a
+      ));
+      setShowEditAttendanceModal(false);
+      setEditingAttendance(null);
+    }
+  };
+
   // [FIX] Edit Sale - Now saves to Database
   const handleEditSale = async (formData) => {
     const updatedStatus = (formData.disposition === 'HW- Xfer' || formData.disposition === 'HW-IBXfer') ? 'Sale' : 'Unsuccessful';
@@ -1235,6 +1557,56 @@ const baseSalary = mgr.base_salary || mgr.baseSalary || 0;
     else {
       setSales(sales.map(s => s.id === editSale.id ? { ...s, ...formData, status: updatedStatus } : s));
       setEditSale(null);
+    }
+  };
+
+  // --- HANDLER: Add Management Fine ---
+  const handleSaveMgmtFine = async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    
+    const newFine = {
+      agentName: formData.get('employeeName'), // Using 'agentName' column so it matches DB schema
+      reason: formData.get('reason'),
+      amount: parseInt(formData.get('amount')),
+      date: new Date().toISOString().split('T')[0],
+      month: selectedMonth
+    };
+
+    const { data, error } = await supabase.from('fines').insert([newFine]).select();
+    
+    if (error) {
+      alert("Error adding fine: " + error.message);
+    } else {
+      setFines([...fines, ...data]); // Update local state
+      setShowMgmtFine(false);
+      alert("Fine added successfully!");
+    }
+  };
+
+  // --- HANDLER: Add Management Bonus ---
+  const handleSaveMgmtBonus = async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+
+    const newBonus = {
+      agentName: formData.get('employeeName'),
+      type: 'Monthly', // Management bonuses are usually monthly
+      period: selectedMonth,
+      amount: parseInt(formData.get('amount')),
+      month: selectedMonth,
+      targetSales: 0, // Not applicable for management
+      actualSales: 0
+    };
+
+    const { data, error } = await supabase.from('bonuses').insert([newBonus]).select();
+
+    if (error) {
+      alert("Error adding bonus: " + error.message);
+    } else {
+      setBonuses([...bonuses, ...data]);
+      setShowMgmtBonus(false);
+      alert("Bonus added successfully!");
     }
   };
 
@@ -1500,7 +1872,7 @@ const handleSaveHR = async (e) => {
           const agentInsertPayload = {
             ...agentSyncPayload,
             cnic: editingHR.cnic,
-            password: '123', // Default Password
+            password: '', // Default Password
             activeDate: editingHR.joining_date,
             leftDate: null
           };
@@ -1686,8 +2058,6 @@ const handleSaveHR = async (e) => {
           if (tempIdCount > 0) msg += `\n(${tempIdCount} were assigned TEMP IDs)`;
           alert(msg);
         }
-
-        // --- 2. IMPORT SALES ---
         // --- 2. IMPORT SALES (FIXED) ---
         else if (importType === 'sales') {
           const newSales = rows.slice(1).map((rawLine) => {
@@ -1745,100 +2115,101 @@ const handleSaveHR = async (e) => {
           }
         }
 
-        // --- 3. IMPORT ATTENDANCE ---
-        // --- 3. IMPORT ATTENDANCE (FIXED) ---
+ // --- 3. IMPORT ATTENDANCE (Night Shift + Weekend Fix) ---
         else if (importType === 'attendance') {
-          const dataRows = rows.slice(1);
-          const dateMap = {};
+          // A. Group raw scans by "Shift Date" (not just Calendar Date)
+          const dailyGroups = {};
 
-          dataRows.forEach(rawLine => {
-            const row = safeRow(rawLine);
-            // Column 2 is Name, Column 3 is the Date/Time string
-            const name = row[2] ? row[2].trim() : '';
-            const timeStr = row[3] || '';
+          // Config: Hour to cut off "yesterday's shift"
+          // If scan is before 12:00 PM (noon), it belongs to previous day
+          const SHIFT_CUTOFF_HOUR = 12; 
 
-            if (name && timeStr) {
-              // Robust Regex for "MM/DD/YYYY HH:MM AM/PM"
-              // Capture Groups: [1]Month, [2]Day, [3]Year, [4]Time, [5]AM/PM
-              const match = timeStr.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}:\d{2})(?::\d{2})?\s?(AM|PM)/i);
+          rows.slice(1).forEach((rawLine) => {
+            const values = safeRow(rawLine);
+            
+            // Map Columns (Col 2 = Name, Col 3 = Time)
+            const nameRaw = values[2]; 
+            const dateTimeRaw = values[3]; 
 
-              if (match) {
-                const month = match[1].padStart(2, '0');
-                const day = match[2].padStart(2, '0');
-                const year = match[3]; // Captures exactly 4 digits (e.g., "2025")
-                const timeRaw = match[4];
-                const ampm = match[5].toUpperCase();
+            if (!nameRaw || !dateTimeRaw) return;
 
-                // 1. Format Date correctly as YYYY-MM-DD
-                const date = `${year}-${month}-${day}`;
+            const dt = new Date(dateTimeRaw);
+            if (isNaN(dt.getTime())) return;
 
-                // 2. Format Time to 24-hour (HH:MM)
-                let [hours, minutes] = timeRaw.split(':').map(Number);
-                if (ampm === 'PM' && hours < 12) hours += 12;
-                if (ampm === 'AM' && hours === 12) hours = 0;
+            // --- LOGIC 1: Handle Night Shift (5:00 AM belongs to prev date) ---
+            let shiftDate = new Date(dt); // Copy date
+            const scanHour = dt.getHours();
 
-                const time = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
-
-                // 3. Add to Map (Group by Date -> Agent)
-                const nameKey = name.toLowerCase();
-
-                if (!dateMap[date]) dateMap[date] = {};
-                if (!dateMap[date][nameKey]) dateMap[date][nameKey] = new Set();
-
-                dateMap[date][nameKey].add(time);
-              }
+            if (scanHour < SHIFT_CUTOFF_HOUR) {
+               // If before 12 PM, move 'shiftDate' back by 1 day
+               shiftDate.setDate(shiftDate.getDate() - 1);
             }
-          });
 
-          // Process Map into Database Rows
-          const activeAgents = agents;
-          const newAttendance = [];
-          const threshold = lateTimeVal || lateTime;
+            // --- LOGIC 2: Skip Weekends (Sat/Sun) ---
+            // getDay(): 0 = Sunday, 6 = Saturday
+            const dayOfWeek = shiftDate.getDay();
+            if (dayOfWeek === 0 || dayOfWeek === 6) {
+               return; // Skip this row entirely
+            }
 
-          Object.keys(dateMap).forEach(date => {
-            Object.keys(dateMap[date]).forEach(importedNameLower => {
-              // Find the agent in your DB (Case-insensitive)
-              const agent = activeAgents.find(a => a.name.toLowerCase() === importedNameLower);
+            // Generate Key based on SHIFT Date
+            const dateKey = shiftDate.toISOString().split('T')[0];
+            const compositeKey = `${nameRaw}-${dateKey}`;
 
-              if (agent) {
-                const times = Array.from(dateMap[date][importedNameLower]).sort();
-                const loginTime = times[0];
-                const logoutTime = times.length > 1 ? times[times.length - 1] : loginTime;
-
-                const status = 'Present';
-                const isLate = (loginTime > threshold);
-
-                newAttendance.push({
-                  date: date,
-                  agentName: agent.name, // Use correct casing from DB
-                  loginTime: loginTime,
-                  logoutTime: logoutTime,
-                  status: status,
-                  late: isLate
-                });
-              }
-            });
-          });
-
-          // Filter Duplicates before inserting
-          const uniqueAttendance = newAttendance.filter(newItem => {
-            const isDuplicate = attendance.some(existing =>
-              existing.agentName === newItem.agentName &&
-              existing.date === newItem.date
-            );
-            return !isDuplicate;
-          });
-
-          if (uniqueAttendance.length > 0) {
-            const { data, error } = await supabase.from('attendance').insert(uniqueAttendance).select();
-            if (!error) {
-              setAttendance([...attendance, ...data]);
-              alert(`Success! Imported ${data.length} attendance records.`);
+            // Store full Date object for sorting later (crucial for night shift sorting)
+            if (!dailyGroups[compositeKey]) {
+              dailyGroups[compositeKey] = {
+                date: dateKey,
+                name: nameRaw,
+                scans: [dt] // Store actual Date objects, not just strings
+              };
             } else {
-              alert('Database Error: ' + error.message);
+              dailyGroups[compositeKey].scans.push(dt);
             }
+          });
+
+          // B. Process groups
+          const newAttendance = Object.values(dailyGroups).map(group => {
+            // Sort scans chronologically (Earliest to Latest)
+            // This works perfectly even if Login is Jan 1st 19:00 and Logout is Jan 2nd 05:00
+            group.scans.sort((a, b) => a - b);
+
+            const firstScan = group.scans[0]; 
+            let lastScanDate = null;
+
+            if (group.scans.length > 1) {
+               const potentialLast = group.scans[group.scans.length - 1]; 
+               
+               // Ignore double tap if within 5 mins (300,000 ms)
+               const diffMs = potentialLast - firstScan;
+               if (diffMs > 300000) { 
+                 lastScanDate = potentialLast;
+               }
+            }
+
+            return {
+              // --- MAPPED EXACTLY TO YOUR SCHEMA ---
+              date: group.date,
+              agentName: group.name,
+              loginTime: normalizeTime(firstScan.toLocaleTimeString('en-GB', { hour12: false })), 
+              logoutTime: lastScanDate ? normalizeTime(lastScanDate.toLocaleTimeString('en-GB', { hour12: false })) : '',
+              status: 'Present',
+              late: false,
+              cnic: null
+            };
+          });
+
+          // C. Insert into Supabase
+          const { data, error } = await supabase
+            .from('attendance') 
+            .upsert(newAttendance, { onConflict: 'date, agentName' }) 
+            .select();
+
+          if (!error) {
+            alert(`Success! Processed ${data.length} records (Weekends excluded).`);
+            window.location.reload(); 
           } else {
-            alert("No new records found. All imported data already exists.");
+            throw new Error(error.message);
           }
         }
 
@@ -2007,11 +2378,11 @@ const handleSaveHR = async (e) => {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#0f172a] relative overflow-hidden">
         {/* Background Decorative Glows */}
-        <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-blue-600/20 rounded-full blur-[100px] opacity-50 pointer-events-none"></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-purple-600/20 rounded-full blur-[100px] opacity-50 pointer-events-none"></div>
+        <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-blue-600/20 rounded-full opacity-50 pointer-events-none"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-purple-600/20 rounded-full opacity-50 pointer-events-none"></div>
 
         {/* Login Card */}
-        <div className="bg-slate-900/80 border border-slate-800 p-10 rounded-3xl shadow-2xl w-full max-w-md backdrop-blur-xl relative z-10">
+        <div className="bg-slate-900/80 border border-slate-800 p-10 rounded-3xl shadow-2xl w-full max-w-md relative z-10">
 
           {/* Logo / Icon Area */}
           <div className="flex justify-center mb-8">
@@ -2032,7 +2403,7 @@ const handleSaveHR = async (e) => {
               <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider ml-1">Username</label>
               <input
                 type="text"
-                className="w-full px-4 py-3.5 bg-slate-950/50 border border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-white placeholder-slate-600 text-sm"
+                className="w-full px-4 py-3.5 bg-slate-950 border border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-white placeholder-slate-600 text-sm"
                 placeholder="e.g. Admin"
                 value={loginData.name}
                 onChange={e => setLoginData({ ...loginData, name: e.target.value })}
@@ -2044,7 +2415,7 @@ const handleSaveHR = async (e) => {
               <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider ml-1">Password</label>
               <input
                 type="password"
-                className="w-full px-4 py-3.5 bg-slate-950/50 border border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-white placeholder-slate-600 text-sm"
+                className="w-full px-4 py-3.5 bg-slate-950 border border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-white placeholder-slate-600 text-sm"
                 placeholder="••••••••"
                 value={loginData.password}
                 onChange={e => setLoginData({ ...loginData, password: e.target.value })}
@@ -2054,7 +2425,7 @@ const handleSaveHR = async (e) => {
 
             {/* Error Message */}
             {loginError && (
-              <div className="flex items-center gap-3 text-red-400 text-sm bg-red-500/10 p-4 rounded-xl border border-red-500/20">
+              <div className="flex items-center gap-3 text-red-400 text-sm bg-red-500 p-4 rounded-xl border border-red-500/20">
                 <AlertCircle className="w-5 h-5 shrink-0" />
                 <span className="font-medium">{loginError}</span>
               </div>
@@ -2134,7 +2505,8 @@ const handleSaveHR = async (e) => {
         </div>
       </div>
 
-      {/* Navigation Tabs */}
+      
+      {/* Navigation Tabs - Main Header Buttons */}
       <div className="bg-slate-800 border-b border-slate-700">
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex gap-1 overflow-x-auto">
@@ -2159,6 +2531,17 @@ const handleSaveHR = async (e) => {
             })}
 
             <button
+  onClick={() => setActiveTab('attendance_matrix')}
+  className={`px-4 py-2 rounded-lg font-medium transition-all ${
+    activeTab === 'attendance_matrix'
+      ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20'
+      : 'text-slate-400 hover:text-white hover:bg-slate-800'
+  }`}
+>
+  Attendance Matrix
+</button>
+
+            <button
               onClick={() => { setActiveTab('monthly_matrix'); setSearchQuery(''); }}
               className={`px-6 py-3 text-sm font-medium capitalize whitespace-nowrap transition-colors ${activeTab === 'monthly_matrix'
                 ? 'border-b-2 border-blue-400 text-blue-400'
@@ -2168,28 +2551,36 @@ const handleSaveHR = async (e) => {
               Monthly Matrix
             </button>
 
+            {/* Agents Tab - Admin Only */}
             {userRole === 'Admin' && (
-              <>
-                <button
-                  onClick={() => { setActiveTab('agents'); setSearchQuery(''); }}
-                  className={`px-6 py-3 text-sm font-medium capitalize transition-colors ${activeTab === 'agents' ? 'border-b-2 border-blue-400 text-blue-400' : 'text-slate-400 hover:text-white'}`}
-                >
-                  Agents
-                </button>
-                <button
-                  onClick={() => { setActiveTab('fines'); setSearchQuery(''); }}
-                  className={`px-6 py-3 text-sm font-medium capitalize transition-colors ${activeTab === 'fines' ? 'border-b-2 border-blue-400 text-blue-400' : 'text-slate-400 hover:text-white'}`}
-                >
-                  Fines
-                </button>
-                <button
-                  onClick={() => { setActiveTab('bonuses'); setSearchQuery(''); }}
-                  className={`px-6 py-3 text-sm font-medium capitalize transition-colors ${activeTab === 'bonuses' ? 'border-b-2 border-blue-400 text-blue-400' : 'text-slate-400 hover:text-white'}`}
-                >
-                  Bonuses
-                </button>
-              </>
+              <button
+                onClick={() => { setActiveTab('agents'); setSearchQuery(''); }}
+                className={`px-6 py-3 text-sm font-medium capitalize transition-colors ${activeTab === 'agents' ? 'border-b-2 border-blue-400 text-blue-400' : 'text-slate-400 hover:text-white'}`}
+              >
+                Agents
+              </button>
             )}
+
+             {/* Bonuses Tab - Visible to Admin and HR */}
+            {(userRole === 'Admin' || userRole === 'HR') && (
+              <button
+                onClick={() => { setActiveTab('bonuses'); setSearchQuery(''); }}
+                className={`px-6 py-3 text-sm font-medium capitalize transition-colors ${activeTab === 'bonuses' ? 'border-b-2 border-blue-400 text-blue-400' : 'text-slate-400 hover:text-white'}`}
+              >
+                Bonuses
+              </button>
+            )}
+
+            {/* Fines Tab - Visible to Admin, HR, and QA */}
+            {(userRole === 'Admin' || userRole === 'HR' || userRole === 'QA') && (
+              <button
+                onClick={() => { setActiveTab('fines'); setSearchQuery(''); }}
+                className={`px-6 py-3 text-sm font-medium capitalize transition-colors ${activeTab === 'fines' ? 'border-b-2 border-blue-400 text-blue-400' : 'text-slate-400 hover:text-white'}`}
+              >
+                Fines
+              </button>
+            )}
+
             {/* [NEW] HR Tab */}
             {(userRole === 'Admin' || userRole === 'HR') && (
               <button
@@ -2266,7 +2657,7 @@ const handleSaveHR = async (e) => {
             </div>
 
             {/* Top Performers Table */}
-            <div className="bg-slate-800/50 rounded-xl shadow-sm border border-slate-600 p-4">
+            <div className="bg-slate-800 rounded-xl shadow-sm border border-slate-600 p-4">
               <h2 className="text-lg font-semibold text-white mb-4">
                 {userRole === 'Agent' ? 'My Performance' : 'Top Performers'} - {selectedMonth}
               </h2>
@@ -2356,7 +2747,7 @@ const handleSaveHR = async (e) => {
             </div>
 
             {/* Filter Grid */}
-            <div className="bg-slate-800/50 rounded-xl shadow-sm border border-slate-600 p-4 mb-6">
+            <div className="bg-slate-800 rounded-xl shadow-sm border border-slate-600 p-4 mb-6">
               <div className="grid grid-cols-1 md:grid-cols-5 gap-4"> {/* Changed cols-4 to cols-5 */}
 
                 {/* Existing Search Input */}
@@ -2469,7 +2860,7 @@ const handleSaveHR = async (e) => {
                           )}
                         </td>
 
-                        <td className="py-3 px-4">
+                       <td className="py-3 px-4">
                           <div className="flex items-center justify-center gap-2">
                             {/* Edit Button */}
                             <button onClick={() => {
@@ -2557,7 +2948,7 @@ const handleSaveHR = async (e) => {
             </div>
 
             {/* Filters */}
-            <div className="bg-slate-800/50 rounded-xl shadow-sm border border-slate-600 p-4">
+            <div className="bg-slate-800 rounded-xl shadow-sm border border-slate-600 p-4">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <input type="text" placeholder="Search agents..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 <select value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
@@ -2679,10 +3070,6 @@ const handleSaveHR = async (e) => {
 
         {activeTab === 'sales' && (
           <div className="space-y-6">
-
-
-
-
             {/* Header Section */}
             <div className="flex justify-between items-center">
               <h2 className="text-xl font-semibold text-white">Sales Management</h2>
@@ -2746,7 +3133,7 @@ const handleSaveHR = async (e) => {
             />
 
             {/* Filters Section */}
-            <div className="bg-slate-800/50 rounded-xl shadow-sm border border-slate-600 p-4">
+            <div className="bg-slate-800 rounded-xl shadow-sm border border-slate-600 p-4">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <input
                   type="text"
@@ -2812,10 +3199,10 @@ const handleSaveHR = async (e) => {
                     {(userRole === 'Admin' || userRole === 'QA') && <th className="text-center py-4 px-3 text-xs font-bold text-slate-400 uppercase">Actions</th>}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-700/50">
+                <tbody className="divide-y divide-slate-700">
                   {filteredSales.map((sale, idx) => {
                     const disp = sale.disposition;
-                    let rowColor = "hover:bg-slate-700/50";
+                    let rowColor = "hover:bg-slate-700";
                     if (['HW- Xfer', 'HW-IBXfer', 'HW-Xfer-CDR'].includes(disp)) rowColor = "bg-green-900/10 hover:bg-green-900/20";
                     else if (['DNC', 'DNQ', 'DNQ-Dup', 'DNQ-Webform'].includes(disp)) rowColor = "bg-red-900/10 hover:bg-red-900/20";
                     else if (['Review Pending', 'Pending Review'].includes(disp)) rowColor = "bg-orange-900/10 hover:bg-orange-900/20";
@@ -2843,7 +3230,7 @@ const handleSaveHR = async (e) => {
                             <select
                               value={sale.disposition || ''}
                               onChange={(e) => updateSaleDisposition(sale.id, e.target.value)}
-                              className="w-full px-2 py-1 text-xs bg-slate-900/50 text-white border border-slate-600 rounded outline-none focus:ring-1 focus:ring-blue-500"
+                              className="w-full px-2 py-1 text-xs bg-slate-900 text-white border border-slate-600 rounded outline-none focus:ring-1 focus:ring-blue-500"
                             >
                               <option value="">Select...</option>
                               <optgroup label="Success">
@@ -3082,175 +3469,678 @@ const handleSaveHR = async (e) => {
           </div>
         )}
 
+{/* =====================================================================================
+            TAB: MANAGEMENT PAYROLL (Buttons Added + Data Fixed)
+           ===================================================================================== */}
         {activeTab === 'management_payroll' && (
-          <div className="space-y-6">
-            <div className="flex justify-between items-center">
-              <h2 className="text-xl font-semibold text-white">Management Payroll - {selectedMonth}</h2>
+          <div className="space-y-8 animate-in fade-in duration-300">
+            
+            {/* Header Section */}
+            <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-slate-800 p-6 rounded-2xl border border-slate-700">
+              <div>
+                <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
+                  Management Payroll
+                </h2>
+                <p className="text-slate-400 text-sm mt-1">
+                  Payroll Breakdown for {selectedMonth}
+                </p>
+              </div>
+              
+             {/* [NEW] Action Buttons for Management */}
+              <div className="flex items-center gap-3">
+                 <button 
+                    onClick={() => setShowMgmtBonus(true)} // Opens NEW Modal
+                    className="flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-lg shadow-green-900/20"
+                 >
+                    <Plus className="w-4 h-4" /> Add Bonus
+                 </button>
+                 <button 
+                    onClick={() => setShowMgmtFine(true)} // Opens NEW Modal
+                    className="flex items-center gap-2 bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-lg shadow-red-900/20"
+                 >
+                    <Plus className="w-4 h-4" /> Add Fine
+                 </button>
+              </div>
             </div>
 
-            <div className="bg-slate-800/80 rounded-xl border border-slate-600 overflow-hidden shadow-lg">
-              <table className="w-full text-left">
-                <thead className="bg-slate-900 border-b border-slate-700">
-                  <tr className="text-slate-200 text-xs uppercase tracking-wider">
-                    <th className="p-4">Employee</th>
-                    <th className="p-4">Designation</th>
-                    <th className="p-4">Cycle Type</th>
-                    <th className="p-4 text-center">Attendance</th>
-                    <th className="p-4 text-right">Base Salary</th>
-                    <th className="p-4 text-right">Earned Base</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-700">
-                  {managementStats.map((mgr, idx) => (
-                    <tr key={mgr.cnic || idx} className="hover:bg-slate-700/50 transition-colors">
-                      <td className="p-4 text-white font-medium">{mgr.agent_name}</td>
-                      <td className="p-4 text-slate-400 text-sm">{mgr.designation}</td>
-                      <td className="p-4">
-                        <span className={`px-2 py-1 rounded text-[10px] font-bold ${mgr.payroll_cycle_type === 'Agent Cycle' ? 'bg-orange-500/10 text-orange-400' : 'bg-purple-500/10 text-purple-400'}`}>
-                          {mgr.payroll_cycle_type}
-                        </span>
-                      </td>
-                      <td className="p-4 text-center">
-                        <span className="bg-blue-500/10 text-blue-400 px-3 py-1 rounded-full text-xs font-mono">
-                          {mgr.daysPresent} / {mgr.totalWorkingDays}
-                        </span>
-                      </td>
-                      <td className="p-4 text-right text-slate-300 font-mono">{mgr.baseSalary?.toLocaleString()}</td>
-                      <td className="p-4 text-right text-green-400 font-bold font-mono">{mgr.earnedBase?.toLocaleString()} PKR</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            {/* --- RENDER TABLES --- */}
+            {(() => {
+                const { standard, agentCycle } = managementPayrollStats;
+
+                const renderPayrollTable = (title, staffList, badgeColor) => (
+                    <div className="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden mb-8 shadow-xl">
+                        <div className="p-5 border-b border-slate-700 flex items-center gap-3">
+                            <h3 className="text-lg font-semibold text-white">{title}</h3>
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${badgeColor} text-white font-medium`}>
+                                {staffList.length} Employees
+                            </span>
+                        </div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-slate-900 text-slate-400 text-xs uppercase tracking-wider">
+                                        <th className="p-4 font-medium border-b border-slate-700">Employee</th>
+                                        <th className="p-4 font-medium border-b border-slate-700">Designation</th>
+                                        <th className="p-4 font-medium border-b border-slate-700 text-center">Attendance</th>
+                                        <th className="p-4 font-medium border-b border-slate-700 text-right">Base Salary</th>
+                                        <th className="p-4 font-medium border-b border-slate-700 text-right">Earned Base</th>
+                                        <th className="p-4 font-medium border-b border-slate-700 text-right text-green-400">Bonus</th>
+                                        <th className="p-4 font-medium border-b border-slate-700 text-right text-red-400">Fine</th>
+                                        <th className="p-4 font-medium border-b border-slate-700 text-right text-blue-400">Net Salary</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-700">
+                                    {staffList.length > 0 ? (
+                                        staffList.map((emp, idx) => (
+                                            <tr key={idx} className="hover:bg-slate-700/20 text-sm group">
+                                                <td className="p-4 font-medium text-white">{emp.agent_name}</td>
+                                                <td className="p-4 text-slate-400">{emp.designation}</td>
+                                                <td className="p-4 text-center">
+                                                    <span className={`px-2 py-1 rounded text-xs font-mono ${emp.daysPresent === emp.totalWorkingDays ? 'bg-green-500/20 text-green-400' : 'bg-slate-700 text-blue-300'}`}>
+                                                        {emp.daysPresent} / {emp.totalWorkingDays}
+                                                    </span>
+                                                </td>
+                                                <td className="p-4 text-right text-slate-400 font-mono text-xs">
+                                                    {emp.baseSalary?.toLocaleString()}
+                                                </td>
+                                                <td className="p-4 text-right text-slate-200 font-mono">
+                                                    {emp.earnedBase?.toLocaleString()}
+                                                </td>
+                                                <td className="p-4 text-right font-mono text-green-400">
+                                                    {emp.totalBonus > 0 ? `+${emp.totalBonus.toLocaleString()}` : '-'}
+                                                </td>
+                                                <td className="p-4 text-right font-mono text-red-400">
+                                                    {emp.totalFine > 0 ? `-${emp.totalFine.toLocaleString()}` : '-'}
+                                                </td>
+                                                <td className="p-4 text-right font-bold font-mono text-blue-300 text-base bg-slate-800/30">
+                                                    {emp.netSalary?.toLocaleString()} <span className="text-xs text-slate-500">PKR</span>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    ) : (
+                                        <tr>
+                                            <td colSpan="8" className="p-8 text-center text-slate-500 italic">
+                                                No employees found in this cycle.
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                );
+
+                return (
+                    <>
+                        {renderPayrollTable("Standard Month Cycle (1st - 30th)", standard, "bg-purple-500/20 border border-purple-500/30")}
+                        {renderPayrollTable("Agent Cycle (21st - 20th)", agentCycle, "bg-orange-500/20 border border-orange-500/30")}
+                    </>
+                );
+            })()}
           </div>
         )}
 
-        {/* Attendance Tab */}
+{/* =====================================================================================
+            TAB: ATTENDANCE (Fixed Time Calculation Logic)
+           ===================================================================================== */}
         {activeTab === 'attendance' && (
           <div className="space-y-6">
-            {/* Header Section */}
-            <div className="flex justify-between items-center">
-              <h2 className="text-xl font-semibold text-white">Attendance Records</h2>
+            
+            {/* Header */}
+            <div className="flex justify-between items-center bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg">
+              <div>
+                <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                  <Clock className="w-6 h-6 text-blue-400" /> Daily Attendance
+                </h2>
+                <div className="flex items-center gap-3 text-sm mt-1">
+                  <span className="text-slate-400">Status for <span className="text-blue-400 font-mono font-bold">{customStartDate}</span></span>
+                  <span className="w-1 h-1 rounded-full bg-slate-600"></span>
+                  <span className="text-slate-400">Late Threshold: <span className="text-yellow-400 font-mono font-bold">{formatTime(lateTime)}</span></span>
+                </div>
+              </div>
+              
               <div className="flex gap-3">
-                {/* Import Button */}
-                {userRole === 'Admin' && (
+                 {/* Set Late Time Button (Admin Only) */}
+                 {userRole === 'Admin' && (
+                   <button
+                     onClick={() => setShowLateTimeModal(true)}
+                     className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition-colors text-sm font-medium shadow-lg shadow-purple-900/20"
+                   >
+                     <Clock className="w-4 h-4" /> Set Late Time
+                   </button>
+                 )}
+
+                 <input 
+                   type="date" 
+                   value={customStartDate} 
+                   onChange={(e) => setCustomStartDate(e.target.value)}
+                   className="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+                 />
+                 
+                 {userRole === 'Admin' && (
                   <button
                     onClick={() => { setImportType('attendance'); setShowImportModal(true); }}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors text-sm font-medium shadow-lg shadow-blue-900/20"
                   >
-                    <Upload className="w-4 h-4" />
-                    Import from Machine
+                    <Upload className="w-4 h-4" /> Import CSV
                   </button>
-                )}
-              </div>
-            </div>
-            {/* [NEW] Add Filter Bar Here */}
-            <DateFilterBar
-              filterType={filterType}
-              setFilterType={setFilterType}
-              dateVal={customStartDate}
-              setDateVal={setCustomStartDate}
-              endVal={customEndDate}
-              setEndVal={setCustomEndDate}
-              selectedMonth={selectedMonth}
-              handleMonthChange={handleMonthChange}
-            />
-            {/* Attendance Tab Search and Filters */}
-            <div className="bg-slate-800/50 rounded-xl shadow-sm border border-slate-600 p-4 mb-6">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                {/* 1. Search Input */}
-                <input
-                  type="text"
-                  placeholder="Search by agent name..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-
-                {/* 2. Dynamic Team Filter */}
-                <select
-                  value={teamFilter}
-                  onChange={(e) => setTeamFilter(e.target.value)}
-                  className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="All">All Teams</option>
-                  {teams.map(t => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
-                </select>
-
-                {/* 3. Dynamic Center Filter */}
-                <select
-                  value={centerFilter}
-                  onChange={(e) => setCenterFilter(e.target.value)}
-                  className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="All">All Centers</option>
-                  {centers.map(c => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
-
-                <select
-                  value={attendanceStatusFilter}
-                  onChange={(e) => setAttendanceStatusFilter(e.target.value)}
-                  className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="All">All Status</option>
-                  <option value="Present">Present</option>
-                  <option value="Absent">Absent</option>
-                  <option value="Late">Late</option>
-                  <option value="OnTime">On Time</option>
-                </select>
-
+                 )}
               </div>
             </div>
 
-            {/* Table Section */}
-            <div className="bg-slate-800/80 rounded-xl shadow-sm border border-slate-600 overflow-hidden">
-              <table className="w-full">
-                <thead className="bg-slate-900">
-                  <tr>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">No.</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">Date</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">Agent</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">Login</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">Logout</th>
-                    <th className="text-center py-3 px-4 text-sm font-medium text-slate-200">Status</th>
-                    <th className="text-center py-3 px-4 text-sm font-medium text-slate-200">Late</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredAttendance.map((record, idx) => (
-                    <tr key={record.id} className="border-b border-slate-700 hover:bg-slate-700">
-                      <td className="py-3 px-4 text-slate-300">{idx + 1}</td>
-                      <td className="py-3 px-4 text-slate-300">{record.date}</td>
-                      <td className="py-3 px-4 font-medium text-white">{record.agentName}</td>
-                      <td className="py-3 px-4 text-slate-300">{formatTime(record.loginTime)}</td>
-                      <td className="py-3 px-4 text-slate-300">{formatTime(record.logoutTime)}</td>
-                      <td className="py-3 px-4 text-center">
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${record.status === 'Present' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{record.status}</span>
-                      </td>
-                      <td className="py-3 px-4 text-center">{record.late && <span className="px-2 py-1 bg-yellow-100 text-yellow-700 rounded-full text-xs">Late</span>}</td>
+            {/* Attendance Table */}
+            <div className="bg-slate-800 rounded-xl shadow-xl border border-slate-700 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead className="bg-slate-900 text-slate-400 text-xs uppercase tracking-wider">
+                    <tr>
+                      <th className="p-4 font-medium border-b border-slate-700">Employee Name</th>
+                      <th className="p-4 font-medium border-b border-slate-700">Designation</th>
+                      <th className="p-4 font-medium border-b border-slate-700 text-center">Login / Logout</th>
+                      <th className="p-4 font-medium border-b border-slate-700 text-center">Late Status</th>
+                      <th className="p-4 font-medium border-b border-slate-700 text-center">Status</th>
+                      <th className="p-4 font-medium border-b border-slate-700 text-center">Actions</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-700">
+                    {(() => {
+                      // 1. Get Unique List of ALL Employees
+                      const allStaff = [
+                        ...agents.map(a => ({ name: a.name, role: 'Agent', status: a.status })),
+                        ...hrRecords.map(h => ({ name: h.agent_name, role: h.designation || 'Staff', status: h.status }))
+                      ].filter(p => p.status === 'Active')
+                       .sort((a, b) => a.name.localeCompare(b.name));
+
+                      const uniqueStaff = Array.from(new Map(allStaff.map(item => [item.name, item])).values());
+
+                      // --- HELPER: Bulletproof Time Parser ---
+                      // Handles "19:00", "07:00 PM", "7:00pm", "19:00:00"
+                      const getMinutes = (timeStr) => {
+                          if (!timeStr) return 0;
+                          
+                          // Normalize string (Remove spaces, uppercase)
+                          const cleanStr = timeStr.toString().trim().toUpperCase();
+                          const isPM = cleanStr.includes('PM');
+                          const isAM = cleanStr.includes('AM');
+
+                          // Extract just the numbers (HH:MM)
+                          // Remove letters to handle "07:00PM" -> "07:00"
+                          const timePart = cleanStr.replace(/[A-Z\s]/g, '');
+                          let [h, m] = timePart.split(':').map(Number);
+
+                          if (isNaN(h)) h = 0;
+                          if (isNaN(m)) m = 0;
+
+                          // 12-hour to 24-hour conversion
+                          if (isPM && h < 12) h += 12;
+                          if (isAM && h === 12) h = 0;
+
+                          return h * 60 + m;
+                      };
+
+                      return uniqueStaff.map((emp, idx) => {
+  // --- DEBUGGING: Remove this after fixing ---
+  // Check if we can find this employee in the attendance list
+  const found = attendance.find(a => a.agentName?.toString().trim().toLowerCase() === emp.name.toString().trim().toLowerCase());
+  if (!found && idx < 5) { 
+     // Log the first few failures to the Console (F12)
+     console.log("FAILED MATCH:", emp.name);
+     console.log("Available Attendance Names:", attendance.map(a => a.agentName));
+  }
+  // ------------------------------------------
+
+  const record = attendance.find(a => 
+    a.agentName?.toString().trim().toLowerCase() === emp.name.toString().trim().toLowerCase() && 
+    a.date === customStartDate
+  );
+
+                        // --- DISPLAY LOGIC ---
+                        const isAbsent = !record || record.status === 'Absent';
+                        
+                        let timeDisplay;
+                        if (isAbsent) {
+                            timeDisplay = <span className="text-slate-600 text-xs italic">-- : --</span>;
+                        } else {
+                            timeDisplay = (
+                             <div className="flex flex-col items-center">
+                               <span className="text-white font-mono text-xs">{formatTime(record.loginTime)}</span>
+                               <span className="text-slate-500 font-mono text-[10px]">{formatTime(record.logoutTime)}</span>
+                             </div>
+                           );
+                        }
+
+                        // --- DYNAMIC LATE CALCULATION ---
+                        let lateBadge = <span className="text-slate-600 text-xs">-</span>;
+                        
+                        if (record && !isAbsent && record.loginTime) {
+                              let loginMinutes = getMinutes(record.loginTime);
+                              // Use the Global 'lateTime' state (e.g. "18:45" or "19:15")
+                              // Default fallback is 19:15 (7:15 PM)
+                              let cutoffMinutes = getMinutes(lateTime || "19:15");
+                              
+                              // --- NIGHT SHIFT FIX ---
+                              // If Threshold is PM (e.g., 6:45 PM -> 1125 mins)
+                              // And Login is AM (e.g., 1:00 AM -> 60 mins)
+                              // Treat Login as "Next Day" by adding 24 hours (1440 mins)
+                              if (cutoffMinutes > 720 && loginMinutes < 720) {
+                                  loginMinutes += 1440; 
+                              }
+
+                              if (loginMinutes > cutoffMinutes) {
+                                 const diff = loginMinutes - cutoffMinutes;
+                                 
+                                 if (diff <= 10) {
+                                    // Late <= 10 mins (Grace Period - Yellow)
+                                    lateBadge = (
+                                      <div className="flex items-center justify-center gap-1 px-2 py-1 bg-yellow-500/10 text-yellow-400 rounded text-[10px] font-bold border border-yellow-500/20 w-fit mx-auto">
+                                        <Clock className="w-3 h-3" /> 
+                                        <span>Late ({diff}m)</span>
+                                      </div>
+                                    );
+                                 } else {
+                                    // Late > 10 mins (Red)
+                                    lateBadge = (
+                                      <div className="flex items-center justify-center gap-1 px-2 py-1 bg-red-500/10 text-red-400 rounded text-[10px] font-bold border border-red-500/20 w-fit mx-auto">
+                                        <AlertTriangle className="w-3 h-3" /> 
+                                        <span>Late ({diff}m)</span>
+                                      </div>
+                                    );
+                                 }
+                              } else {
+                                 lateBadge = <span className="text-green-500/50 text-[10px] font-medium tracking-wide">ON TIME</span>;
+                              }
+                        }
+
+                        // Status Badge
+                        let statusBadge;
+                        if (isAbsent) {
+                            statusBadge = (
+                              <div className="flex items-center justify-center gap-1.5 px-2 py-1 rounded-full bg-red-500/10 text-red-400 border border-red-500/20 w-fit mx-auto">
+                                <XCircle className="w-3 h-3" />
+                                <span className="text-[10px] font-bold">ABSENT</span>
+                              </div>
+                            );
+                        } else {
+                            statusBadge = (
+                              <div className="flex items-center justify-center gap-1.5 px-2 py-1 rounded-full bg-green-500/10 text-green-400 border border-green-500/20 w-fit mx-auto">
+                                <CheckCircle className="w-3 h-3" />
+                                <span className="text-[10px] font-bold">PRESENT</span>
+                              </div>
+                            );
+                        }
+
+                        return (
+                          <tr key={idx} className="hover:bg-slate-700/30 transition-colors border-b border-slate-800 last:border-0">
+                            <td className="p-4 text-white font-medium">{emp.name}</td>
+                            <td className="p-4 text-slate-400 text-xs">{emp.role}</td>
+                            <td className="p-4 text-center">{timeDisplay}</td>
+                            <td className="p-4 text-center">{lateBadge}</td>
+                            <td className="p-4 text-center">{statusBadge}</td>
+                            
+                            {/* ACTION BUTTONS */}
+                            <td className="p-4">
+                              <div className="flex items-center justify-center gap-2">
+                                
+                                {isAbsent && (
+                                    <button 
+                                      onClick={() => handleQuickAttendance(emp.name, 'Present', record?.id)}
+                                      className="p-1.5 bg-green-500/10 text-green-400 rounded hover:bg-green-500/20 transition-colors border border-green-500/20"
+                                      title="Mark Present (Default Time)"
+                                    >
+                                      <CheckCircle className="w-4 h-4" />
+                                    </button>
+                                )}
+
+                                {!isAbsent && (
+                                    <button 
+                                      onClick={() => handleQuickAttendance(emp.name, 'Absent', record?.id)}
+                                      className="p-1.5 bg-red-500/10 text-red-400 rounded hover:bg-red-500/20 transition-colors border border-red-500/20"
+                                      title="Mark Absent"
+                                    >
+                                      <XCircle className="w-4 h-4" />
+                                    </button>
+                                )}
+
+                                {!isAbsent && record && (
+                                    <button 
+                                      onClick={() => { setEditingAttendance(record); setShowEditAttendanceModal(true); }}
+                                      className="p-1.5 bg-blue-500/10 text-blue-400 rounded hover:bg-blue-500/30 transition-colors border border-blue-500/20"
+                                      title="Manual Edit"
+                                    >
+                                      <Pencil className="w-4 h-4" />
+                                    </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      });
+                    })()}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
+
+{/* =====================================================================================
+    TAB: ATTENDANCE MATRIX (High Fidelity - Monthly View)
+   ===================================================================================== */}
+{activeTab === 'attendance_matrix' && (
+  <div className="space-y-6">
+    <div className="flex justify-between items-center">
+      <div>
+        <h2 className="text-xl text-white font-bold">Attendance Matrix ({selectedMonth})</h2>
+        <p className="text-xs text-slate-400 mt-1 uppercase tracking-wider">Login Times • Late Tracking • Team Grouping</p>
+      </div>
+      <div className="text-sm text-slate-400 font-medium">
+        Cycle: {getPayrollRange(selectedMonth).start.toDateString()} - {getPayrollRange(selectedMonth).end.toDateString()}
+      </div>
+    </div>
+
+    <div className="bg-slate-900 rounded-xl border border-slate-700 shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
+      <div className="overflow-auto relative">
+        <table className="w-full text-slate-300 border-collapse table-fixed">
+          
+          {/* --- HEADER --- */}
+          <thead className="sticky top-0 z-40 shadow-md">
+            <tr className="bg-slate-950">
+              <th className="p-3 text-center border-b border-r border-slate-800 sticky left-0 z-50 bg-slate-950 w-12">No.</th>
+              <th className="p-3 text-left border-b border-r border-slate-800 sticky left-12 z-50 bg-slate-950 w-44">Agent Name</th>
+
+              {/* Attendance Metrics */}
+              <th className="p-2 text-center border-b border-slate-800 bg-green-900/20 text-green-400 text-[10px] font-bold w-10" title="Days Present">P</th>
+              <th className="p-2 text-center border-b border-slate-800 bg-yellow-900/20 text-yellow-400 text-[10px] font-bold w-10" title="Days Late">L</th>
+              <th className="p-2 text-center border-b border-r border-slate-800 bg-red-900/20 text-red-400 text-[10px] font-bold w-10" title="Days Absent">A</th>
+
+              {/* Date Columns */}
+              {getDaysArray(getPayrollRange(selectedMonth).start, getPayrollRange(selectedMonth).end).map(dateStr => {
+                const d = new Date(dateStr);
+                const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+                return (
+                  <th key={dateStr} className={`p-2 text-center border-b border-slate-800 w-16 ${isWeekend ? 'bg-slate-800' : 'bg-slate-900'}`}>
+                    <div className="text-[10px] text-slate-500 uppercase">{d.toLocaleDateString('en-US', { weekday: 'narrow' })}</div>
+                    <div className={`text-xs font-bold ${isWeekend ? 'text-slate-500' : 'text-white'}`}>{d.getDate()}</div>
+                  </th>
+                );
+              })}
+              
+              {/* Summary Column */}
+              <th className="p-3 text-center bg-slate-950 border-b border-l border-slate-800 font-bold text-yellow-400 sticky right-0 z-40 w-20 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
+                LATE %
+              </th>
+            </tr>
+          </thead>
+
+          <tbody className="divide-y divide-slate-800">
+            {(() => {
+              const { start, end } = getPayrollRange(selectedMonth);
+              const dateArray = getDaysArray(start, end);
+
+              // --- HELPER: Convert 24h to 12h (HH:MM PM) ---
+const formatTo12Hour = (timeStr) => {
+  if (!timeStr) return '';
+  
+  // Split "18:34:00" into ["18", "34", "00"]
+  const [h, m] = timeStr.toString().split(':');
+  if (!h || !m) return timeStr; // Return original if invalid
+
+  let hours = parseInt(h);
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  
+  // Convert 24h to 12h
+  hours = hours % 12;
+  hours = hours ? hours : 12; // Handle midnight (0 -> 12)
+  
+  return `${hours}:${m} ${ampm}`;
+};
+
+// --- HELPER: Calculate Late Status (Based on 7:00 PM / 19:00 Start) ---
+              const getLateStatus = (timeStr) => {
+                if (!timeStr) return { isLate: false, color: 'text-green-400' };
+
+                const [h, m] = timeStr.toString().split(':').map(Number);
+                
+                // 1. Convert Login Time to Minutes
+                let loginMins = h * 60 + m;
+                
+                // 2. Handle Night Shift Crossing (e.g., 01:00 AM counts as 25:00)
+                // If hour is 0-11 (AM), add 24 hours (1440 mins) to compare correctly against 19:00
+                if (h < 12) loginMins += 1440;
+
+                // 3. Define Shift Start (19:00 = 1140 mins)
+                const shiftStartMins = 19 * 60; 
+
+                const diff = loginMins - shiftStartMins;
+
+                // 4. Determine Color & Status
+                if (diff <= 0) {
+                    return { isLate: false, color: 'text-green-400' }; // On Time
+                } else if (diff <= 10) {
+                    return { isLate: true, color: 'text-yellow-400 font-bold' }; // Late <= 10 mins
+                } else {
+                    return { isLate: true, color: 'text-red-500 font-bold' }; // Late > 10 mins
+                }
+              };
+
+              // Get Unique Teams
+              const uniqueTeams = [...new Set([...teams, ...agents.map(a => a.team)])].filter(Boolean).sort();
+
+              return uniqueTeams.map(teamName => {
+                // Filter Agents by Team
+                const teamAgents = agents.filter(a => a.team === teamName && a.status === 'Active');
+                if (teamAgents.length === 0) return null;
+
+                // --- TEAM SUMMARY CALCULATIONS ---
+                const teamTotalPresent = teamAgents.reduce((sum, agent) => {
+                  return sum + attendance.filter(a => a.agentName === agent.name && a.status === 'Present').length;
+                }, 0);
+                
+                const teamTotalLate = teamAgents.reduce((sum, agent) => {
+                   const agentLates = attendance.filter(a => 
+                     a.agentName === agent.name && 
+                     a.status === 'Present' && 
+                     getLateStatus(a.loginTime).isLate // <--- USES NEW HELPER
+                   ).length;
+                   return sum + agentLates;
+                }, 0);
+
+                return (
+                  <React.Fragment key={teamName}>
+                    {/* --- TEAM ROW --- */}
+                    <tr className="bg-slate-800/80 sticky top-[53px] z-30">
+                      <td colSpan={2} className="p-2 px-4 border-r border-slate-700 font-black text-blue-400 uppercase tracking-widest text-sm sticky left-0 z-30 bg-slate-800">
+                        {teamName}
+                      </td>
+                      <td className="text-center font-bold text-green-500/50 bg-slate-800 text-[10px]">{teamTotalPresent}</td>
+                      <td className="text-center font-bold text-yellow-500/50 bg-slate-800 text-[10px]">{teamTotalLate}</td>
+                      <td className="text-center bg-slate-800 border-r border-slate-700"></td>
+
+                      {/* Team Daily Breakdown (Count of people present that day) */}
+                      {dateArray.map(d => {
+                        const dailyPresentCount = attendance.filter(a => 
+                          a.date === d && 
+                          a.status === 'Present' && 
+                          teamAgents.some(agent => agent.name === a.agentName)
+                        ).length;
+
+                        return (
+                          <td key={d} className={`text-center text-[10px] border-b border-slate-700 font-bold ${dailyPresentCount > 0 ? 'text-blue-300 bg-blue-500/10' : 'text-slate-600 bg-slate-800/30'}`}>
+                            {dailyPresentCount > 0 ? dailyPresentCount : '-'}
+                          </td>
+                        );
+                      })}
+
+                      <td className="text-center font-black text-slate-500 sticky right-0 z-30 bg-slate-800 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
+                         -
+                      </td>
+                    </tr>
+
+                    {/* --- AGENT ROWS --- */}
+                    {teamAgents.map((agent, idx) => {
+                      // Join Date Logic
+                      const hrRec = hrRecords.find(h => h.cnic === agent.cnic) || {};
+                      const joinDateStr = hrRec.joining_date || agent.activeDate;
+                      const joinDate = joinDateStr ? new Date(joinDateStr) : null;
+                      if (joinDate) joinDate.setHours(0, 0, 0, 0);
+
+                      // Metrics Calculation
+                      const agentRecs = attendance.filter(a => a.agentName === agent.name);
+                      const presentCount = agentRecs.filter(a => a.status === 'Present').length;
+                      const lateCount = agentRecs.filter(a => 
+                    a.status === 'Present' && 
+                    getLateStatus(a.loginTime).isLate // <--- USES NEW HELPER
+                ).length;
+                      
+                      // Absent Calc: Working days passed since join date where no attendance found
+                      let absentCount = 0;
+                      dateArray.forEach(dStr => {
+                         const dObj = new Date(dStr);
+                         dObj.setHours(0,0,0,0);
+                         // Skip weekends
+                         if (dObj.getDay() === 0 || dObj.getDay() === 6) return; 
+                         // Skip future
+                         if (dObj > new Date()) return;
+                         // Skip before joined
+                         if (joinDate && dObj < joinDate) return;
+
+                         const hasRec = agentRecs.some(a => a.date === dStr);
+                         if (!hasRec) absentCount++;
+                         else if (agentRecs.find(a => a.date === dStr).status === 'Absent') absentCount++;
+                      });
+
+                      const latePercentage = presentCount > 0 ? Math.round((lateCount / presentCount) * 100) : 0;
+
+                      return (
+                        <tr key={agent.id} className="hover:bg-blue-900/10 transition-colors group">
+                          <td className="p-2 text-center border-r border-slate-800 bg-slate-900 text-slate-600 font-mono text-[10px] sticky left-0 z-10 group-hover:text-white">{idx + 1}</td>
+
+                          <td className="p-2 px-3 font-medium border-r border-slate-800 bg-slate-900 sticky left-12 z-10 truncate text-xs text-slate-200">
+                            {agent.name}
+                          </td>
+
+                          <td className="p-1 text-center border-b border-slate-800 text-green-400 font-bold text-[10px]">{presentCount}</td>
+                          <td className="p-1 text-center border-b border-slate-800 text-yellow-400 font-bold text-[10px]">{lateCount}</td>
+                          <td className="p-1 text-center border-b border-r border-slate-800 text-red-400 font-bold text-[10px]">{absentCount}</td>
+
+                          {/* Daily Cells */}
+                          {dateArray.map(dateStr => {
+                            const currentDate = new Date(dateStr);
+                            currentDate.setHours(0, 0, 0, 0);
+                            const isWeekend = currentDate.getDay() === 0 || currentDate.getDay() === 6;
+
+                            // 1. Before Join?
+                            const isBeforeJoining = joinDate && currentDate < joinDate;
+
+                            // 2. Find Record
+                            const record = agentRecs.find(a => a.date === dateStr);
+
+                            let cellContent = '-';
+                            let cellClass = 'text-slate-700';
+
+                            if (isBeforeJoining) {
+                                cellContent = '•';
+                                cellClass = 'text-slate-800';
+                            } 
+                            else if (record) {
+                                if (record.status === 'Absent') {
+                                    cellContent = 'A';
+                                    cellClass = 'bg-red-500/10 text-red-500 font-bold';
+                                } else {
+                                    // 1. Format Time to 12h
+                                    cellContent = formatTo12Hour(record.loginTime) || 'OK';
+
+                                    // 2. Calculate Color Dynamically
+                                    // We use the helper to decide Yellow vs Red vs Green
+                                    const status = getLateStatus(record.loginTime);
+
+                                    if (status.isLate) {
+                                        // Use the color returned by getLateStatus (Yellow or Red)
+                                        cellClass = `bg-slate-800/50 ${status.color} font-mono text-[10px]`;
+                                    } else {
+                                        // On Time (Green)
+                                        cellClass = 'text-green-400 font-mono text-[10px]';
+                                    }
+                                }
+                            } else {
+                                // No Record
+                                if (isWeekend) {
+                                    cellContent = '';
+                                    cellClass = 'bg-slate-800/30';
+                                } else if (currentDate <= new Date()) {
+                                    cellContent = 'A'; // Marked absent if workday passed with no scan
+                                    cellClass = 'text-red-500/50 font-bold';
+                                }
+                            }
+
+                            return (
+                              <td key={dateStr} className={`p-1 text-center border-b border-slate-800 text-[11px] ${cellClass}`}>
+                                {cellContent}
+                              </td>
+                            );
+                          })}
+
+                          {/* Row Summary */}
+                          <td className={`p-2 text-center font-bold sticky right-0 z-10 bg-slate-900 shadow-[-4px_0_10px_rgba(0,0,0,0.5)] ${latePercentage > 20 ? 'text-red-400' : 'text-slate-400'}`}>
+                            {latePercentage}%
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </React.Fragment>
+                );
+              });
+            })()}
+          </tbody>
+
+          {/* --- FOOTER --- */}
+          <tfoot className="sticky bottom-0 z-40 shadow-[0_-4px_10px_rgba(0,0,0,0.5)]">
+            <tr className="bg-slate-950 border-t-2 border-purple-500 font-black text-white">
+              <td colSpan={2} className="p-3 text-left sticky left-0 bg-slate-950 z-50 uppercase tracking-tighter">Grand Total</td>
+              
+              {/* Grand Metrics */}
+              <td className="text-center text-green-400 bg-slate-950 text-[10px]">
+                {attendance.filter(a => a.status === 'Present').length}
+              </td>
+              <td className="text-center text-yellow-400 bg-slate-950 text-[10px]">
+                {attendance.filter(a => a.late === true).length}
+              </td>
+              <td className="text-center text-red-400 bg-slate-950 border-r border-slate-800 text-[10px]">
+                 -
+              </td>
+
+              {/* Daily Grand Totals */}
+              {getDaysArray(getPayrollRange(selectedMonth).start, getPayrollRange(selectedMonth).end).map(d => {
+                const dailyTotal = attendance.filter(a => a.date === d && a.status === 'Present').length;
+                return (
+                  <td key={d} className="bg-slate-950 text-center text-[10px] font-bold text-slate-500">
+                    {dailyTotal > 0 ? dailyTotal : ''}
+                  </td>
+                );
+              })}
+
+              <td className="p-3 text-center text-purple-400 text-lg sticky right-0 bg-slate-950 z-50 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
+                -
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+)}
 
         {/* Fines Tab */}
         {activeTab === 'fines' && (
           <div className="space-y-6">
             <div className="flex justify-between items-center">
               <h2 className="text-xl font-semibold text-white">Fines Management</h2>
-              {userRole === 'Admin' && (
+              
                 <button onClick={() => setShowAddFine(true)} className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"><Plus className="w-4 h-4" /> Add Fine</button>
-              )}
+              
             </div>
             {/* Search ... (Keep existing search div) */}
-            <div className="bg-slate-800/50 rounded-xl shadow-sm border border-slate-600 p-4">
+            <div className="bg-slate-800 rounded-xl shadow-sm border border-slate-600 p-4">
               <input type="text" placeholder="Search by agent or reason..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-white placeholder-slate-400" />
             </div>
 
@@ -3263,7 +4153,7 @@ const handleSaveHR = async (e) => {
                     <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">Agent</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">Reason</th>
                     <th className="text-right py-3 px-4 text-sm font-medium text-slate-200">Amount</th>
-                    {userRole === 'Admin' && <th className="text-center py-3 px-4 text-sm font-medium text-slate-200">Actions</th>}
+                    <th className="text-center py-3 px-4 text-sm font-medium text-slate-200">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -3274,14 +4164,14 @@ const handleSaveHR = async (e) => {
                       <td className="py-3 px-4 font-medium text-white">{fine.agentName}</td>
                       <td className="py-3 px-4 text-slate-300">{fine.reason}</td>
                       <td className="py-3 px-4 text-right font-semibold text-red-600">{fine.amount.toLocaleString()} PKR</td>
-                      {userRole === 'Admin' && (
+                      
                         <td className="py-3 px-4">
                           <div className="flex items-center justify-center gap-2">
                             <button onClick={() => { setEditingFine(fine); setShowAddFine(true); }} className="p-1.5 bg-blue-500/10 text-blue-400 rounded hover:bg-blue-500/20" title="Edit"><Pencil className="w-4 h-4" /></button>
                             <button onClick={() => handleDeleteFine(fine.id)} className="p-1.5 bg-red-500/10 text-red-400 rounded hover:bg-red-500/20" title="Delete"><Trash2 className="w-4 h-4" /></button>
                           </div>
                         </td>
-                      )}
+                      
                     </tr>
                   ))}
                 </tbody>
@@ -3295,12 +4185,12 @@ const handleSaveHR = async (e) => {
           <div className="space-y-6">
             <div className="flex justify-between items-center">
               <h2 className="text-xl font-semibold text-white">Bonuses Management</h2>
-              {userRole === 'Admin' && (
+              
                 <button onClick={() => setShowAddBonus(true)} className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"><Plus className="w-4 h-4" /> Add Bonus</button>
-              )}
+              
             </div>
             {/* Search ... */}
-            <div className="bg-slate-800/50 rounded-xl shadow-sm border border-slate-600 p-4">
+            <div className="bg-slate-800 rounded-xl shadow-sm border border-slate-600 p-4">
               <input type="text" placeholder="Search by agent name..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-white" />
             </div>
 
@@ -3315,7 +4205,7 @@ const handleSaveHR = async (e) => {
                     <th className="text-right py-3 px-4 text-sm font-medium text-slate-200">Target</th>
                     <th className="text-right py-3 px-4 text-sm font-medium text-slate-200">Actual</th>
                     <th className="text-right py-3 px-4 text-sm font-medium text-slate-200">Amount</th>
-                    {userRole === 'Admin' && <th className="text-center py-3 px-4 text-sm font-medium text-slate-200">Actions</th>}
+                    <th className="text-center py-3 px-4 text-sm font-medium text-slate-200">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -3328,14 +4218,14 @@ const handleSaveHR = async (e) => {
                       <td className="py-3 px-4 text-right text-slate-100">{bonus.targetSales}</td>
                       <td className="py-3 px-4 text-right font-semibold text-green-400">{bonus.actualSales}</td>
                       <td className="py-3 px-4 text-right font-semibold text-green-400">{bonus.amount.toLocaleString()} PKR</td>
-                      {userRole === 'Admin' && (
+                      
                         <td className="py-3 px-4">
                           <div className="flex items-center justify-center gap-2">
                             <button onClick={() => { setEditingBonus(bonus); setShowAddBonus(true); }} className="p-1.5 bg-blue-500/10 text-blue-400 rounded hover:bg-blue-500/20" title="Edit"><Pencil className="w-4 h-4" /></button>
                             <button onClick={() => handleDeleteBonus(bonus.id)} className="p-1.5 bg-red-500/10 text-red-400 rounded hover:bg-red-500/20" title="Delete"><Trash2 className="w-4 h-4" /></button>
                           </div>
                         </td>
-                      )}
+                      
                     </tr>
                   ))}
                 </tbody>
@@ -3360,7 +4250,7 @@ const handleSaveHR = async (e) => {
             </div>
 
             {/* SEARCH & FILTER Bar */}
-            <div className="bg-slate-800/50 rounded-xl shadow-sm border border-slate-600 p-4 mb-6">
+            <div className="bg-slate-800 rounded-xl shadow-sm border border-slate-600 p-4 mb-6">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <input
                   type="text"
@@ -3540,7 +4430,7 @@ const handleSaveHR = async (e) => {
                         const d = new Date(dateStr);
                         const isWeekend = d.getDay() === 0 || d.getDay() === 6;
                         return (
-                          <th key={dateStr} className={`p-2 text-center border-b border-slate-800 w-10 ${isWeekend ? 'bg-slate-800/50' : 'bg-slate-900'}`}>
+                          <th key={dateStr} className={`p-2 text-center border-b border-slate-800 w-10 ${isWeekend ? 'bg-slate-800' : 'bg-slate-900'}`}>
                             <div className="text-[10px] text-slate-500 uppercase">{d.toLocaleDateString('en-US', { weekday: 'narrow' })}</div>
                             <div className={`text-xs font-bold ${isWeekend ? 'text-slate-500' : 'text-white'}`}>{d.getDate()}</div>
                           </th>
@@ -3640,7 +4530,7 @@ const uniqueTeams = [...new Set([...teams, ...monthlyStats.map(s => s.team)])].f
 
                                   <td className="p-1 text-center border-r border-slate-800 bg-blue-500/5 font-bold text-blue-400 text-xs">{stat.lpd}</td>
                                   <td className="p-1 text-center border-r border-slate-800 text-slate-400 text-[10px]">{stat.dialingDays}</td>
-                                  <td className="p-1 text-center text-red-400/50 text-[10px]">{stat.daysOn0}</td>
+                                  <td className="p-1 text-center text-red-400 text-[10px]">{stat.daysOn0}</td>
                                   <td className="p-1 text-center text-orange-300/80 text-[10px]">{stat.daysOn1}</td>
                                   <td className="p-1 text-center text-yellow-300/80 text-[10px]">{stat.daysOn2}</td>
                                   <td className="p-1 text-center border-r border-slate-800 text-green-400 font-bold text-[10px]">{stat.daysOn3}</td>
@@ -3743,7 +4633,7 @@ const uniqueTeams = [...new Set([...teams, ...monthlyStats.map(s => s.team)])].f
           <div className="bg-slate-900 border border-slate-700 rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl overscroll-contain transform-gpu">
 
             {/* Header */}
-            <div className="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-800/50">
+            <div className="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-800">
               <h2 className="text-xl font-bold text-white flex items-center gap-2">
                 {editingAgent?.cnic ? 'Edit Agent Details' : 'Add New Agent'}
               </h2>
@@ -3800,7 +4690,7 @@ const uniqueTeams = [...new Set([...teams, ...monthlyStats.map(s => s.team)])].f
                   </div>
                   <div>
                     <label className="block text-xs text-slate-400 mb-1 font-medium">Login Password</label>
-                    <input type="text" value={editingAgent?.password || '123'} onChange={e => setEditingAgent({ ...editingAgent, password: e.target.value })} className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white text-sm outline-none focus:ring-1 focus:ring-blue-500" />
+                    <input type="text" value={editingAgent?.password || ''} onChange={e => setEditingAgent({ ...editingAgent, password: e.target.value })} className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white text-sm outline-none focus:ring-1 focus:ring-blue-500" />
                   </div>
                 </div>
               </div>
@@ -3924,7 +4814,7 @@ const uniqueTeams = [...new Set([...teams, ...monthlyStats.map(s => s.team)])].f
           <div className="bg-slate-900 border border-slate-700 rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl overscroll-contain transform-gpu">
 
             {/* Header */}
-            <div className="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-800/50">
+            <div className="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-800">
               <h2 className="text-xl font-bold text-white flex items-center gap-2">
                 {editingHR?.id ? 'Edit Employee' : 'Add New Employee'}
               </h2>
@@ -4161,7 +5051,7 @@ const uniqueTeams = [...new Set([...teams, ...monthlyStats.map(s => s.team)])].f
 
       {/* --- MANAGE ADMINS / HR / QA MODAL --- */}
       {showAdminModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
           <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-3xl overflow-hidden shadow-2xl">
 
             {/* Header */}
@@ -4179,7 +5069,7 @@ const uniqueTeams = [...new Set([...teams, ...monthlyStats.map(s => s.team)])].f
             <div className="p-6 space-y-8">
 
               {/* 1. Create New User Form */}
-              <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
+              <div className="bg-slate-800 p-4 rounded-lg border border-slate-700">
                 <h3 className="text-xs font-bold text-green-400 uppercase tracking-wider mb-3">Add New Access</h3>
                 <form onSubmit={handleCreateAdmin} className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
                   <div>
@@ -4252,6 +5142,162 @@ const uniqueTeams = [...new Set([...teams, ...monthlyStats.map(s => s.team)])].f
         </div>
       )}
 
+      {/* =================================================================================
+          SEPARATE MODALS FOR MANAGEMENT (To fix Dropdown Issues)
+         ================================================================================= */}
+
+      {/* 1. MANAGEMENT FINE MODAL */}
+      {showMgmtFine && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-md overflow-hidden shadow-2xl">
+            <div className="p-5 border-b border-slate-800 flex justify-between items-center bg-slate-800">
+              <h3 className="font-bold text-white flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-red-500" /> Add Management Fine
+              </h3>
+              <button onClick={() => setShowMgmtFine(false)} className="text-slate-400 hover:text-white"><X className="w-5 h-5" /></button>
+            </div>
+            
+            <form onSubmit={handleSaveMgmtFine} className="p-6 space-y-4">
+              <div>
+                <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Select Employee</label>
+                <select name="employeeName" required className="w-full bg-slate-800 border border-slate-600 rounded-lg p-2.5 text-white text-sm focus:ring-2 focus:ring-red-500 outline-none">
+                  <option value="">-- Choose Employee --</option>
+                  {managementEmployees.map((name, idx) => (
+                    <option key={idx} value={name}>{name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Fine Amount (PKR)</label>
+                <input name="amount" type="number" required placeholder="e.g. 1000" className="w-full bg-slate-800 border border-slate-600 rounded-lg p-2.5 text-white text-sm focus:ring-2 focus:ring-red-500 outline-none" />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Reason</label>
+                <input name="reason" type="text" required placeholder="e.g. Late Arrival" className="w-full bg-slate-800 border border-slate-600 rounded-lg p-2.5 text-white text-sm focus:ring-2 focus:ring-red-500 outline-none" />
+              </div>
+
+              <div className="pt-2 flex gap-3">
+                <button type="button" onClick={() => setShowMgmtFine(false)} className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm font-medium transition-colors">Cancel</button>
+                <button type="submit" className="flex-1 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-lg text-sm font-bold shadow-lg shadow-red-900/20 transition-colors">Save Fine</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 2. MANAGEMENT BONUS MODAL */}
+      {showMgmtBonus && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-md overflow-hidden shadow-2xl">
+            <div className="p-5 border-b border-slate-800 flex justify-between items-center bg-slate-800">
+              <h3 className="font-bold text-white flex items-center gap-2">
+                <DollarSign className="w-5 h-5 text-green-500" /> Add Management Bonus
+              </h3>
+              <button onClick={() => setShowMgmtBonus(false)} className="text-slate-400 hover:text-white"><X className="w-5 h-5" /></button>
+            </div>
+            
+            <form onSubmit={handleSaveMgmtBonus} className="p-6 space-y-4">
+              <div>
+                <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Select Employee</label>
+                <select name="employeeName" required className="w-full bg-slate-800 border border-slate-600 rounded-lg p-2.5 text-white text-sm focus:ring-2 focus:ring-green-500 outline-none">
+                  <option value="">-- Choose Employee --</option>
+                  {managementEmployees.map((name, idx) => (
+                    <option key={idx} value={name}>{name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Bonus Amount (PKR)</label>
+                <input name="amount" type="number" required placeholder="e.g. 5000" className="w-full bg-slate-800 border border-slate-600 rounded-lg p-2.5 text-white text-sm focus:ring-2 focus:ring-green-500 outline-none" />
+              </div>
+
+              <div className="pt-2 flex gap-3">
+                <button type="button" onClick={() => setShowMgmtBonus(false)} className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm font-medium transition-colors">Cancel</button>
+                <button type="submit" className="flex-1 py-2.5 bg-green-600 hover:bg-green-500 text-white rounded-lg text-sm font-bold shadow-lg shadow-green-900/20 transition-colors">Save Bonus</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+   {/* =================================================================================
+          ATTENDANCE EDIT MODAL (Manually Correct Time)
+         ================================================================================= */}
+      {showEditAttendanceModal && editingAttendance && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-sm overflow-hidden shadow-2xl">
+            <div className="p-5 border-b border-slate-800 flex justify-between items-center bg-slate-800/50">
+              <h3 className="font-bold text-white flex items-center gap-2">
+                <Clock className="w-5 h-5 text-blue-400" /> Edit Attendance
+              </h3>
+              <button onClick={() => setShowEditAttendanceModal(false)} className="text-slate-400 hover:text-white"><X className="w-5 h-5" /></button>
+            </div>
+            
+            <form onSubmit={handleUpdateAttendance} className="p-6 space-y-4">
+              
+              <div className="text-center mb-4 bg-slate-800/50 p-3 rounded-lg border border-slate-700">
+                <p className="text-xs text-slate-400 uppercase tracking-wider">Employee</p>
+                <p className="text-lg font-bold text-white">{editingAttendance.agentName}</p>
+                <p className="text-xs text-blue-400 font-mono mt-1">{editingAttendance.date}</p>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Status</label>
+                <select 
+                  name="status" 
+                  defaultValue={editingAttendance.status}
+                  className="w-full bg-slate-800 border border-slate-600 rounded-lg p-2.5 text-white text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                  onChange={(e) => {
+                      // Visual Helper: If they select Absent, clear the inputs locally
+                      if(e.target.value === 'Absent') {
+                          document.getElementsByName('loginTime')[0].value = '';
+                          document.getElementsByName('logoutTime')[0].value = '';
+                      } else if (e.target.value === 'Present' && !document.getElementsByName('loginTime')[0].value) {
+                          document.getElementsByName('loginTime')[0].value = '19:00';
+                          document.getElementsByName('logoutTime')[0].value = '05:00';
+                      }
+                  }}
+                >
+                  <option value="Present">Present</option>
+                  <option value="Late">Late</option>
+                  <option value="Half Day">Half Day</option>
+                  <option value="Absent">Absent</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Login Time</label>
+                  <input 
+                    name="loginTime" 
+                    type="time" 
+                    defaultValue={editingAttendance.loginTime} 
+                    className="w-full bg-slate-800 border border-slate-600 rounded-lg p-2.5 text-white text-sm focus:ring-2 focus:ring-blue-500 outline-none [color-scheme:dark]" 
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Logout Time</label>
+                  <input 
+                    name="logoutTime" 
+                    type="time" 
+                    defaultValue={editingAttendance.logoutTime} 
+                    className="w-full bg-slate-800 border border-slate-600 rounded-lg p-2.5 text-white text-sm focus:ring-2 focus:ring-blue-500 outline-none [color-scheme:dark]" 
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2 flex gap-3">
+                <button type="button" onClick={() => setShowEditAttendanceModal(false)} className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm font-medium transition-colors">Cancel</button>
+                <button type="submit" className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-bold shadow-lg shadow-blue-900/20 transition-colors">Update Record</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div> // <--- THIS must be the very last line before );
   );
 };
@@ -4259,4 +5305,4 @@ const uniqueTeams = [...new Set([...teams, ...monthlyStats.map(s => s.team)])].f
 export default AgentPayrollSystem;
 
 
-// LEFT STATUS NOT WOKRING ON HR TABLE
+//  Adding Buttons in Matrixes

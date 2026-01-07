@@ -85,23 +85,7 @@ const ImportModal = ({ importType, onClose, onImport }) => {
             </div>
           )}
 
-          {/* 2. ATTENDANCE: Show Late Time Threshold */}
-          {importType === 'attendance' && (
-            <div className="bg-orange-900/10 border border-orange-500/20 rounded-xl p-4">
-               <label className="block text-[10px] font-black text-orange-400 uppercase tracking-widest mb-2 flex items-center gap-2">
-                <Clock className="w-3 h-3" /> Late Time Threshold
-              </label>
-              <input 
-                type="time" 
-                value={lateTimeInput} 
-                onChange={(e) => setLateTimeInput(e.target.value)} 
-                className="w-full px-4 py-2 border border-slate-600 rounded-lg bg-slate-800 text-white outline-none focus:ring-2 focus:ring-orange-500" 
-              />
-               <p className="text-xs text-slate-400 mt-2">
-                Logins after this time will be marked as <strong>Late</strong>.
-              </p>
-            </div>
-          )}
+         
 
           {/* Format Instructions Box */}
           <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
