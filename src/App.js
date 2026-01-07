@@ -121,6 +121,11 @@ const countWorkingDays = (start, end) => {
 
 const AgentPayrollSystem = () => {
 
+  const [salesSubTab, setSalesSubTab] = useState('list');
+const [attendanceSubTab, setAttendanceSubTab] = useState('daily');
+const [employeesSubTab, setEmployeesSubTab] = useState('agents');
+const [managementSubTab, setManagementSubTab] = useState('payroll');
+
   // --- MANAGEMENT SPECIFIC MODALS STATE ---
   const [showMgmtBonus, setShowMgmtBonus] = useState(false);
   const [showMgmtFine, setShowMgmtFine] = useState(false);
@@ -2445,6 +2450,29 @@ const handleSaveHR = async (e) => {
     );
   }
 
+  // Reusable Sub-Navigation Component
+const SubTabBar = ({ tabs, activeSubTab, setActiveSubTab }) => {
+  return (
+    <div className="bg-slate-800/50 border-b border-slate-700 mb-6">
+      <div className="flex gap-2 px-6">
+        {tabs.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveSubTab(tab.id)}
+            className={`px-4 py-2 text-sm font-medium transition-colors ${
+              activeSubTab === tab.id
+                ? 'border-b-2 border-green-400 text-green-400'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+};
+
   // MAIN DASHBOARD
   // Main Return Agent Payroll System
   return (
@@ -2506,103 +2534,72 @@ const handleSaveHR = async (e) => {
       </div>
 
       
-      {/* Navigation Tabs - Main Header Buttons */}
-      <div className="bg-slate-800 border-b border-slate-700">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="flex gap-1 overflow-x-auto">
-            {['dashboard', 'sales', 'attendance', 'payroll'].map(tab => {
-              if (userRole === 'Agent' && (tab === 'payroll')) return null;
+     {/* Navigation Tabs - Main Header Buttons */}
+<div className="bg-slate-800 border-b border-slate-700">
+  <div className="max-w-7xl mx-auto px-6">
+    <div className="flex gap-1 overflow-x-auto">
+      {['dashboard', 'sales', 'attendance', 'payroll'].map(tab => {
+        if (userRole === 'Agent' && (tab === 'payroll')) return null;
 
-              return (
-                <button
-                  key={tab}
-                  onClick={() => {
-                    setActiveTab(tab);
-                    setSearchQuery('');
-                  }}
-                  className={`px-6 py-3 text-sm font-medium capitalize transition-colors whitespace-nowrap ${activeTab === tab
-                    ? 'border-b-2 border-blue-400 text-blue-400'
-                    : 'text-slate-400 hover:text-white'
-                    }`}
-                >
-                  {tab}
-                </button>
-              );
-            })}
+        return (
+          <button
+            key={tab}
+            onClick={() => {
+              setActiveTab(tab);
+              setSearchQuery('');
+            }}
+            className={`px-6 py-3 text-sm font-medium capitalize transition-colors whitespace-nowrap ${activeTab === tab
+              ? 'border-b-2 border-blue-400 text-blue-400'
+              : 'text-slate-400 hover:text-white'
+              }`}
+          >
+            {tab}
+          </button>
+        );
+      })}
 
-            <button
-  onClick={() => setActiveTab('attendance_matrix')}
-  className={`px-6 py-3 text-sm font-medium capitalize whitespace-nowrap transition-colors  ${
-    activeTab === 'attendance_matrix'
-      ? 'border-b-2 border-blue-400 text-blue-400'
-                : 'text-slate-400 hover:text-white'
-  }`}
->
-  Attendance Matrix
-</button>
+      {/* Employees Tab - Admin Only */}
+      {userRole === 'Admin' && (
+        <button
+          onClick={() => { setActiveTab('employees'); setSearchQuery(''); }}
+          className={`px-6 py-3 text-sm font-medium capitalize transition-colors ${activeTab === 'employees' ? 'border-b-2 border-blue-400 text-blue-400' : 'text-slate-400 hover:text-white'}`}
+        >
+          Employees
+        </button>
+      )}
 
-            <button
-              onClick={() => { setActiveTab('monthly_matrix'); setSearchQuery(''); }}
-              className={`px-6 py-3 text-sm font-medium capitalize whitespace-nowrap transition-colors ${activeTab === 'monthly_matrix'
-                ? 'border-b-2 border-blue-400 text-blue-400'
-                : 'text-slate-400 hover:text-white'
-                }`}
-            >
-              Monthly Matrix
-            </button>
+      {/* Bonuses Tab - Visible to Admin and HR */}
+      {(userRole === 'Admin' || userRole === 'HR') && (
+        <button
+          onClick={() => { setActiveTab('bonuses'); setSearchQuery(''); }}
+          className={`px-6 py-3 text-sm font-medium capitalize transition-colors ${activeTab === 'bonuses' ? 'border-b-2 border-blue-400 text-blue-400' : 'text-slate-400 hover:text-white'}`}
+        >
+          Bonuses
+        </button>
+      )}
 
-            {/* Agents Tab - Admin Only */}
-            {userRole === 'Admin' && (
-              <button
-                onClick={() => { setActiveTab('agents'); setSearchQuery(''); }}
-                className={`px-6 py-3 text-sm font-medium capitalize transition-colors ${activeTab === 'agents' ? 'border-b-2 border-blue-400 text-blue-400' : 'text-slate-400 hover:text-white'}`}
-              >
-                Agents
-              </button>
-            )}
+      {/* Fines Tab - Visible to Admin, HR, and QA */}
+      {(userRole === 'Admin' || userRole === 'HR' || userRole === 'QA') && (
+        <button
+          onClick={() => { setActiveTab('fines'); setSearchQuery(''); }}
+          className={`px-6 py-3 text-sm font-medium capitalize transition-colors ${activeTab === 'fines' ? 'border-b-2 border-blue-400 text-blue-400' : 'text-slate-400 hover:text-white'}`}
+        >
+          Fines
+        </button>
+      )}
 
-             {/* Bonuses Tab - Visible to Admin and HR */}
-            {(userRole === 'Admin' || userRole === 'HR') && (
-              <button
-                onClick={() => { setActiveTab('bonuses'); setSearchQuery(''); }}
-                className={`px-6 py-3 text-sm font-medium capitalize transition-colors ${activeTab === 'bonuses' ? 'border-b-2 border-blue-400 text-blue-400' : 'text-slate-400 hover:text-white'}`}
-              >
-                Bonuses
-              </button>
-            )}
-
-            {/* Fines Tab - Visible to Admin, HR, and QA */}
-            {(userRole === 'Admin' || userRole === 'HR' || userRole === 'QA') && (
-              <button
-                onClick={() => { setActiveTab('fines'); setSearchQuery(''); }}
-                className={`px-6 py-3 text-sm font-medium capitalize transition-colors ${activeTab === 'fines' ? 'border-b-2 border-blue-400 text-blue-400' : 'text-slate-400 hover:text-white'}`}
-              >
-                Fines
-              </button>
-            )}
-
-            {/* [NEW] HR Tab */}
-            {(userRole === 'Admin' || userRole === 'HR') && (
-              <button
-                onClick={() => { setActiveTab('hr'); setSearchQuery(''); }}
-                className={`px-6 py-3 text-sm font-medium capitalize transition-colors ${activeTab === 'hr' ? 'border-b-2 border-blue-400 text-blue-400' : 'text-slate-400 hover:text-white'}`}
-              >
-                HR Team
-              </button>
-            )}
-
-            {(userRole === 'Admin' || userRole === 'HR') && (
-              <button
-                onClick={() => { setActiveTab('management_payroll'); setSearchQuery(''); }}
-                className={`px-6 py-3 text-sm font-medium capitalize whitespace-nowrap transition-colors ${activeTab === 'management_payroll' ? 'border-b-2 border-blue-400 text-blue-400' : 'text-slate-400 hover:text-white'}`}
-              >
-                Management Payroll
-              </button>
-            )}
-
-          </div>
-        </div>
-      </div>
+      {/* Management Tab - Admin & HR Only */}
+      {(userRole === 'Admin' || userRole === 'HR') && (
+        <button
+          onClick={() => { setActiveTab('management'); setSearchQuery(''); }}
+          className={`px-6 py-3 text-sm font-medium capitalize whitespace-nowrap transition-colors ${activeTab === 'management' ? 'border-b-2 border-blue-400 text-blue-400' : 'text-slate-400 hover:text-white'}`}
+        >
+          Management
+        </button>
+      )}
+    </div>
+  </div>
+</div>
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-6 py-8">
@@ -2713,10 +2710,175 @@ const handleSaveHR = async (e) => {
           </div>
         )}
 
-        {/* HR Team Management */}
 
-        {activeTab === 'hr' && (
+
+        {/* Agent Management */}
+
+        {activeTab === 'employees' && (
           <div className="space-y-6">
+
+
+<SubTabBar
+      tabs={[
+        { id: 'agents', label: 'Agents' },
+        { id: 'hr', label: 'HR Records' }
+      ]}
+      activeSubTab={employeesSubTab}
+      setActiveSubTab={setEmployeesSubTab}
+    />
+
+    {employeesSubTab === 'agents' && (
+      <div className="space-y-6">
+
+            {/* Header & Buttons */}
+            <div className="flex justify-between items-center">
+              <h2 className="text-xl font-semibold text-white">Agent Management</h2>
+              <div className="flex gap-3">
+                {userRole === 'Admin' && (
+                  <>
+                    <button onClick={() => setShowAddCenterModal(true)} className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium">
+                      <Plus className="w-4 h-4" /> Add Center
+                    </button>
+                    <button onClick={() => setShowAddTeamModal(true)} className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm font-medium">
+                      <Plus className="w-4 h-4" /> Add Team
+                    </button>
+                    <button onClick={() => { setImportType('agents'); setShowImportModal(true); }} className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium">
+                      <Upload className="w-4 h-4" /> Import CSV
+                    </button>
+                    <button onClick={() => {
+                      setEditingAgent({});
+                      setShowEditAgent(false);
+                      setShowAddAgent(true);
+                    }} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
+                      <Plus className="w-4 h-4" /> Add Agent
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Filters */}
+            <div className="bg-slate-800 rounded-xl shadow-sm border border-slate-600 p-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <input type="text" placeholder="Search agents..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <select value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="All">All Teams</option>
+                  {teams.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+                <select value={centerFilter} onChange={(e) => setCenterFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="All">All Centers</option>
+                  {centers.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <select value={agentStatusFilter} onChange={(e) => setAgentStatusFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="All">All Status</option>
+                  <option value="Active">Active</option>
+                  <option value="Left">Inactive/Left</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Scrollable Table Container */}
+            <div className="w-full overflow-x-auto rounded-lg shadow-md border border-slate-700">
+              <table className="w-full text-left border-collapse">
+                <thead className="bg-slate-900">
+                  <tr>
+                    <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[50px]">No.</th>
+                    <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[200px]">Agent</th>
+                    <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[180px]">Father Name</th>
+                    <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[200px]">Bank Details</th>
+                    <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[140px]">CNIC</th>
+                    <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[140px]">Team</th>
+                    <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[140px]">Center</th>
+                    <th className="py-3 px-4 text-sm font-medium text-slate-200 text-right min-w-[100px]">Salary</th>
+
+                    {/* [CHANGED] Renamed from "Active Date" to "Joining Date" */}
+                    <th className="py-3 px-4 text-sm font-medium text-slate-200 text-center min-w-[120px]">Joining Date</th>
+
+                    {userRole === 'Admin' && <th className="py-3 px-4 text-sm font-medium text-slate-200 text-center min-w-[140px]">Actions</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredAgents.map((agent, idx) => {
+                    // Fetch linked HR Data
+                    const linkedHR = hrRecords.find(h => h.cnic === agent.cnic) || {};
+                    const displayFatherName = linkedHR.father_name || agent.father_name || '-';
+
+                    return (
+                      <tr key={agent.cnic || idx} className="border-b border-slate-700 hover:bg-slate-700">
+                        <td className="py-3 px-4 text-slate-300">{idx + 1}</td>
+
+                        {/* 1. Name & Status Combined */}
+                        <td className="py-3 px-4">
+                          <div className="font-medium text-white text-sm">{agent.name}</div>
+                          <div className={`text-[11px] mt-0.5 font-medium ${agent.status === 'Active' ? 'text-green-400' : 'text-red-400'}`}>
+                            {agent.status}
+                          </div>
+                        </td>
+
+                        {/* Father Name */}
+                        <td className="py-3 px-4 text-slate-300 text-sm">{displayFatherName}</td>
+
+                        {/* 2. Bank Details Combined */}
+                        <td className="py-3 px-4">
+                          <div className="text-sm text-slate-200">{linkedHR.bank_name || '-'}</div>
+                          <div className="text-xs text-slate-500 font-mono">{linkedHR.account_number || '-'}</div>
+                        </td>
+
+                        <td className="py-3 px-4 text-slate-400 text-xs font-mono">{agent.cnic || '-'}</td>
+                        <td className="py-3 px-4 text-slate-300 text-sm">{agent.team}</td>
+                        <td className="py-3 px-4 text-slate-300 text-xs">{agent.center || '-'}</td>
+                        <td className="py-3 px-4 text-right text-slate-100 font-mono">{agent.baseSalary ? agent.baseSalary.toLocaleString() : 0}</td>
+
+                        {/* [CHANGED] Joining Date + Left Date (if applicable) */}
+                        <td className="py-3 px-4 text-center">
+                          <div className="text-slate-300 text-xs">{linkedHR.joining_date || '-'}</div>
+                          {agent.status === 'Left' && agent.leftDate && (
+                            <div className="text-[10px] text-red-400 font-medium mt-0.5">
+                              Left: {agent.leftDate}
+                            </div>
+                          )}
+                        </td>
+
+                        {userRole === 'Admin' && (
+                          <td className="py-3 px-4">
+                            <div className="flex items-center justify-center gap-2">
+                              <button onClick={() => {
+                                const hrInfo = hrRecords.find(h => h.cnic === agent.cnic) || {};
+                                setEditingAgent({
+                                  ...agent,
+                                  ...hrInfo,
+                                  contact_number: agent.Phone || hrInfo.Phone,
+                                  active_date: hrInfo.joining_date || agent.activeDate
+                                });
+                                setShowEditAgent(true);
+                                setShowAddAgent(true);
+                              }} className="p-1.5 bg-blue-500/10 text-blue-400 rounded hover:bg-blue-500/20 transition-colors" title="Edit">
+                                <Pencil className="w-4 h-4" />
+                              </button>
+
+                              <button onClick={() => agent.status === 'Active' ? handleMarkAsLeft(agent.cnic) : handleReactivateAgent(agent.cnic)}
+                                className={`p-1.5 rounded transition-colors ${agent.status === 'Active' ? 'bg-orange-500/10 text-orange-400 hover:bg-orange-500/20' : 'bg-green-500/10 text-green-400 hover:bg-green-500/20'}`}>
+                                {agent.status === 'Active' ? <UserX className="w-4 h-4" /> : <RotateCcw className="w-4 h-4" />}
+                              </button>
+
+                              <button onClick={() => handleDeleteAgent(agent.cnic)} className="p-1.5 bg-red-500/10 text-red-400 rounded hover:bg-red-500/20 transition-colors" title="Delete">
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+    {employeesSubTab === 'hr' && (
+      <div className="space-y-6">
+        {/* HR Team Management */}
             <div className="flex justify-between items-center">
               <h2 className="text-xl font-semibold text-white">HR - Employment Data</h2>
               <button
@@ -2914,155 +3076,6 @@ const handleSaveHR = async (e) => {
             </div>
           </div>
         )}
-
-        {/* Agent Management */}
-
-        {activeTab === 'agents' && (
-          <div className="space-y-6">
-
-            {/* Header & Buttons */}
-            <div className="flex justify-between items-center">
-              <h2 className="text-xl font-semibold text-white">Agent Management</h2>
-              <div className="flex gap-3">
-                {userRole === 'Admin' && (
-                  <>
-                    <button onClick={() => setShowAddCenterModal(true)} className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium">
-                      <Plus className="w-4 h-4" /> Add Center
-                    </button>
-                    <button onClick={() => setShowAddTeamModal(true)} className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm font-medium">
-                      <Plus className="w-4 h-4" /> Add Team
-                    </button>
-                    <button onClick={() => { setImportType('agents'); setShowImportModal(true); }} className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium">
-                      <Upload className="w-4 h-4" /> Import CSV
-                    </button>
-                    <button onClick={() => {
-                      setEditingAgent({});
-                      setShowEditAgent(false);
-                      setShowAddAgent(true);
-                    }} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
-                      <Plus className="w-4 h-4" /> Add Agent
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
-
-            {/* Filters */}
-            <div className="bg-slate-800 rounded-xl shadow-sm border border-slate-600 p-4">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <input type="text" placeholder="Search agents..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                <select value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <option value="All">All Teams</option>
-                  {teams.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-                <select value={centerFilter} onChange={(e) => setCenterFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <option value="All">All Centers</option>
-                  {centers.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-                <select value={agentStatusFilter} onChange={(e) => setAgentStatusFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <option value="All">All Status</option>
-                  <option value="Active">Active</option>
-                  <option value="Left">Inactive/Left</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Scrollable Table Container */}
-            <div className="w-full overflow-x-auto rounded-lg shadow-md border border-slate-700">
-              <table className="w-full text-left border-collapse">
-                <thead className="bg-slate-900">
-                  <tr>
-                    <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[50px]">No.</th>
-                    <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[200px]">Agent</th>
-                    <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[180px]">Father Name</th>
-                    <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[200px]">Bank Details</th>
-                    <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[140px]">CNIC</th>
-                    <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[140px]">Team</th>
-                    <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[140px]">Center</th>
-                    <th className="py-3 px-4 text-sm font-medium text-slate-200 text-right min-w-[100px]">Salary</th>
-
-                    {/* [CHANGED] Renamed from "Active Date" to "Joining Date" */}
-                    <th className="py-3 px-4 text-sm font-medium text-slate-200 text-center min-w-[120px]">Joining Date</th>
-
-                    {userRole === 'Admin' && <th className="py-3 px-4 text-sm font-medium text-slate-200 text-center min-w-[140px]">Actions</th>}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredAgents.map((agent, idx) => {
-                    // Fetch linked HR Data
-                    const linkedHR = hrRecords.find(h => h.cnic === agent.cnic) || {};
-                    const displayFatherName = linkedHR.father_name || agent.father_name || '-';
-
-                    return (
-                      <tr key={agent.cnic || idx} className="border-b border-slate-700 hover:bg-slate-700">
-                        <td className="py-3 px-4 text-slate-300">{idx + 1}</td>
-
-                        {/* 1. Name & Status Combined */}
-                        <td className="py-3 px-4">
-                          <div className="font-medium text-white text-sm">{agent.name}</div>
-                          <div className={`text-[11px] mt-0.5 font-medium ${agent.status === 'Active' ? 'text-green-400' : 'text-red-400'}`}>
-                            {agent.status}
-                          </div>
-                        </td>
-
-                        {/* Father Name */}
-                        <td className="py-3 px-4 text-slate-300 text-sm">{displayFatherName}</td>
-
-                        {/* 2. Bank Details Combined */}
-                        <td className="py-3 px-4">
-                          <div className="text-sm text-slate-200">{linkedHR.bank_name || '-'}</div>
-                          <div className="text-xs text-slate-500 font-mono">{linkedHR.account_number || '-'}</div>
-                        </td>
-
-                        <td className="py-3 px-4 text-slate-400 text-xs font-mono">{agent.cnic || '-'}</td>
-                        <td className="py-3 px-4 text-slate-300 text-sm">{agent.team}</td>
-                        <td className="py-3 px-4 text-slate-300 text-xs">{agent.center || '-'}</td>
-                        <td className="py-3 px-4 text-right text-slate-100 font-mono">{agent.baseSalary ? agent.baseSalary.toLocaleString() : 0}</td>
-
-                        {/* [CHANGED] Joining Date + Left Date (if applicable) */}
-                        <td className="py-3 px-4 text-center">
-                          <div className="text-slate-300 text-xs">{linkedHR.joining_date || '-'}</div>
-                          {agent.status === 'Left' && agent.leftDate && (
-                            <div className="text-[10px] text-red-400 font-medium mt-0.5">
-                              Left: {agent.leftDate}
-                            </div>
-                          )}
-                        </td>
-
-                        {userRole === 'Admin' && (
-                          <td className="py-3 px-4">
-                            <div className="flex items-center justify-center gap-2">
-                              <button onClick={() => {
-                                const hrInfo = hrRecords.find(h => h.cnic === agent.cnic) || {};
-                                setEditingAgent({
-                                  ...agent,
-                                  ...hrInfo,
-                                  contact_number: agent.Phone || hrInfo.Phone,
-                                  active_date: hrInfo.joining_date || agent.activeDate
-                                });
-                                setShowEditAgent(true);
-                                setShowAddAgent(true);
-                              }} className="p-1.5 bg-blue-500/10 text-blue-400 rounded hover:bg-blue-500/20 transition-colors" title="Edit">
-                                <Pencil className="w-4 h-4" />
-                              </button>
-
-                              <button onClick={() => agent.status === 'Active' ? handleMarkAsLeft(agent.cnic) : handleReactivateAgent(agent.cnic)}
-                                className={`p-1.5 rounded transition-colors ${agent.status === 'Active' ? 'bg-orange-500/10 text-orange-400 hover:bg-orange-500/20' : 'bg-green-500/10 text-green-400 hover:bg-green-500/20'}`}>
-                                {agent.status === 'Active' ? <UserX className="w-4 h-4" /> : <RotateCcw className="w-4 h-4" />}
-                              </button>
-
-                              <button onClick={() => handleDeleteAgent(agent.cnic)} className="p-1.5 bg-red-500/10 text-red-400 rounded hover:bg-red-500/20 transition-colors" title="Delete">
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </td>
-                        )}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
           </div>
         )}
 
@@ -3070,6 +3083,19 @@ const handleSaveHR = async (e) => {
 
         {activeTab === 'sales' && (
           <div className="space-y-6">
+
+            <SubTabBar
+      tabs={[
+        { id: 'list', label: 'Sales List' },
+        { id: 'matrix', label: 'Monthly Matrix' }
+      ]}
+      activeSubTab={salesSubTab}
+      setActiveSubTab={setSalesSubTab}
+    />
+
+    {salesSubTab === 'list' && (
+      <div className="space-y-6">
+
             {/* Header Section */}
             <div className="flex justify-between items-center">
               <h2 className="text-xl font-semibold text-white">Sales Management</h2>
@@ -3366,37 +3392,40 @@ const handleSaveHR = async (e) => {
                           )}
                         </td>
 
-                        {/* Editable Dock Details */}
+                       {/* Editable Dock Details (FINE AMOUNT) */}
                         <td className="py-2 px-2">
                           <input
                             type="text"
                             inputMode="numeric"
                             placeholder="Fine"
-                            // 1. Use defaultValue instead of value for uncontrolled input
                             defaultValue={sale.dockDetails || ''}
 
-                            // 2. Only validate input visually
+                            // --- 1. RESTRICTION: Disable if not Admin/QA ---
+                            disabled={userRole !== 'Admin' && userRole !== 'QA'}
+
                             onInput={(e) => {
                               e.target.value = e.target.value.replace(/\D/g, '');
                             }}
 
-                            // 3. Trigger the Database Update ONLY when leaving the field
                             onBlur={(e) => {
                               const val = e.target.value;
-                              // Only update if the value actually changed
                               if (val !== sale.dockDetails) {
                                 updateSaleField(sale.id, 'dockDetails', val);
                               }
                             }}
 
-                            // 4. Handle "Enter" key
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') {
-                                e.target.blur(); // Triggers onBlur
+                                e.target.blur(); 
                               }
                             }}
 
-                            className="w-full px-1 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded text-center font-mono placeholder-slate-400 focus:ring-1 focus:ring-blue-500 outline-none"
+                            // --- 2. STYLING: Dim text if disabled ---
+                            className={`w-full px-1 py-1 text-xs border border-slate-600 rounded text-center font-mono outline-none transition-colors
+                              ${userRole !== 'Admin' && userRole !== 'QA' 
+                                ? 'bg-slate-800/50 text-slate-500 cursor-not-allowed' // Disabled Style
+                                : 'bg-slate-700 text-white placeholder-slate-400 focus:ring-1 focus:ring-blue-500' // Enabled Style
+                              }`}
                           />
                         </td>
 
@@ -3405,12 +3434,13 @@ const handleSaveHR = async (e) => {
                           <input
                             type="text"
                             placeholder="Reason..."
-                            // [FIX] Check both casing styles to ensure data loads
                             defaultValue={sale.dockReason || sale.dockreason || ''}
+
+                            // --- 1. RESTRICTION: Disable if not Admin/QA ---
+                            disabled={userRole !== 'Admin' && userRole !== 'QA'}
 
                             onBlur={(e) => {
                               const val = e.target.value;
-                              // [FIX] Pass 'dockreason' (lowercase) if that is your DB column name
                               updateSaleField(sale.id, 'dockreason', val);
                             }}
 
@@ -3418,7 +3448,12 @@ const handleSaveHR = async (e) => {
                               if (e.key === 'Enter') e.target.blur();
                             }}
 
-                            className="w-full px-1 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded text-left"
+                            // --- 2. STYLING: Dim text if disabled ---
+                            className={`w-full px-1 py-1 text-xs border border-slate-600 rounded text-left transition-colors
+                              ${userRole !== 'Admin' && userRole !== 'QA' 
+                                ? 'bg-slate-800/50 text-slate-500 cursor-not-allowed' // Disabled Style
+                                : 'bg-slate-700 text-white focus:ring-1 focus:ring-blue-500' // Enabled Style
+                              }`}
                           />
                         </td>
 
@@ -3469,10 +3504,250 @@ const handleSaveHR = async (e) => {
           </div>
         )}
 
+         {salesSubTab === 'matrix' && (
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <div>
+            <h2 className="text-xl text-white font-bold">Team Performance Matrix ({selectedMonth})</h2>
+            <p className="text-xs text-slate-400 mt-1 uppercase tracking-wider">Grouped by Team • Daily Breakdown • Sales Frequency</p>
+          </div>
+          <div className="text-sm text-slate-400 font-medium">
+            Cycle: {getPayrollRange(selectedMonth).start.toDateString()} - {getPayrollRange(selectedMonth).end.toDateString()}
+          </div>
+        </div>
+            <div className="bg-slate-900 rounded-xl border border-slate-700 shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
+              <div className="overflow-auto relative">
+                <table className="w-full text-slate-300 border-collapse table-fixed">
+                  <thead className="sticky top-0 z-40 shadow-md">
+                    <tr className="bg-slate-950">
+                      <th className="p-3 text-center border-b border-r border-slate-800 sticky left-0 z-50 bg-slate-950 w-12">No.</th>
+                      <th className="p-3 text-left border-b border-r border-slate-800 sticky left-12 z-50 bg-slate-950 w-44">Agent Name</th>
+
+                      {/* Metric Headers */}
+                      <th className="p-2 text-center border-b border-r border-slate-800 bg-blue-900/40 text-blue-400 text-[10px] font-bold w-14">LPD</th>
+                      <th className="p-2 text-center border-b border-r border-slate-800 bg-slate-800 text-slate-400 text-[10px] w-12">DAYS</th>
+                      <th className="p-2 text-center border-b border-slate-800 bg-red-900/20 text-red-400 text-[10px] w-10">0s</th>
+                      <th className="p-2 text-center border-b border-slate-800 bg-orange-900/20 text-orange-400 text-[10px] w-10">1s</th>
+                      <th className="p-2 text-center border-b border-slate-800 bg-yellow-900/20 text-yellow-400 text-[10px] w-10">2s</th>
+                      <th className="p-2 text-center border-b border-r border-slate-800 bg-green-900/20 text-green-400 text-[10px] w-10">3s</th>
+
+                      {/* Date Columns */}
+                      {getDaysArray(getPayrollRange(selectedMonth).start, getPayrollRange(selectedMonth).end).map(dateStr => {
+                        const d = new Date(dateStr);
+                        const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+                        return (
+                          <th key={dateStr} className={`p-2 text-center border-b border-slate-800 w-10 ${isWeekend ? 'bg-slate-800' : 'bg-slate-900'}`}>
+                            <div className="text-[10px] text-slate-500 uppercase">{d.toLocaleDateString('en-US', { weekday: 'narrow' })}</div>
+                            <div className={`text-xs font-bold ${isWeekend ? 'text-slate-500' : 'text-white'}`}>{d.getDate()}</div>
+                          </th>
+                        );
+                      })}
+                      <th className="p-3 text-center bg-slate-950 border-b border-l border-slate-800 font-bold text-green-400 sticky right-0 z-40 w-16 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">TOTAL</th>
+                    </tr>
+                  </thead>
+
+                  <tbody className="divide-y divide-slate-800">
+                    {(() => {
+                      const globalWorkDays = new Set();
+                      const { start, end } = getPayrollRange(selectedMonth);
+
+                      sales.forEach(s => {
+                        if (new Date(s.date) >= start && new Date(s.date) <= end) {
+                          if (s.status === 'Sale' || ['HW- Xfer', 'HW-IBXfer'].includes(s.disposition)) {
+                            globalWorkDays.add(s.date);
+                          }
+                        }
+                      });
+const uniqueTeams = [...new Set([...teams, ...monthlyStats.map(s => s.team)])].filter(Boolean).sort();
+
+                      return uniqueTeams.map(teamName => {
+                        const teamAgents = monthlyStats.filter(s => s.team === teamName);
+                        if (teamAgents.length === 0) return null;
+
+                        const teamAllSales = sales.filter(s =>
+  (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer') &&
+  teamAgents.some(a => a.name?.toString().trim().toLowerCase() === s.agentName?.toString().trim().toLowerCase())
+);
+
+                        const teamTotalSales = teamAgents.reduce((sum, a) => sum + a.totalSales, 0);
+                        const teamTotalDays = teamAgents.reduce((sum, a) => sum + a.dialingDays, 0);
+                        const teamAvgLPD = teamTotalDays > 0 ? (teamTotalSales / teamTotalDays).toFixed(2) : "0.00";
+
+                        return (
+                          <React.Fragment key={teamName}>
+                            <tr className="bg-slate-800/80 sticky top-[53px] z-30">
+                              <td colSpan={2} className="p-2 px-4 border-r border-slate-700 font-black text-blue-400 uppercase tracking-widest text-sm sticky left-0 z-30 bg-slate-800">
+                                {teamName}
+                              </td>
+                              <td className="text-center font-bold text-blue-300 border-r border-slate-700 bg-slate-800">{teamAvgLPD}</td>
+                              <td className="text-center text-slate-400 border-r border-slate-700 bg-slate-800">{teamTotalDays}</td>
+                              <td colSpan={4} className="bg-slate-800 border-r border-slate-700"></td>
+
+                              {getDaysArray(getPayrollRange(selectedMonth).start, getPayrollRange(selectedMonth).end).map(d => {
+                                const dailyCount = teamAllSales.filter(s => s.date === d).length;
+                                return (
+                                  <td key={d} className={`text-center text-[10px] border-b border-slate-700 font-bold ${dailyCount > 0 ? 'text-blue-300 bg-blue-500/10' : 'text-slate-600 bg-slate-800/30'}`}>
+                                    {dailyCount > 0 ? dailyCount : '-'}
+                                  </td>
+                                );
+                              })}
+
+                              <td className="text-center font-black text-green-400 sticky right-0 z-30 bg-slate-800 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
+                                {teamTotalSales}
+                              </td>
+                            </tr>
+
+                            {teamAgents.map((stat, idx) => {
+                              const agentSales = sales.filter(s =>
+  s.agentName?.toString().trim().toLowerCase() === stat.name?.toString().trim().toLowerCase() &&
+  (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer')
+);
+
+                              // [NEW] Get Agent's Join Date for comparison
+                              const hrRec = hrRecords.find(h => h.cnic === stat.cnic) || {};
+                              const joinDateStr = hrRec.joining_date || stat.activeDate || stat.active_date;
+                              const joinDate = joinDateStr ? new Date(joinDateStr) : null;
+                              if (joinDate) joinDate.setHours(0, 0, 0, 0);
+
+                              const isLeft = stat.status === 'Left';
+                              const rowClass = isLeft ? 'bg-red-900/10 hover:bg-red-900/20' : 'hover:bg-blue-900/10';
+                              const nameClass = isLeft ? 'text-red-400' : 'text-slate-200';
+
+                              return (
+                                <tr key={stat.id} className={`${rowClass} transition-colors group`}>
+                                  <td className="p-2 text-center border-r border-slate-800 bg-slate-900 text-slate-600 font-mono text-[10px] sticky left-0 z-10 group-hover:text-white">{idx + 1}</td>
+
+                                  <td className="p-2 px-3 font-medium border-r border-slate-800 bg-slate-900 sticky left-12 z-10 truncate text-xs">
+                                    <div className={nameClass}>{stat.name}</div>
+                                    {/* [NEW] Show Promoted Status */}
+                                      {stat.isPromoted ? (
+                                          <div className="text-[9px] text-red-500 font-bold uppercase mt-0.5 tracking-tighter">
+                                              PROMOTED TO {stat.designation.toUpperCase()}
+                                          </div>
+                                      ) : (
+                                          /* Show Left Date only if NOT promoted */
+                                          isLeft && (
+                                            <div className="text-[9px] text-red-500/80 font-mono mt-0.5">
+                                                LEFT: {stat.leftDate || 'N/A'}
+                                            </div>
+                                          )
+                                      )}
+                                  </td>
+
+                                  <td className="p-1 text-center border-r border-slate-800 bg-blue-500/5 font-bold text-blue-400 text-xs">{stat.lpd}</td>
+                                  <td className="p-1 text-center border-r border-slate-800 text-slate-400 text-[10px]">{stat.dialingDays}</td>
+                                  <td className="p-1 text-center text-red-400 text-[10px]">{stat.daysOn0}</td>
+                                  <td className="p-1 text-center text-orange-300/80 text-[10px]">{stat.daysOn1}</td>
+                                  <td className="p-1 text-center text-yellow-300/80 text-[10px]">{stat.daysOn2}</td>
+                                  <td className="p-1 text-center border-r border-slate-800 text-green-400 font-bold text-[10px]">{stat.daysOn3}</td>
+
+                                  {getDaysArray(getPayrollRange(selectedMonth).start, getPayrollRange(selectedMonth).end).map(dateStr => {
+                                    const currentDate = new Date(dateStr);
+                                    currentDate.setHours(0, 0, 0, 0);
+
+                                    // 1. Is this date BEFORE they joined?
+                                    const isBeforeJoining = joinDate && currentDate < joinDate;
+
+                                    const dailyCount = agentSales.filter(s => s.date === dateStr).length;
+                                    const hasAttendance = attendance.some(a =>
+  a.date === dateStr &&
+  a.agentName?.toString().trim().toLowerCase() === stat.name?.toString().trim().toLowerCase() &&
+  (a.status === 'Present' || a.status === 'Late')
+);
+                                    const isWorkingDay = globalWorkDays.has(dateStr);
+
+                                    let cellContent = '-';
+                                    let cellClass = 'text-slate-700';
+
+                                    if (dailyCount > 0) {
+                                      cellContent = dailyCount;
+                                      cellClass = 'bg-green-500/10 text-green-400 font-bold';
+                                    }
+                                    // [CHANGED] Only mark 0 or A if they have officially joined
+                                    else if (!isBeforeJoining) {
+                                      if (hasAttendance) {
+                                        cellContent = '0';
+                                        cellClass = 'bg-red-500/20 text-red-400 font-bold';
+                                      }
+                                      else if (isWorkingDay) {
+                                        cellContent = 'A';
+                                        cellClass = 'text-red-500 font-black';
+                                      }
+                                    }
+
+                                    return (
+                                      <td key={dateStr} className={`p-1 text-center border-b border-slate-800 text-[11px] ${cellClass}`}>
+                                        {cellContent}
+                                      </td>
+                                    );
+                                  })}
+
+                                  <td className="p-2 text-center font-bold text-white bg-slate-900 sticky right-0 z-10 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
+                                    {stat.totalSales}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </React.Fragment>
+                        );
+                      });
+                    })()}
+                  </tbody>
+
+                  <tfoot className="sticky bottom-0 z-40 shadow-[0_-4px_10px_rgba(0,0,0,0.5)]">
+                    <tr className="bg-slate-950 border-t-2 border-blue-500 font-black text-white">
+                      <td colSpan={2} className="p-3 text-left sticky left-0 bg-slate-950 z-50 uppercase tracking-tighter">Grand Total</td>
+                      <td className="text-center text-blue-400 bg-slate-950">
+                        {(monthlyStats.reduce((s, a) => s + a.totalSales, 0) / (monthlyStats.reduce((s, a) => s + a.dialingDays, 0) || 1)).toFixed(2)}
+                      </td>
+                      <td className="text-center text-slate-400 bg-slate-950">{monthlyStats.reduce((s, a) => s + a.dialingDays, 0)}</td>
+                      <td colSpan={4} className="bg-slate-950"></td>
+
+                      {getDaysArray(getPayrollRange(selectedMonth).start, getPayrollRange(selectedMonth).end).map(d => {
+                        const dailyGrandTotal = sales.filter(s =>
+                          s.date === d &&
+                          (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer') &&
+                         (validAgentNames.has(s.agentName) || hrRecords.some(h => h.agent_name === s.agentName))
+                        ).length;
+
+                        return (
+                          <td key={d} className="bg-slate-950 text-center text-xs font-bold text-green-400">
+                            {dailyGrandTotal > 0 ? dailyGrandTotal : ''}
+                          </td>
+                        );
+                      })}
+
+                      <td className="p-3 text-center text-green-400 text-lg sticky right-0 bg-slate-950 z-50 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
+                        {monthlyStats.reduce((s, a) => s + a.totalSales, 0)}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        </div>
+    )}
+```
+
 {/* =====================================================================================
             TAB: MANAGEMENT PAYROLL (Buttons Added + Data Fixed)
            ===================================================================================== */}
-        {activeTab === 'management_payroll' && (
+        {activeTab === 'management' && (
+
+<div className="space-y-6">
+    <SubTabBar
+      tabs={[
+        { id: 'payroll', label: 'Payroll' },
+        { id: 'attendance', label: 'Attendance' }
+      ]}
+      activeSubTab={managementSubTab}
+      setActiveSubTab={setManagementSubTab}
+    />
+
+    {managementSubTab === 'payroll' && (
           <div className="space-y-8 animate-in fade-in duration-300">
             
             {/* Header Section */}
@@ -3578,13 +3853,292 @@ const handleSaveHR = async (e) => {
                 );
             })()}
           </div>
-        )}
+    )}
+
+    {managementSubTab === 'attendance' && (
+      <div className="space-y-6">
+        {/* =====================================================================================
+    TAB: MANAGEMENT ATTENDANCE MATRIX (HR/QA/TL/IT Staff)
+   ===================================================================================== */}
+
+  <div className="space-y-8">
+    <div className="flex justify-between items-center">
+      <div>
+        <h2 className="text-xl text-white font-bold">Management Attendance Matrix ({selectedMonth})</h2>
+        <p className="text-xs text-slate-400 mt-1 uppercase tracking-wider">Login Times • Late Tracking • Non-Agent Staff</p>
+      </div>
+    </div>
+
+    {(() => {
+      // Helper: Format time to 12-hour
+      const formatTo12Hour = (timeStr) => {
+        if (!timeStr) return '';
+        const [h, m] = timeStr.toString().split(':');
+        if (!h || !m) return timeStr;
+        let hours = parseInt(h);
+        const ampm = hours >= 12 ? 'PM' : 'AM';
+        hours = hours % 12;
+        hours = hours ? hours : 12;
+        return `${hours}:${m} ${ampm}`;
+      };
+
+      // Helper: Calculate late status
+      const getLateStatus = (timeStr) => {
+        if (!timeStr) return { isLate: false, color: 'text-green-400' };
+        const [h, m] = timeStr.toString().split(':').map(Number);
+        let loginMins = h * 60 + m;
+        if (h < 12) loginMins += 1440;
+        const shiftStartMins = 19 * 60;
+        const diff = loginMins - shiftStartMins;
+        if (diff <= 0) return { isLate: false, color: 'text-green-400' };
+        else if (diff <= 10) return { isLate: true, color: 'text-yellow-400 font-bold' };
+        else return { isLate: true, color: 'text-red-500 font-bold' };
+      };
+
+      // Get all non-agent staff from HR records
+      const allManagementStaff = hrRecords
+        .filter(emp => {
+          const designation = (emp.designation || '').toLowerCase().trim();
+          return designation !== 'agent' && emp.status === 'Active';
+        })
+        .sort((a, b) => a.agent_name.localeCompare(b.agent_name));
+
+      // Split by cycle type
+      const agentCycleStaff = allManagementStaff.filter(emp => 
+        (emp.payroll_cycle_type || '').toLowerCase().includes('agent')
+      );
+      
+      const standardCycleStaff = allManagementStaff.filter(emp => 
+        !(emp.payroll_cycle_type || '').toLowerCase().includes('agent')
+      );
+
+      // Reusable table renderer
+      const renderAttendanceTable = (staff, cycleType, themeColor) => {
+        if (staff.length === 0) return null;
+
+        const { start, end } = cycleType === 'agent' 
+          ? getPayrollRange(selectedMonth) 
+          : getStandardMonthRange(selectedMonth);
+        
+        const dateArray = getDaysArray(start, end);
+
+        return (
+          <div className="bg-slate-900 rounded-xl border border-slate-700 shadow-2xl overflow-hidden flex flex-col max-h-[70vh] mb-8">
+            <div className="p-4 bg-slate-800 border-b border-slate-700">
+              <h3 className={`text-lg font-bold ${themeColor === 'orange' ? 'text-orange-400' : 'text-purple-400'}`}>
+                {cycleType === 'agent' ? 'Agent Cycle (21st - 20th)' : 'Standard Month Cycle (1st - End of Month)'}
+              </h3>
+              <p className="text-xs text-slate-400 mt-1">
+                Cycle: {start.toDateString()} - {end.toDateString()}
+              </p>
+            </div>
+
+            <div className="overflow-auto relative">
+              <table className="w-full text-slate-300 border-collapse table-fixed">
+                
+                {/* --- HEADER --- */}
+                <thead className="sticky top-0 z-40 shadow-md">
+                  <tr className="bg-slate-950">
+                    <th className="p-3 text-center border-b border-r border-slate-800 sticky left-0 z-50 bg-slate-950 w-12">No.</th>
+                    <th className="p-3 text-left border-b border-r border-slate-800 sticky left-12 z-50 bg-slate-950 w-44">Employee Name</th>
+                    <th className="p-3 text-left border-b border-r border-slate-800 bg-slate-950 w-32">Designation</th>
+
+                    {/* Attendance Metrics */}
+                    <th className="p-2 text-center border-b border-slate-800 bg-green-900/20 text-green-400 text-[10px] font-bold w-10" title="Days Present">P</th>
+                    <th className="p-2 text-center border-b border-slate-800 bg-yellow-900/20 text-yellow-400 text-[10px] font-bold w-10" title="Days Late">L</th>
+                    <th className="p-2 text-center border-b border-r border-slate-800 bg-red-900/20 text-red-400 text-[10px] font-bold w-10" title="Days Absent">A</th>
+
+                    {/* Date Columns */}
+                    {dateArray.map(dateStr => {
+                      const d = new Date(dateStr);
+                      const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+                      return (
+                        <th key={dateStr} className={`p-2 text-center border-b border-slate-800 w-16 ${isWeekend ? 'bg-slate-800' : 'bg-slate-900'}`}>
+                          <div className="text-[10px] text-slate-500 uppercase">{d.toLocaleDateString('en-US', { weekday: 'narrow' })}</div>
+                          <div className={`text-xs font-bold ${isWeekend ? 'text-slate-500' : 'text-white'}`}>{d.getDate()}</div>
+                        </th>
+                      );
+                    })}
+                    
+                    {/* Summary Column */}
+                    <th className="p-3 text-center bg-slate-950 border-b border-l border-slate-800 font-bold text-yellow-400 sticky right-0 z-40 w-20 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
+                      LATE %
+                    </th>
+                  </tr>
+                </thead>
+
+                <tbody className="divide-y divide-slate-800">
+                  {staff.map((emp, idx) => {
+                    const joinDate = emp.joining_date ? new Date(emp.joining_date) : null;
+                    if (joinDate) joinDate.setHours(0, 0, 0, 0);
+
+                    const empRecords = attendance.filter(a => a.agentName === emp.agent_name);
+                    const presentCount = empRecords.filter(a => a.status === 'Present').length;
+                    const lateCount = empRecords.filter(a => 
+                      a.status === 'Present' && getLateStatus(a.loginTime).isLate
+                    ).length;
+
+                    let absentCount = 0;
+                    dateArray.forEach(dStr => {
+                      const dObj = new Date(dStr);
+                      dObj.setHours(0, 0, 0, 0);
+                      if (dObj.getDay() === 0 || dObj.getDay() === 6) return;
+                      if (dObj > new Date()) return;
+                      if (joinDate && dObj < joinDate) return;
+
+                      const hasRec = empRecords.some(a => a.date === dStr);
+                      if (!hasRec) absentCount++;
+                      else if (empRecords.find(a => a.date === dStr).status === 'Absent') absentCount++;
+                    });
+
+                    const latePercentage = presentCount > 0 ? Math.round((lateCount / presentCount) * 100) : 0;
+
+                    return (
+                      <tr key={emp.id} className={`hover:${themeColor === 'orange' ? 'bg-orange-900/10' : 'bg-purple-900/10'} transition-colors group`}>
+                        <td className="p-2 text-center border-r border-slate-800 bg-slate-900 text-slate-600 font-mono text-[10px] sticky left-0 z-10 group-hover:text-white">{idx + 1}</td>
+                        <td className="p-2 px-3 font-medium border-r border-slate-800 bg-slate-900 sticky left-12 z-10 truncate text-xs text-slate-200">
+                          {emp.agent_name}
+                        </td>
+                        <td className="p-2 px-3 text-xs text-slate-400 border-r border-slate-800 bg-slate-900">{emp.designation}</td>
+
+                        <td className="p-1 text-center border-b border-slate-800 text-green-400 font-bold text-[10px]">{presentCount}</td>
+                        <td className="p-1 text-center border-b border-slate-800 text-yellow-400 font-bold text-[10px]">{lateCount}</td>
+                        <td className="p-1 text-center border-b border-r border-slate-800 text-red-400 font-bold text-[10px]">{absentCount}</td>
+
+                        {/* Daily Cells */}
+                        {dateArray.map(dateStr => {
+                          const currentDate = new Date(dateStr);
+                          currentDate.setHours(0, 0, 0, 0);
+                          const isWeekend = currentDate.getDay() === 0 || currentDate.getDay() === 6;
+                          const isBeforeJoining = joinDate && currentDate < joinDate;
+
+                          const record = empRecords.find(a => a.date === dateStr);
+
+                          let cellContent = '-';
+                          let cellClass = 'text-slate-700';
+
+                          if (isBeforeJoining) {
+                            cellContent = '•';
+                            cellClass = 'text-slate-800';
+                          } 
+                          else if (record) {
+                            if (record.status === 'Absent') {
+                              cellContent = 'A';
+                              cellClass = 'bg-red-500/10 text-red-500 font-bold';
+                            } else {
+                              cellContent = formatTo12Hour(record.loginTime) || 'OK';
+                              const status = getLateStatus(record.loginTime);
+                              if (status.isLate) {
+                                cellClass = `bg-slate-800/50 ${status.color} font-mono text-[10px]`;
+                              } else {
+                                cellClass = 'text-green-400 font-mono text-[10px]';
+                              }
+                            }
+                          } else {
+                            if (isWeekend) {
+                              cellContent = '';
+                              cellClass = 'bg-slate-800/30';
+                            } else if (currentDate <= new Date()) {
+                              cellContent = 'A';
+                              cellClass = 'text-red-500/50 font-bold';
+                            }
+                          }
+
+                          return (
+                            <td key={dateStr} className={`p-1 text-center border-b border-slate-800 text-[11px] ${cellClass}`}>
+                              {cellContent}
+                            </td>
+                          );
+                        })}
+
+                        {/* Row Summary */}
+                        <td className={`p-2 text-center font-bold sticky right-0 z-10 bg-slate-900 shadow-[-4px_0_10px_rgba(0,0,0,0.5)] ${latePercentage > 20 ? 'text-red-400' : 'text-slate-400'}`}>
+                          {latePercentage}%
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+
+                {/* --- FOOTER --- */}
+                <tfoot className="sticky bottom-0 z-40 shadow-[0_-4px_10px_rgba(0,0,0,0.5)]">
+                  <tr className={`bg-slate-950 border-t-2 ${themeColor === 'orange' ? 'border-orange-500' : 'border-purple-500'} font-black text-white`}>
+                    <td colSpan={3} className="p-3 text-left sticky left-0 bg-slate-950 z-50 uppercase tracking-tighter">Total</td>
+                    
+                    <td className="text-center text-green-400 bg-slate-950 text-[10px]">
+                      {attendance.filter(a => 
+                        a.status === 'Present' && 
+                        staff.some(s => s.agent_name === a.agentName)
+                      ).length}
+                    </td>
+                    <td className="text-center text-yellow-400 bg-slate-950 text-[10px]">
+                      {attendance.filter(a => 
+                        a.late === true && 
+                        staff.some(s => s.agent_name === a.agentName)
+                      ).length}
+                    </td>
+                    <td className="text-center text-red-400 bg-slate-950 border-r border-slate-800 text-[10px]">
+                      -
+                    </td>
+
+                    {/* Daily Grand Totals */}
+                    {dateArray.map(d => {
+                      const dailyTotal = attendance.filter(a => 
+                        a.date === d && 
+                        a.status === 'Present' && 
+                        staff.some(s => s.agent_name === a.agentName)
+                      ).length;
+                      return (
+                        <td key={d} className="bg-slate-950 text-center text-[10px] font-bold text-slate-500">
+                          {dailyTotal > 0 ? dailyTotal : ''}
+                        </td>
+                      );
+                    })}
+
+                    <td className={`p-3 text-center ${themeColor === 'orange' ? 'text-orange-400' : 'text-purple-400'} text-lg sticky right-0 bg-slate-950 z-50 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]`}>
+                      -
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        );
+      };
+
+      return (
+        <>
+          {/* Table 1: Agent Cycle (21st - 20th) */}
+          {renderAttendanceTable(agentCycleStaff, 'agent', 'orange')}
+
+          {/* Table 2: Standard Cycle (1st - End of Month) */}
+          {renderAttendanceTable(standardCycleStaff, 'standard', 'purple')}
+        </>
+      );
+    })()}
+  </div>
+      </div>
+    )}
+  </div>
+)}
 
 {/* =====================================================================================
-            TAB: ATTENDANCE (Fixed Time Calculation Logic)
+            TAB: ATTENDANCE Tab (Fixed Time Calculation Logic)
            ===================================================================================== */}
         {activeTab === 'attendance' && (
           <div className="space-y-6">
+
+            <SubTabBar
+      tabs={[
+        { id: 'daily', label: 'Daily Attendance' },
+        { id: 'matrix', label: 'Attendance Matrix' }
+      ]}
+      activeSubTab={attendanceSubTab}
+      setActiveSubTab={setAttendanceSubTab}
+    />
+
+    {attendanceSubTab === 'daily' && (
+      <div className="space-y-6">
             
             {/* Header */}
             <div className="flex justify-between items-center bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg">
@@ -3644,14 +4198,20 @@ const handleSaveHR = async (e) => {
                   </thead>
                   <tbody className="divide-y divide-slate-700">
                     {(() => {
-                      // 1. Get Unique List of ALL Employees
-                      const allStaff = [
-                        ...agents.map(a => ({ name: a.name, role: 'Agent', status: a.status })),
-                        ...hrRecords.map(h => ({ name: h.agent_name, role: h.designation || 'Staff', status: h.status }))
-                      ].filter(p => p.status === 'Active')
-                       .sort((a, b) => a.name.localeCompare(b.name));
+  // 1. Get Unique List of ALL Employees
+  const allStaff = [
+    ...agents.map(a => ({ name: a.name, role: 'Agent', status: a.status, cnic: a.cnic })),
+    ...hrRecords.map(h => ({ name: h.agent_name, role: h.designation || 'Staff', status: h.status, cnic: h.cnic }))
+  ].filter(p => p.status === 'Active')
+   .sort((a, b) => a.name.localeCompare(b.name));
 
-                      const uniqueStaff = Array.from(new Map(allStaff.map(item => [item.name, item])).values());
+  let uniqueStaff = Array.from(new Map(allStaff.map(item => [item.name, item])).values());
+
+  // [NEW] Filter for Agent users - show ONLY their own record
+  if (userRole === 'Agent') {
+    const loggedInCnic = currentUser?.cnic || JSON.parse(localStorage.getItem('ams_user'))?.cnic;
+    uniqueStaff = uniqueStaff.filter(emp => emp.cnic === loggedInCnic);
+  }
 
                       // --- HELPER: Bulletproof Time Parser ---
                       // Handles "19:00", "07:00 PM", "7:00pm", "19:00:00"
@@ -3823,20 +4383,8 @@ const handleSaveHR = async (e) => {
           </div>
         )}
 
-{/* =====================================================================================
-    TAB: ATTENDANCE MATRIX (High Fidelity - Monthly View)
-   ===================================================================================== */}
-{activeTab === 'attendance_matrix' && (
-  <div className="space-y-6">
-    <div className="flex justify-between items-center">
-      <div>
-        <h2 className="text-xl text-white font-bold">Attendance Matrix ({selectedMonth})</h2>
-        <p className="text-xs text-slate-400 mt-1 uppercase tracking-wider">Login Times • Late Tracking • Team Grouping</p>
-      </div>
-      <div className="text-sm text-slate-400 font-medium">
-        Cycle: {getPayrollRange(selectedMonth).start.toDateString()} - {getPayrollRange(selectedMonth).end.toDateString()}
-      </div>
-    </div>
+    {attendanceSubTab === 'matrix' && (
+      <div className="space-y-6">
 
     <div className="bg-slate-900 rounded-xl border border-slate-700 shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
       <div className="overflow-auto relative">
@@ -3876,6 +4424,13 @@ const handleSaveHR = async (e) => {
             {(() => {
               const { start, end } = getPayrollRange(selectedMonth);
               const dateArray = getDaysArray(start, end);
+
+              let filteredAgents = agents;
+  if (userRole === 'Agent') {
+    const loggedInCnic = currentUser?.cnic || JSON.parse(localStorage.getItem('ams_user'))?.cnic;
+    filteredAgents = agents.filter(a => a.cnic === loggedInCnic);
+  }
+
 
               // --- HELPER: Convert 24h to 12h (HH:MM PM) ---
 const formatTo12Hour = (timeStr) => {
@@ -3924,61 +4479,63 @@ const formatTo12Hour = (timeStr) => {
               };
 
               // Get Unique Teams
-              const uniqueTeams = [...new Set([...teams, ...agents.map(a => a.team)])].filter(Boolean).sort();
+const uniqueTeams = [...new Set([...teams, ...filteredAgents.map(a => a.team)])].filter(Boolean).sort();
 
-              return uniqueTeams.map(teamName => {
-                // Filter Agents by Team
-                const teamAgents = agents.filter(a => a.team === teamName && a.status === 'Active');
-                if (teamAgents.length === 0) return null;
+return uniqueTeams.map(teamName => {
+  // Filter Agents by Team (using filtered list)
+  const teamAgents = filteredAgents.filter(a => a.team === teamName && a.status === 'Active');
+  if (teamAgents.length === 0) return null;
 
-               // --- TEAM SUMMARY CALCULATIONS ---
-const teamTotalPresent = teamAgents.reduce((sum, agent) => {
-  return sum + attendance.filter(a => 
-    a.agentName?.toString().trim().toLowerCase() === agent.name?.toString().trim().toLowerCase() && 
-    a.status === 'Present'
-  ).length;
-}, 0);
+  // --- TEAM SUMMARY CALCULATIONS ---
+  const teamTotalPresent = teamAgents.reduce((sum, agent) => {
+    return sum + attendance.filter(a => 
+      a.agentName?.toString().trim().toLowerCase() === agent.name?.toString().trim().toLowerCase() && 
+      a.status === 'Present'
+    ).length;
+  }, 0);
 
-const teamTotalLate = teamAgents.reduce((sum, agent) => {
-   return sum + attendance.filter(a => 
-     a.agentName?.toString().trim().toLowerCase() === agent.name?.toString().trim().toLowerCase() && 
-     getLateStatus(a.loginTime).isLate
-   ).length;
-}, 0);
+  const teamTotalLate = teamAgents.reduce((sum, agent) => {
+     return sum + attendance.filter(a => 
+       a.agentName?.toString().trim().toLowerCase() === agent.name?.toString().trim().toLowerCase() && 
+       getLateStatus(a.loginTime).isLate
+     ).length;
+  }, 0);
 
-                return (
-                  <React.Fragment key={teamName}>
-                    {/* --- TEAM ROW --- */}
-                    <tr className="bg-slate-800/80 sticky top-[53px] z-30">
-                      <td colSpan={2} className="p-2 px-4 border-r border-slate-700 font-black text-blue-400 uppercase tracking-widest text-sm sticky left-0 z-30 bg-slate-800">
-                        {teamName}
-                      </td>
-                      <td className="text-center font-bold text-green-500/50 bg-slate-800 text-[10px]">{teamTotalPresent}</td>
-                      <td className="text-center font-bold text-yellow-500/50 bg-slate-800 text-[10px]">{teamTotalLate}</td>
-                      <td className="text-center bg-slate-800 border-r border-slate-700"></td>
+  return (
+    <React.Fragment key={teamName}>
+      {/* --- TEAM ROW (Hide for Agent users) --- */}
+      {userRole !== 'Agent' && (
+        <tr className="bg-slate-800/80 sticky top-[53px] z-30">
+          <td colSpan={2} className="p-2 px-4 border-r border-slate-700 font-black text-blue-400 uppercase tracking-widest text-sm sticky left-0 z-30 bg-slate-800">
+            {teamName}
+          </td>
+          <td className="text-center font-bold text-green-500/50 bg-slate-800 text-[10px]">{teamTotalPresent}</td>
+          <td className="text-center font-bold text-yellow-500/50 bg-slate-800 text-[10px]">{teamTotalLate}</td>
+          <td className="text-center bg-slate-800 border-r border-slate-700"></td>
 
-                      {/* Team Daily Breakdown (Count of people present that day) */}
-                      {dateArray.map(d => {
-                        const dailyPresentCount = attendance.filter(a => 
-                          a.date === d && 
-                          a.status === 'Present' && 
-                          teamAgents.some(agent => agent.name === a.agentName)
-                        ).length;
+          {/* Team Daily Breakdown (Count of people present that day) */}
+          {dateArray.map(d => {
+            const dailyPresentCount = attendance.filter(a => 
+              a.date === d && 
+              a.status === 'Present' && 
+              teamAgents.some(agent => agent.name === a.agentName)
+            ).length;
 
-                        return (
-                          <td key={d} className={`text-center text-[10px] border-b border-slate-700 font-bold ${dailyPresentCount > 0 ? 'text-blue-300 bg-blue-500/10' : 'text-slate-600 bg-slate-800/30'}`}>
-                            {dailyPresentCount > 0 ? dailyPresentCount : '-'}
-                          </td>
-                        );
-                      })}
+            return (
+              <td key={d} className={`text-center text-[10px] border-b border-slate-700 font-bold ${dailyPresentCount > 0 ? 'text-blue-300 bg-blue-500/10' : 'text-slate-600 bg-slate-800/30'}`}>
+                {dailyPresentCount > 0 ? dailyPresentCount : '-'}
+              </td>
+            );
+          })}
 
-                      <td className="text-center font-black text-slate-500 sticky right-0 z-30 bg-slate-800 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
-                         -
-                      </td>
-                    </tr>
+          <td className="text-center font-black text-slate-500 sticky right-0 z-30 bg-slate-800 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
+             -
+          </td>
+        </tr>
+      )}
 
-                    {/* --- AGENT ROWS --- */}
-                    {teamAgents.map((agent, idx) => {
+      {/* --- AGENT ROWS --- */}
+      {teamAgents.map((agent, idx) => {
                       // Join Date Logic
                       const hrRec = hrRecords.find(h => h.cnic === agent.cnic) || {};
                       const joinDateStr = hrRec.joining_date || agent.activeDate;
@@ -4134,6 +4691,10 @@ const agentRecs = attendance.filter(a =>
     </div>
   </div>
 )}
+ </div>
+)}
+
+
 
         {/* Fines Tab */}
         {activeTab === 'fines' && (
@@ -4399,234 +4960,6 @@ const agentRecs = attendance.filter(a =>
             })()}
           </div>
         )}
-
-        {/* Monthly Matrix Tab */}
-
-        {activeTab === 'monthly_matrix' && (
-          <div className="space-y-6">
-            <div className="flex justify-between items-center">
-              <div>
-                <h2 className="text-xl text-white font-bold">Team Performance Matrix ({selectedMonth})</h2>
-                <p className="text-xs text-slate-400 mt-1 uppercase tracking-wider">Grouped by Team • Daily Breakdown • Sales Frequency</p>
-              </div>
-              <div className="text-sm text-slate-400 font-medium">
-                Cycle: {getPayrollRange(selectedMonth).start.toDateString()} - {getPayrollRange(selectedMonth).end.toDateString()}
-              </div>
-            </div>
-
-            <div className="bg-slate-900 rounded-xl border border-slate-700 shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
-              <div className="overflow-auto relative">
-                <table className="w-full text-slate-300 border-collapse table-fixed">
-                  <thead className="sticky top-0 z-40 shadow-md">
-                    <tr className="bg-slate-950">
-                      <th className="p-3 text-center border-b border-r border-slate-800 sticky left-0 z-50 bg-slate-950 w-12">No.</th>
-                      <th className="p-3 text-left border-b border-r border-slate-800 sticky left-12 z-50 bg-slate-950 w-44">Agent Name</th>
-
-                      {/* Metric Headers */}
-                      <th className="p-2 text-center border-b border-r border-slate-800 bg-blue-900/40 text-blue-400 text-[10px] font-bold w-14">LPD</th>
-                      <th className="p-2 text-center border-b border-r border-slate-800 bg-slate-800 text-slate-400 text-[10px] w-12">DAYS</th>
-                      <th className="p-2 text-center border-b border-slate-800 bg-red-900/20 text-red-400 text-[10px] w-10">0s</th>
-                      <th className="p-2 text-center border-b border-slate-800 bg-orange-900/20 text-orange-400 text-[10px] w-10">1s</th>
-                      <th className="p-2 text-center border-b border-slate-800 bg-yellow-900/20 text-yellow-400 text-[10px] w-10">2s</th>
-                      <th className="p-2 text-center border-b border-r border-slate-800 bg-green-900/20 text-green-400 text-[10px] w-10">3s</th>
-
-                      {/* Date Columns */}
-                      {getDaysArray(getPayrollRange(selectedMonth).start, getPayrollRange(selectedMonth).end).map(dateStr => {
-                        const d = new Date(dateStr);
-                        const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-                        return (
-                          <th key={dateStr} className={`p-2 text-center border-b border-slate-800 w-10 ${isWeekend ? 'bg-slate-800' : 'bg-slate-900'}`}>
-                            <div className="text-[10px] text-slate-500 uppercase">{d.toLocaleDateString('en-US', { weekday: 'narrow' })}</div>
-                            <div className={`text-xs font-bold ${isWeekend ? 'text-slate-500' : 'text-white'}`}>{d.getDate()}</div>
-                          </th>
-                        );
-                      })}
-                      <th className="p-3 text-center bg-slate-950 border-b border-l border-slate-800 font-bold text-green-400 sticky right-0 z-40 w-16 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">TOTAL</th>
-                    </tr>
-                  </thead>
-
-                  <tbody className="divide-y divide-slate-800">
-                    {(() => {
-                      const globalWorkDays = new Set();
-                      const { start, end } = getPayrollRange(selectedMonth);
-
-                      sales.forEach(s => {
-                        if (new Date(s.date) >= start && new Date(s.date) <= end) {
-                          if (s.status === 'Sale' || ['HW- Xfer', 'HW-IBXfer'].includes(s.disposition)) {
-                            globalWorkDays.add(s.date);
-                          }
-                        }
-                      });
-const uniqueTeams = [...new Set([...teams, ...monthlyStats.map(s => s.team)])].filter(Boolean).sort();
-
-                      return uniqueTeams.map(teamName => {
-                        const teamAgents = monthlyStats.filter(s => s.team === teamName);
-                        if (teamAgents.length === 0) return null;
-
-                        const teamAllSales = sales.filter(s =>
-  (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer') &&
-  teamAgents.some(a => a.name?.toString().trim().toLowerCase() === s.agentName?.toString().trim().toLowerCase())
-);
-
-                        const teamTotalSales = teamAgents.reduce((sum, a) => sum + a.totalSales, 0);
-                        const teamTotalDays = teamAgents.reduce((sum, a) => sum + a.dialingDays, 0);
-                        const teamAvgLPD = teamTotalDays > 0 ? (teamTotalSales / teamTotalDays).toFixed(2) : "0.00";
-
-                        return (
-                          <React.Fragment key={teamName}>
-                            <tr className="bg-slate-800/80 sticky top-[53px] z-30">
-                              <td colSpan={2} className="p-2 px-4 border-r border-slate-700 font-black text-blue-400 uppercase tracking-widest text-sm sticky left-0 z-30 bg-slate-800">
-                                {teamName}
-                              </td>
-                              <td className="text-center font-bold text-blue-300 border-r border-slate-700 bg-slate-800">{teamAvgLPD}</td>
-                              <td className="text-center text-slate-400 border-r border-slate-700 bg-slate-800">{teamTotalDays}</td>
-                              <td colSpan={4} className="bg-slate-800 border-r border-slate-700"></td>
-
-                              {getDaysArray(getPayrollRange(selectedMonth).start, getPayrollRange(selectedMonth).end).map(d => {
-                                const dailyCount = teamAllSales.filter(s => s.date === d).length;
-                                return (
-                                  <td key={d} className={`text-center text-[10px] border-b border-slate-700 font-bold ${dailyCount > 0 ? 'text-blue-300 bg-blue-500/10' : 'text-slate-600 bg-slate-800/30'}`}>
-                                    {dailyCount > 0 ? dailyCount : '-'}
-                                  </td>
-                                );
-                              })}
-
-                              <td className="text-center font-black text-green-400 sticky right-0 z-30 bg-slate-800 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
-                                {teamTotalSales}
-                              </td>
-                            </tr>
-
-                            {teamAgents.map((stat, idx) => {
-                              const agentSales = sales.filter(s =>
-  s.agentName?.toString().trim().toLowerCase() === stat.name?.toString().trim().toLowerCase() &&
-  (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer')
-);
-
-                              // [NEW] Get Agent's Join Date for comparison
-                              const hrRec = hrRecords.find(h => h.cnic === stat.cnic) || {};
-                              const joinDateStr = hrRec.joining_date || stat.activeDate || stat.active_date;
-                              const joinDate = joinDateStr ? new Date(joinDateStr) : null;
-                              if (joinDate) joinDate.setHours(0, 0, 0, 0);
-
-                              const isLeft = stat.status === 'Left';
-                              const rowClass = isLeft ? 'bg-red-900/10 hover:bg-red-900/20' : 'hover:bg-blue-900/10';
-                              const nameClass = isLeft ? 'text-red-400' : 'text-slate-200';
-
-                              return (
-                                <tr key={stat.id} className={`${rowClass} transition-colors group`}>
-                                  <td className="p-2 text-center border-r border-slate-800 bg-slate-900 text-slate-600 font-mono text-[10px] sticky left-0 z-10 group-hover:text-white">{idx + 1}</td>
-
-                                  <td className="p-2 px-3 font-medium border-r border-slate-800 bg-slate-900 sticky left-12 z-10 truncate text-xs">
-                                    <div className={nameClass}>{stat.name}</div>
-                                    {/* [NEW] Show Promoted Status */}
-                                      {stat.isPromoted ? (
-                                          <div className="text-[9px] text-red-500 font-bold uppercase mt-0.5 tracking-tighter">
-                                              PROMOTED TO {stat.designation.toUpperCase()}
-                                          </div>
-                                      ) : (
-                                          /* Show Left Date only if NOT promoted */
-                                          isLeft && (
-                                            <div className="text-[9px] text-red-500/80 font-mono mt-0.5">
-                                                LEFT: {stat.leftDate || 'N/A'}
-                                            </div>
-                                          )
-                                      )}
-                                  </td>
-
-                                  <td className="p-1 text-center border-r border-slate-800 bg-blue-500/5 font-bold text-blue-400 text-xs">{stat.lpd}</td>
-                                  <td className="p-1 text-center border-r border-slate-800 text-slate-400 text-[10px]">{stat.dialingDays}</td>
-                                  <td className="p-1 text-center text-red-400 text-[10px]">{stat.daysOn0}</td>
-                                  <td className="p-1 text-center text-orange-300/80 text-[10px]">{stat.daysOn1}</td>
-                                  <td className="p-1 text-center text-yellow-300/80 text-[10px]">{stat.daysOn2}</td>
-                                  <td className="p-1 text-center border-r border-slate-800 text-green-400 font-bold text-[10px]">{stat.daysOn3}</td>
-
-                                  {getDaysArray(getPayrollRange(selectedMonth).start, getPayrollRange(selectedMonth).end).map(dateStr => {
-                                    const currentDate = new Date(dateStr);
-                                    currentDate.setHours(0, 0, 0, 0);
-
-                                    // 1. Is this date BEFORE they joined?
-                                    const isBeforeJoining = joinDate && currentDate < joinDate;
-
-                                    const dailyCount = agentSales.filter(s => s.date === dateStr).length;
-                                    const hasAttendance = attendance.some(a =>
-  a.date === dateStr &&
-  a.agentName?.toString().trim().toLowerCase() === stat.name?.toString().trim().toLowerCase() &&
-  (a.status === 'Present' || a.status === 'Late')
-);
-                                    const isWorkingDay = globalWorkDays.has(dateStr);
-
-                                    let cellContent = '-';
-                                    let cellClass = 'text-slate-700';
-
-                                    if (dailyCount > 0) {
-                                      cellContent = dailyCount;
-                                      cellClass = 'bg-green-500/10 text-green-400 font-bold';
-                                    }
-                                    // [CHANGED] Only mark 0 or A if they have officially joined
-                                    else if (!isBeforeJoining) {
-                                      if (hasAttendance) {
-                                        cellContent = '0';
-                                        cellClass = 'bg-red-500/20 text-red-400 font-bold';
-                                      }
-                                      else if (isWorkingDay) {
-                                        cellContent = 'A';
-                                        cellClass = 'text-red-500 font-black';
-                                      }
-                                    }
-
-                                    return (
-                                      <td key={dateStr} className={`p-1 text-center border-b border-slate-800 text-[11px] ${cellClass}`}>
-                                        {cellContent}
-                                      </td>
-                                    );
-                                  })}
-
-                                  <td className="p-2 text-center font-bold text-white bg-slate-900 sticky right-0 z-10 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
-                                    {stat.totalSales}
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </React.Fragment>
-                        );
-                      });
-                    })()}
-                  </tbody>
-
-                  <tfoot className="sticky bottom-0 z-40 shadow-[0_-4px_10px_rgba(0,0,0,0.5)]">
-                    <tr className="bg-slate-950 border-t-2 border-blue-500 font-black text-white">
-                      <td colSpan={2} className="p-3 text-left sticky left-0 bg-slate-950 z-50 uppercase tracking-tighter">Grand Total</td>
-                      <td className="text-center text-blue-400 bg-slate-950">
-                        {(monthlyStats.reduce((s, a) => s + a.totalSales, 0) / (monthlyStats.reduce((s, a) => s + a.dialingDays, 0) || 1)).toFixed(2)}
-                      </td>
-                      <td className="text-center text-slate-400 bg-slate-950">{monthlyStats.reduce((s, a) => s + a.dialingDays, 0)}</td>
-                      <td colSpan={4} className="bg-slate-950"></td>
-
-                      {getDaysArray(getPayrollRange(selectedMonth).start, getPayrollRange(selectedMonth).end).map(d => {
-                        const dailyGrandTotal = sales.filter(s =>
-                          s.date === d &&
-                          (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer') &&
-                          validAgentNames.has(s.agentName)
-                        ).length;
-
-                        return (
-                          <td key={d} className="bg-slate-950 text-center text-xs font-bold text-green-400">
-                            {dailyGrandTotal > 0 ? dailyGrandTotal : ''}
-                          </td>
-                        );
-                      })}
-
-                      <td className="p-3 text-center text-green-400 text-lg sticky right-0 bg-slate-950 z-50 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
-                        {monthlyStats.reduce((s, a) => s + a.totalSales, 0)}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-
       </div>
 
       {/* Modals */}
