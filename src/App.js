@@ -948,7 +948,8 @@ const allPossibleSellers = useMemo(() => {
       };
     });
 
-    return agentStats.sort((a, b) => b.totalSales - a.totalSales);
+    // Sort Alphabetically (A-Z) by Name
+return agentStats.sort((a, b) => a.name.localeCompare(b.name));
   }, [agents, sales, fines, bonuses, attendance, hrRecords, selectedMonth, teamFilter, centerFilter, userRole, currentUser]);
 
   const managementStats = useMemo(() => {
@@ -1012,9 +1013,11 @@ const baseSalary = mgr.base_salary || mgr.baseSalary || 0;
 
     // [CHANGED] Calculate Total Bonus (instead of Revenue)
     // We use filteredBonuses which already respects the Team & Month filters
+
     const totalBonusPayout = filteredBonuses.reduce((sum, b) => sum + (b.amount || 0), 0);
 
     // Payroll Calculation (Sum of Net Salaries)
+
     const totalPayroll = monthlyStats.reduce((sum, a) => sum + a.netSalary, 0);
 
     return { totalAgents: activeAgentCount, totalSalesCount, totalBonusPayout, totalPayroll };
@@ -1022,6 +1025,7 @@ const baseSalary = mgr.base_salary || mgr.baseSalary || 0;
 
 
   // 4. Top Performers (Updated: Shows Real Bonus & Net Salary)
+
   const filteredPerformerStats = useMemo(() => {
     const { start, end } = getActiveDateRange;
     const relevantAgents = agents.filter(a => validAgentNames.has(a.name));
@@ -3503,21 +3507,77 @@ const SubTabBar = ({ tabs, activeSubTab, setActiveSubTab }) => {
             </div>
           </div>
         )}
-
-         {salesSubTab === 'matrix' && (
+{salesSubTab === 'matrix' && (
       <div className="space-y-6">
         <div className="flex justify-between items-center">
           <div>
             <h2 className="text-xl text-white font-bold">Team Performance Matrix ({selectedMonth})</h2>
-            <p className="text-xs text-slate-400 mt-1 uppercase tracking-wider">Grouped by Team • Daily Breakdown • Sales Frequency</p>
+            <p className="text-xs text-slate-400 mt-1 uppercase tracking-wider">Grouped by Team • Daily Breakdown</p>
           </div>
           <div className="text-sm text-slate-400 font-medium">
             Cycle: {getPayrollRange(selectedMonth).start.toDateString()} - {getPayrollRange(selectedMonth).end.toDateString()}
           </div>
         </div>
+
+        {/* --- FILTERS --- */}
+        <div className="bg-slate-800 rounded-xl shadow-sm border border-slate-600 p-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <input
+              type="text"
+              placeholder="Search agent name..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <select value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
+              <option value="All">All Teams</option>
+              {teams.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+            <select value={centerFilter} onChange={(e) => setCenterFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
+              <option value="All">All Centers</option>
+              {centers.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <select value={agentStatusFilter} onChange={(e) => setAgentStatusFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
+              <option value="All">All Status</option>
+              <option value="Active">Active</option>
+              <option value="Left">Left / Ex-Employees</option>
+            </select>
+          </div>
+        </div>
+
+        {/* --- MATRIX LOGIC STARTS HERE --- */}
+        {(() => {
+          // 1. Prepare Dates
+          const { start, end } = getPayrollRange(selectedMonth);
+          const dateArray = getDaysArray(start, end);
+
+          // 2. [CRITICAL FIX] Calculate Filtered Data ONCE at the top
+          // This list will be used by BOTH the Rows (Body) and the Grand Total (Footer)
+          const displayedStats = monthlyStats.filter(stat => {
+             // Search Filter
+             const matchesSearch = !searchQuery || (stat.name && stat.name.toLowerCase().includes(searchQuery.toLowerCase()));
+             
+             // Status Filter (Active/Left)
+             const matchesStatus = agentStatusFilter === 'All' || stat.status === agentStatusFilter;
+             
+             // Team Filter
+             const matchesTeam = teamFilter === 'All' || stat.team === teamFilter;
+
+             // Center Filter
+             const matchesCenter = centerFilter === 'All' || stat.center === centerFilter;
+
+             return matchesSearch && matchesStatus && matchesTeam && matchesCenter;
+          });
+
+          // 3. Extract Unique Teams from the FILTERED list (so empty teams don't show)
+          const uniqueTeams = [...new Set(displayedStats.map(s => s.team))].filter(Boolean).sort();
+
+          return (
             <div className="bg-slate-900 rounded-xl border border-slate-700 shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
               <div className="overflow-auto relative">
                 <table className="w-full text-slate-300 border-collapse table-fixed">
+                  
+                  {/* --- HEADER --- */}
                   <thead className="sticky top-0 z-40 shadow-md">
                     <tr className="bg-slate-950">
                       <th className="p-3 text-center border-b border-r border-slate-800 sticky left-0 z-50 bg-slate-950 w-12">No.</th>
@@ -3532,7 +3592,7 @@ const SubTabBar = ({ tabs, activeSubTab, setActiveSubTab }) => {
                       <th className="p-2 text-center border-b border-r border-slate-800 bg-green-900/20 text-green-400 text-[10px] w-10">3s</th>
 
                       {/* Date Columns */}
-                      {getDaysArray(getPayrollRange(selectedMonth).start, getPayrollRange(selectedMonth).end).map(dateStr => {
+                      {dateArray.map(dateStr => {
                         const d = new Date(dateStr);
                         const isWeekend = d.getDay() === 0 || d.getDay() === 6;
                         return (
@@ -3546,168 +3606,167 @@ const SubTabBar = ({ tabs, activeSubTab, setActiveSubTab }) => {
                     </tr>
                   </thead>
 
+                  {/* --- BODY --- */}
                   <tbody className="divide-y divide-slate-800">
-                    {(() => {
-                      const globalWorkDays = new Set();
-                      const { start, end } = getPayrollRange(selectedMonth);
+                    {uniqueTeams.map(teamName => {
+                        // Filter and Sort Agents for this Team (from displayedStats)
+                        const teamAgents = displayedStats
+                            .filter(s => s.team === teamName)
+                            .sort((a, b) => a.name.localeCompare(b.name));
 
-                      sales.forEach(s => {
-                        if (new Date(s.date) >= start && new Date(s.date) <= end) {
-                          if (s.status === 'Sale' || ['HW- Xfer', 'HW-IBXfer'].includes(s.disposition)) {
-                            globalWorkDays.add(s.date);
-                          }
-                        }
-                      });
-const uniqueTeams = [...new Set([...teams, ...monthlyStats.map(s => s.team)])].filter(Boolean).sort();
-
-                      return uniqueTeams.map(teamName => {
-                        const teamAgents = monthlyStats.filter(s => s.team === teamName);
                         if (teamAgents.length === 0) return null;
 
-                        const teamAllSales = sales.filter(s =>
-  (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer') &&
-  teamAgents.some(a => a.name?.toString().trim().toLowerCase() === s.agentName?.toString().trim().toLowerCase())
-);
-
+                        // Calculate Team Sub-Totals
                         const teamTotalSales = teamAgents.reduce((sum, a) => sum + a.totalSales, 0);
                         const teamTotalDays = teamAgents.reduce((sum, a) => sum + a.dialingDays, 0);
                         const teamAvgLPD = teamTotalDays > 0 ? (teamTotalSales / teamTotalDays).toFixed(2) : "0.00";
+                        
+                        // Get sales relevant to this team for daily breakdown
+                        const teamAllSales = sales.filter(s =>
+                          (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer') &&
+                          teamAgents.some(a => a.name?.toString().trim().toLowerCase() === s.agentName?.toString().trim().toLowerCase())
+                        );
 
                         return (
                           <React.Fragment key={teamName}>
+                            {/* Team Header Row */}
                             <tr className="bg-slate-800/80 sticky top-[53px] z-30">
-                              <td colSpan={2} className="p-2 px-4 border-r border-slate-700 font-black text-blue-400 uppercase tracking-widest text-sm sticky left-0 z-30 bg-slate-800">
-                                {teamName}
-                              </td>
-                              <td className="text-center font-bold text-blue-300 border-r border-slate-700 bg-slate-800">{teamAvgLPD}</td>
-                              <td className="text-center text-slate-400 border-r border-slate-700 bg-slate-800">{teamTotalDays}</td>
-                              <td colSpan={4} className="bg-slate-800 border-r border-slate-700"></td>
-
-                              {getDaysArray(getPayrollRange(selectedMonth).start, getPayrollRange(selectedMonth).end).map(d => {
-                                const dailyCount = teamAllSales.filter(s => s.date === d).length;
-                                return (
-                                  <td key={d} className={`text-center text-[10px] border-b border-slate-700 font-bold ${dailyCount > 0 ? 'text-blue-300 bg-blue-500/10' : 'text-slate-600 bg-slate-800/30'}`}>
-                                    {dailyCount > 0 ? dailyCount : '-'}
+                                  <td colSpan={2} className="p-2 px-4 border-r border-slate-700 font-black text-blue-400 uppercase tracking-widest text-sm sticky left-0 z-30 bg-slate-800">
+                                    {teamName}
                                   </td>
-                                );
-                              })}
+                                  <td className="text-center font-bold text-blue-300 border-r border-slate-700 bg-slate-800">{teamAvgLPD}</td>
+                                  <td className="text-center text-slate-400 border-r border-slate-700 bg-slate-800">{teamTotalDays}</td>
+                                  <td colSpan={4} className="bg-slate-800 border-r border-slate-700"></td>
 
-                              <td className="text-center font-black text-green-400 sticky right-0 z-30 bg-slate-800 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
-                                {teamTotalSales}
-                              </td>
-                            </tr>
-
-                            {teamAgents.map((stat, idx) => {
-                              const agentSales = sales.filter(s =>
-  s.agentName?.toString().trim().toLowerCase() === stat.name?.toString().trim().toLowerCase() &&
-  (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer')
-);
-
-                              // [NEW] Get Agent's Join Date for comparison
-                              const hrRec = hrRecords.find(h => h.cnic === stat.cnic) || {};
-                              const joinDateStr = hrRec.joining_date || stat.activeDate || stat.active_date;
-                              const joinDate = joinDateStr ? new Date(joinDateStr) : null;
-                              if (joinDate) joinDate.setHours(0, 0, 0, 0);
-
-                              const isLeft = stat.status === 'Left';
-                              const rowClass = isLeft ? 'bg-red-900/10 hover:bg-red-900/20' : 'hover:bg-blue-900/10';
-                              const nameClass = isLeft ? 'text-red-400' : 'text-slate-200';
-
-                              return (
-                                <tr key={stat.id} className={`${rowClass} transition-colors group`}>
-                                  <td className="p-2 text-center border-r border-slate-800 bg-slate-900 text-slate-600 font-mono text-[10px] sticky left-0 z-10 group-hover:text-white">{idx + 1}</td>
-
-                                  <td className="p-2 px-3 font-medium border-r border-slate-800 bg-slate-900 sticky left-12 z-10 truncate text-xs">
-                                    <div className={nameClass}>{stat.name}</div>
-                                    {/* [NEW] Show Promoted Status */}
-                                      {stat.isPromoted ? (
-                                          <div className="text-[9px] text-red-500 font-bold uppercase mt-0.5 tracking-tighter">
-                                              PROMOTED TO {stat.designation.toUpperCase()}
-                                          </div>
-                                      ) : (
-                                          /* Show Left Date only if NOT promoted */
-                                          isLeft && (
-                                            <div className="text-[9px] text-red-500/80 font-mono mt-0.5">
-                                                LEFT: {stat.leftDate || 'N/A'}
-                                            </div>
-                                          )
-                                      )}
-                                  </td>
-
-                                  <td className="p-1 text-center border-r border-slate-800 bg-blue-500/5 font-bold text-blue-400 text-xs">{stat.lpd}</td>
-                                  <td className="p-1 text-center border-r border-slate-800 text-slate-400 text-[10px]">{stat.dialingDays}</td>
-                                  <td className="p-1 text-center text-red-400 text-[10px]">{stat.daysOn0}</td>
-                                  <td className="p-1 text-center text-orange-300/80 text-[10px]">{stat.daysOn1}</td>
-                                  <td className="p-1 text-center text-yellow-300/80 text-[10px]">{stat.daysOn2}</td>
-                                  <td className="p-1 text-center border-r border-slate-800 text-green-400 font-bold text-[10px]">{stat.daysOn3}</td>
-
-                                  {getDaysArray(getPayrollRange(selectedMonth).start, getPayrollRange(selectedMonth).end).map(dateStr => {
-                                    const currentDate = new Date(dateStr);
-                                    currentDate.setHours(0, 0, 0, 0);
-
-                                    // 1. Is this date BEFORE they joined?
-                                    const isBeforeJoining = joinDate && currentDate < joinDate;
-
-                                    const dailyCount = agentSales.filter(s => s.date === dateStr).length;
-                                    const hasAttendance = attendance.some(a =>
-  a.date === dateStr &&
-  a.agentName?.toString().trim().toLowerCase() === stat.name?.toString().trim().toLowerCase() &&
-  (a.status === 'Present' || a.status === 'Late')
-);
-                                    const isWorkingDay = globalWorkDays.has(dateStr);
-
-                                    let cellContent = '-';
-                                    let cellClass = 'text-slate-700';
-
-                                    if (dailyCount > 0) {
-                                      cellContent = dailyCount;
-                                      cellClass = 'bg-green-500/10 text-green-400 font-bold';
-                                    }
-                                    // [CHANGED] Only mark 0 or A if they have officially joined
-                                    else if (!isBeforeJoining) {
-                                      if (hasAttendance) {
-                                        cellContent = '0';
-                                        cellClass = 'bg-red-500/20 text-red-400 font-bold';
-                                      }
-                                      else if (isWorkingDay) {
-                                        cellContent = 'A';
-                                        cellClass = 'text-red-500 font-black';
-                                      }
-                                    }
-
+                                  {dateArray.map(d => {
+                                    const dailyCount = teamAllSales.filter(s => s.date === d).length;
                                     return (
-                                      <td key={dateStr} className={`p-1 text-center border-b border-slate-800 text-[11px] ${cellClass}`}>
-                                        {cellContent}
+                                      <td key={d} className={`text-center text-[10px] border-b border-slate-700 font-bold ${dailyCount > 0 ? 'text-blue-300 bg-blue-500/10' : 'text-slate-600 bg-slate-800/30'}`}>
+                                        {dailyCount > 0 ? dailyCount : '-'}
                                       </td>
                                     );
                                   })}
 
-                                  <td className="p-2 text-center font-bold text-white bg-slate-900 sticky right-0 z-10 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
-                                    {stat.totalSales}
+                                  <td className="text-center font-black text-green-400 sticky right-0 z-30 bg-slate-800 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
+                                    {teamTotalSales}
                                   </td>
                                 </tr>
-                              );
+
+                            {/* Agent Rows */}
+                            {teamAgents.map((stat, idx) => {
+                              const agentSales = sales.filter(s =>
+                                  s.agentName?.toString().trim().toLowerCase() === stat.name?.toString().trim().toLowerCase() &&
+                                  (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer')
+                                );
+
+                                  // Get Agent's Join Date for comparison
+                                  const hrRec = hrRecords.find(h => h.cnic === stat.cnic) || {};
+                                  const joinDateStr = hrRec.joining_date || stat.activeDate || stat.active_date;
+                                  const joinDate = joinDateStr ? new Date(joinDateStr) : null;
+                                  if (joinDate) joinDate.setHours(0, 0, 0, 0);
+
+                                  const isLeft = stat.status === 'Left';
+                                  const rowClass = isLeft ? 'bg-red-900/10 hover:bg-red-900/20' : 'hover:bg-blue-900/10';
+                                  const nameClass = isLeft ? 'text-red-400' : 'text-slate-200';
+
+                                  return (
+                                    <tr key={stat.id} className={`${rowClass} transition-colors group`}>
+                                      <td className="p-2 text-center border-r border-slate-800 bg-slate-900 text-slate-600 font-mono text-[10px] sticky left-0 z-10 group-hover:text-white">{idx + 1}</td>
+
+                                      <td className="p-2 px-3 font-medium border-r border-slate-800 bg-slate-900 sticky left-12 z-10 truncate text-xs">
+                                        <div className={nameClass}>{stat.name}</div>
+                                          {stat.isPromoted ? (
+                                              <div className="text-[9px] text-red-500 font-bold uppercase mt-0.5 tracking-tighter">
+                                                  PROMOTED TO {stat.designation.toUpperCase()}
+                                              </div>
+                                          ) : (
+                                              isLeft && (
+                                                <div className="text-[9px] text-red-500/80 font-mono mt-0.5">
+                                                    LEFT: {stat.leftDate || 'N/A'}
+                                                </div>
+                                              )
+                                          )}
+                                      </td>
+
+                                      <td className="p-1 text-center border-r border-slate-800 bg-blue-500/5 font-bold text-blue-400 text-xs">{stat.lpd}</td>
+                                      <td className="p-1 text-center border-r border-slate-800 text-slate-400 text-[10px]">{stat.dialingDays}</td>
+                                      <td className="p-1 text-center text-red-400 text-[10px]">{stat.daysOn0}</td>
+                                      <td className="p-1 text-center text-orange-300/80 text-[10px]">{stat.daysOn1}</td>
+                                      <td className="p-1 text-center text-yellow-300/80 text-[10px]">{stat.daysOn2}</td>
+                                      <td className="p-1 text-center border-r border-slate-800 text-green-400 font-bold text-[10px]">{stat.daysOn3}</td>
+
+                                      {dateArray.map(dateStr => {
+                                        const currentDate = new Date(dateStr);
+                                        currentDate.setHours(0, 0, 0, 0);
+
+                                        // 1. Is this date BEFORE they joined?
+                                        const isBeforeJoining = joinDate && currentDate < joinDate;
+
+                                        const dailyCount = agentSales.filter(s => s.date === dateStr).length;
+                                        const hasAttendance = attendance.some(a =>
+                                          a.date === dateStr &&
+                                          a.agentName?.toString().trim().toLowerCase() === stat.name?.toString().trim().toLowerCase() &&
+                                          (a.status === 'Present' || a.status === 'Late')
+                                        );
+                                        
+                                        const isWorkingDay = sales.some(s => s.date === dateStr && (s.status === 'Sale' || ['HW- Xfer', 'HW-IBXfer'].includes(s.disposition)));
+
+                                        let cellContent = '-';
+                                        let cellClass = 'text-slate-700';
+
+                                        if (dailyCount > 0) {
+                                          cellContent = dailyCount;
+                                          cellClass = 'bg-green-500/10 text-green-400 font-bold';
+                                        }
+                                        else if (!isBeforeJoining) {
+                                          if (hasAttendance) {
+                                            cellContent = '0';
+                                            cellClass = 'bg-red-500/20 text-red-400 font-bold';
+                                          }
+                                          else if (isWorkingDay) {
+                                            cellContent = 'A';
+                                            cellClass = 'text-red-500 font-black';
+                                          }
+                                        }
+
+                                        return (
+                                          <td key={dateStr} className={`p-1 text-center border-b border-slate-800 text-[11px] ${cellClass}`}>
+                                            {cellContent}
+                                          </td>
+                                        );
+                                      })}
+
+                                      <td className="p-2 text-center font-bold text-white bg-slate-900 sticky right-0 z-10 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
+                                        {stat.totalSales}
+                                      </td>
+                                    </tr>
+                                  );
                             })}
                           </React.Fragment>
                         );
-                      });
-                    })()}
+                      })}
                   </tbody>
 
+                  {/* --- FOOTER (Grand Totals using DISPLAYEDSTATS) --- */}
                   <tfoot className="sticky bottom-0 z-40 shadow-[0_-4px_10px_rgba(0,0,0,0.5)]">
                     <tr className="bg-slate-950 border-t-2 border-blue-500 font-black text-white">
                       <td colSpan={2} className="p-3 text-left sticky left-0 bg-slate-950 z-50 uppercase tracking-tighter">Grand Total</td>
                       <td className="text-center text-blue-400 bg-slate-950">
-                        {(monthlyStats.reduce((s, a) => s + a.totalSales, 0) / (monthlyStats.reduce((s, a) => s + a.dialingDays, 0) || 1)).toFixed(2)}
+                        {/* Calculate Average LPD for VISIBLE agents only */}
+                        {(displayedStats.reduce((s, a) => s + a.totalSales, 0) / (displayedStats.reduce((s, a) => s + a.dialingDays, 0) || 1)).toFixed(2)}
                       </td>
-                      <td className="text-center text-slate-400 bg-slate-950">{monthlyStats.reduce((s, a) => s + a.dialingDays, 0)}</td>
+                      <td className="text-center text-slate-400 bg-slate-950">
+                        {displayedStats.reduce((s, a) => s + a.dialingDays, 0)}
+                      </td>
                       <td colSpan={4} className="bg-slate-950"></td>
 
-                      {getDaysArray(getPayrollRange(selectedMonth).start, getPayrollRange(selectedMonth).end).map(d => {
+                      {dateArray.map(d => {
+                        // Grand Total for each day must check displayedStats
+                        // We check if the sale belongs to ANY agent in the displayedStats list
                         const dailyGrandTotal = sales.filter(s =>
                           s.date === d &&
                           (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer') &&
-                         (validAgentNames.has(s.agentName) || hrRecords.some(h => h.agent_name === s.agentName))
+                          displayedStats.some(agent => agent.name?.toString().trim().toLowerCase() === s.agentName?.toString().trim().toLowerCase())
                         ).length;
 
                         return (
@@ -3718,15 +3777,17 @@ const uniqueTeams = [...new Set([...teams, ...monthlyStats.map(s => s.team)])].f
                       })}
 
                       <td className="p-3 text-center text-green-400 text-lg sticky right-0 bg-slate-950 z-50 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
-                        {monthlyStats.reduce((s, a) => s + a.totalSales, 0)}
+                        {displayedStats.reduce((s, a) => s + a.totalSales, 0)}
                       </td>
                     </tr>
                   </tfoot>
                 </table>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
+      </div>
+    )}
 
         </div>
     )}
@@ -3861,7 +3922,8 @@ const uniqueTeams = [...new Set([...teams, ...monthlyStats.map(s => s.team)])].f
     TAB: MANAGEMENT ATTENDANCE MATRIX (HR/QA/TL/IT Staff)
    ===================================================================================== */}
 
-  <div className="space-y-8">
+<div className="space-y-6">
+    {/* Header */}
     <div className="flex justify-between items-center">
       <div>
         <h2 className="text-xl text-white font-bold">Management Attendance Matrix ({selectedMonth})</h2>
@@ -3869,6 +3931,33 @@ const uniqueTeams = [...new Set([...teams, ...monthlyStats.map(s => s.team)])].f
       </div>
     </div>
 
+    {/* --- [ADDED] FILTER BAR --- */}
+    <div className="bg-slate-800 rounded-xl shadow-sm border border-slate-600 p-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <input
+          type="text"
+          placeholder="Search employee..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <select value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="All">All Teams</option>
+          {teams.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <select value={centerFilter} onChange={(e) => setCenterFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="All">All Centers</option>
+          {centers.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <select value={agentStatusFilter} onChange={(e) => setAgentStatusFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="All">All Status</option>
+          <option value="Active">Active</option>
+          <option value="Left">Left / Ex-Employees</option>
+        </select>
+      </div>
+    </div>
+
+    {/* --- LOGIC STARTS --- */}
     {(() => {
       // Helper: Format time to 12-hour
       const formatTo12Hour = (timeStr) => {
@@ -3895,11 +3984,26 @@ const uniqueTeams = [...new Set([...teams, ...monthlyStats.map(s => s.team)])].f
         else return { isLate: true, color: 'text-red-500 font-bold' };
       };
 
-      // Get all non-agent staff from HR records
+      // [FIXED] Filter Logic using Search/Team/Center/Status
       const allManagementStaff = hrRecords
         .filter(emp => {
+          // 1. Must NOT be an Agent
           const designation = (emp.designation || '').toLowerCase().trim();
-          return designation !== 'agent' && emp.status === 'Active';
+          if (designation === 'agent') return false;
+
+          // 2. Search Filter
+          const matchesSearch = !searchQuery || (emp.agent_name && emp.agent_name.toLowerCase().includes(searchQuery.toLowerCase()));
+
+          // 3. Team Filter
+          const matchesTeam = teamFilter === 'All' || emp.team === teamFilter;
+
+          // 4. Center Filter
+          const matchesCenter = centerFilter === 'All' || emp.center === centerFilter;
+
+          // 5. Status Filter (Allows seeing Left employees)
+          const matchesStatus = agentStatusFilter === 'All' || emp.status === agentStatusFilter;
+
+          return matchesSearch && matchesTeam && matchesCenter && matchesStatus;
         })
         .sort((a, b) => a.agent_name.localeCompare(b.agent_name));
 
@@ -3993,11 +4097,17 @@ const uniqueTeams = [...new Set([...teams, ...monthlyStats.map(s => s.team)])].f
 
                     const latePercentage = presentCount > 0 ? Math.round((lateCount / presentCount) * 100) : 0;
 
+                    // Visual for Left Employees
+                    const isLeft = emp.status === 'Left';
+                    const rowClass = isLeft ? 'hover:bg-red-900/10' : `hover:${themeColor === 'orange' ? 'bg-orange-900/10' : 'bg-purple-900/10'}`;
+                    const nameClass = isLeft ? 'text-red-400' : 'text-slate-200';
+
                     return (
-                      <tr key={emp.id} className={`hover:${themeColor === 'orange' ? 'bg-orange-900/10' : 'bg-purple-900/10'} transition-colors group`}>
+                      <tr key={emp.id} className={`${rowClass} transition-colors group`}>
                         <td className="p-2 text-center border-r border-slate-800 bg-slate-900 text-slate-600 font-mono text-[10px] sticky left-0 z-10 group-hover:text-white">{idx + 1}</td>
-                        <td className="p-2 px-3 font-medium border-r border-slate-800 bg-slate-900 sticky left-12 z-10 truncate text-xs text-slate-200">
-                          {emp.agent_name}
+                        <td className="p-2 px-3 font-medium border-r border-slate-800 bg-slate-900 sticky left-12 z-10 truncate text-xs">
+                          <div className={nameClass}>{emp.agent_name}</div>
+                          {isLeft && <div className="text-[9px] text-red-500 font-mono mt-0.5">LEFT</div>}
                         </td>
                         <td className="p-2 px-3 text-xs text-slate-400 border-r border-slate-800 bg-slate-900">{emp.designation}</td>
 
@@ -4065,6 +4175,7 @@ const uniqueTeams = [...new Set([...teams, ...monthlyStats.map(s => s.team)])].f
                   <tr className={`bg-slate-950 border-t-2 ${themeColor === 'orange' ? 'border-orange-500' : 'border-purple-500'} font-black text-white`}>
                     <td colSpan={3} className="p-3 text-left sticky left-0 bg-slate-950 z-50 uppercase tracking-tighter">Total</td>
                     
+                    {/* Grand Metrics */}
                     <td className="text-center text-green-400 bg-slate-950 text-[10px]">
                       {attendance.filter(a => 
                         a.status === 'Present' && 
@@ -4483,7 +4594,9 @@ const uniqueTeams = [...new Set([...teams, ...filteredAgents.map(a => a.team)])]
 
 return uniqueTeams.map(teamName => {
   // Filter Agents by Team (using filtered list)
-  const teamAgents = filteredAgents.filter(a => a.team === teamName && a.status === 'Active');
+  const teamAgents = filteredAgents
+  .filter(a => a.team === teamName && a.status === 'Active')
+  .sort((a, b) => a.name.localeCompare(b.name)); // <--- Added Sort Here
   if (teamAgents.length === 0) return null;
 
   // --- TEAM SUMMARY CALCULATIONS ---
@@ -5647,4 +5760,5 @@ const agentRecs = attendance.filter(a =>
 export default AgentPayrollSystem;
 
 
-//  Adding Buttons in Matrixes
+//UPDATED TILL NOW TODAY 8-JAN-2026 5:00 AM
+// Starting my work on 13th of JAN 2026 09:12 PM
