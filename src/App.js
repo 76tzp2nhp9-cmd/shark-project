@@ -21,7 +21,7 @@ import {
   Users, Edit, DollarSign, Calendar, AlertCircle, TrendingUp, Download,
   Plus, X, Upload, LogOut, Lock, Clock,
   Pencil, Trash2, UserX, Shield, RotateCcw,
-  CheckCircle, XCircle, ThumbsDown, AlertTriangle // <--- ENSURE THESE ARE HERE
+  CheckCircle, XCircle, ThumbsDown, AlertTriangle// <--- ENSURE THESE ARE HERE
 } from 'lucide-react';
 
 
@@ -44,101 +44,101 @@ const countWorkingDays = (start, end) => {
   return count;
 };
 
-  // [NEW] Helper: Convert "January 2026" -> "2026-01" (For Input Value)
-  const getMonthInputValue = (monthStr) => {
-    if (!monthStr) return new Date().toISOString().slice(0, 7);
-    const [month, year] = monthStr.split(' ');
-    const date = new Date(`${month} 1, ${year}`);
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    return `${year}-${m}`;
-  };
+// [NEW] Helper: Convert "January 2026" -> "2026-01" (For Input Value)
+const getMonthInputValue = (monthStr) => {
+  if (!monthStr) return new Date().toISOString().slice(0, 7);
+  const [month, year] = monthStr.split(' ');
+  const date = new Date(`${month} 1, ${year}`);
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  return `${year}-${m}`;
+};
 
-  // [NEW] Reusable Date Filter Component
-  const DateFilterBar = ({ filterType, setFilterType, dateVal, setDateVal, endVal, setEndVal, selectedMonth, handleMonthChange }) => {
-    return (
-      <div className="bg-slate-800 p-3 rounded-lg border border-slate-600 flex flex-wrap gap-4 items-center mb-6">
+// [NEW] Reusable Date Filter Component
+const DateFilterBar = ({ filterType, setFilterType, dateVal, setDateVal, endVal, setEndVal, selectedMonth, handleMonthChange }) => {
+  return (
+    <div className="bg-slate-800 p-3 rounded-lg border border-slate-600 flex flex-wrap gap-4 items-center mb-6">
 
-        {/* 1. Filter Type Selector */}
-        <div className="flex items-center gap-2">
-          <span className="text-slate-400 text-sm font-medium"><Calendar className="w-4 h-4 inline" /> Filter:</span>
-          <select
-            value={filterType}
-            onChange={(e) => setFilterType(e.target.value)}
-            className="bg-slate-700 text-white text-sm border border-slate-600 rounded px-2 py-1 focus:ring-2 focus:ring-blue-500 outline-none"
-          >
-            <option value="Daily">Daily</option>
-            <option value="Weekly">Weekly</option>
-            <option value="Monthly">Monthly</option>
-            <option value="Custom">Custom Range</option>
-          </select>
-        </div>
+      {/* 1. Filter Type Selector */}
+      <div className="flex items-center gap-2">
+        <span className="text-slate-400 text-sm font-medium"><Calendar className="w-4 h-4 inline" /> Filter:</span>
+        <select
+          value={filterType}
+          onChange={(e) => setFilterType(e.target.value)}
+          className="bg-slate-700 text-white text-sm border border-slate-600 rounded px-2 py-1 focus:ring-2 focus:ring-blue-500 outline-none"
+        >
+          <option value="Daily">Daily</option>
+          <option value="Weekly">Weekly</option>
+          <option value="Monthly">Monthly</option>
+          <option value="Custom">Custom Range</option>
+        </select>
+      </div>
 
-        {/* 2. Inputs based on Type */}
-        <div className="flex items-center gap-2">
+      {/* 2. Inputs based on Type */}
+      <div className="flex items-center gap-2">
 
-          {/* Monthly: Show your existing Month Picker */}
-          {filterType === 'Monthly' && (
-            <input
-              type="month"
-              value={getMonthInputValue(selectedMonth)}
-              onChange={handleMonthChange}
-              className="bg-slate-700 text-white text-sm border border-slate-600 rounded px-2 py-1 [color-scheme:dark]"
-            />
-          )}
+        {/* Monthly: Show your existing Month Picker */}
+        {filterType === 'Monthly' && (
+          <input
+            type="month"
+            value={getMonthInputValue(selectedMonth)}
+            onChange={handleMonthChange}
+            className="bg-slate-700 text-white text-sm border border-slate-600 rounded px-2 py-1 [color-scheme:dark]"
+          />
+        )}
 
-          {/* Daily or Weekly: Show Single Date Picker */}
-          {(filterType === 'Daily' || filterType === 'Weekly') && (
+        {/* Daily or Weekly: Show Single Date Picker */}
+        {(filterType === 'Daily' || filterType === 'Weekly') && (
+          <input
+            type="date"
+            value={dateVal}
+            onChange={(e) => setDateVal(e.target.value)}
+            className="bg-slate-700 text-white text-sm border border-slate-600 rounded px-2 py-1 [color-scheme:dark]"
+          />
+        )}
+
+        {/* Custom: Show Start & End Date Pickers */}
+        {filterType === 'Custom' && (
+          <>
             <input
               type="date"
               value={dateVal}
               onChange={(e) => setDateVal(e.target.value)}
               className="bg-slate-700 text-white text-sm border border-slate-600 rounded px-2 py-1 [color-scheme:dark]"
             />
-          )}
-
-          {/* Custom: Show Start & End Date Pickers */}
-          {filterType === 'Custom' && (
-            <>
-              <input
-                type="date"
-                value={dateVal}
-                onChange={(e) => setDateVal(e.target.value)}
-                className="bg-slate-700 text-white text-sm border border-slate-600 rounded px-2 py-1 [color-scheme:dark]"
-              />
-              <span className="text-slate-400">-</span>
-              <input
-                type="date"
-                value={endVal}
-                onChange={(e) => setEndVal(e.target.value)}
-                className="bg-slate-700 text-white text-sm border border-slate-600 rounded px-2 py-1 [color-scheme:dark]"
-              />
-            </>
-          )}
-        </div>
+            <span className="text-slate-400">-</span>
+            <input
+              type="date"
+              value={endVal}
+              onChange={(e) => setEndVal(e.target.value)}
+              className="bg-slate-700 text-white text-sm border border-slate-600 rounded px-2 py-1 [color-scheme:dark]"
+            />
+          </>
+        )}
       </div>
-    );
-  };
+    </div>
+  );
+};
 
 const AgentPayrollSystem = () => {
 
   const [salesSubTab, setSalesSubTab] = useState('list');
-const [attendanceSubTab, setAttendanceSubTab] = useState('daily');
-const [employeesSubTab, setEmployeesSubTab] = useState('agents');
-const [managementSubTab, setManagementSubTab] = useState('payroll');
+  const [attendanceSubTab, setAttendanceSubTab] = useState('daily');
+  const [employeesSubTab, setEmployeesSubTab] = useState('agents');
+  const [managementSubTab, setManagementSubTab] = useState('payroll');
 
   // --- MANAGEMENT SPECIFIC MODALS STATE ---
   const [showMgmtBonus, setShowMgmtBonus] = useState(false);
   const [showMgmtFine, setShowMgmtFine] = useState(false);
 
   // 2. Add State inside your component
-const [showTransactionModal, setShowTransactionModal] = useState(false);
-const [transactionType, setTransactionType] = useState('bonus'); // 'bonus' or 'fine'
+  const [showTransactionModal, setShowTransactionModal] = useState(false);
+  const [transactionType, setTransactionType] = useState('bonus'); // 'bonus' or 'fine'
 
   // Login States
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [designationFilter, setDesignationFilter] = useState('All');
   // Add this near your other state variables
-const [user, setUser] = useState(JSON.parse(localStorage.getItem('currentUser')) || null);
+  const [user, setUser] = useState(JSON.parse(localStorage.getItem('currentUser')) || null);
   const [userRole, setUserRole] = useState('');
   const [currentUser, setCurrentUser] = useState(null);
   const [loginData, setLoginData] = useState({ name: '', password: '' });
@@ -190,7 +190,7 @@ const [user, setUser] = useState(JSON.parse(localStorage.getItem('currentUser'))
 
   // Add this Effect to load admins ONLY if the logged-in user is an Admin
   useEffect(() => {
-    if (userRole === 'Admin') {
+    if (['Admin', 'SuperAdmin'].includes(userRole)) {
       fetchAdmins();
     }
   }, [userRole, showAdminModal]); // Refresh when modal opens/closes
@@ -237,6 +237,25 @@ const [user, setUser] = useState(JSON.parse(localStorage.getItem('currentUser'))
   // [FIX] Default to 19:15 (7:15 PM) to match your requested shift start
   const [lateTime, setLateTime] = useState(() => localStorage.getItem('ams_late_time') || '19:15');
   const [showLateTimeModal, setShowLateTimeModal] = useState(false);
+
+// --- [NEW] Update Admin Password ---
+  const handleUpdateAdminPassword = async (id, currentName) => {
+    const newPassword = prompt(`Enter new password for user "${currentName}":`);
+    
+    if (newPassword !== null && newPassword.trim() !== "") {
+      const { error } = await supabase
+        .from('admins')
+        .update({ password: newPassword.trim() })
+        .eq('id', id);
+
+      if (error) {
+        alert("Error updating password: " + error.message);
+      } else {
+        alert("Password updated successfully!");
+        fetchAdmins(); // Refresh the list to show the new password
+      }
+    }
+  };
 
   // Inside App.js
   const handleAddTeam = async (teamName) => {
@@ -505,40 +524,48 @@ const [user, setUser] = useState(JSON.parse(localStorage.getItem('currentUser'))
   ]);
 
   // Login Logic
-  // --- LOGIN LOGIC (Dual Table Check) ---
+  // --- LOGIN LOGIC (Dual Table Check + Status Check) ---
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoginError('');
     setLoading(true);
 
     try {
-      // 1. Check ADMINS Table first (Admin, HR, QA)
-      const { data: adminUser, error: adminError } = await supabase
+      // 1. Check ADMINS Table first
+      const { data: adminUser } = await supabase
         .from('admins')
         .select('*')
         .eq('name', loginData.name)
         .eq('password', loginData.password)
-        .single();
+        .maybeSingle(); // Use maybeSingle to avoid errors if not found
 
       if (adminUser) {
+        // Admins don't usually have a 'status' column, but if they are deleted, they can't login anyway.
         setUserRole(adminUser.role);
         setCurrentUser(adminUser);
         setIsLoggedIn(true);
         localStorage.setItem('ams_user', JSON.stringify(adminUser));
         localStorage.setItem('ams_role', adminUser.role);
-        return; // Stop here, we found the user
+        setLoading(false);
+        return; 
       }
 
       // 2. If not found, check AGENTS Table
-      const { data: agentUser, error: agentError } = await supabase
+      const { data: agentUser } = await supabase
         .from('agents')
         .select('*')
-        .eq('name', loginData.name) // Using name as login for agents
+        .eq('name', loginData.name)
         .eq('password', loginData.password)
-        .single();
+        .maybeSingle();
 
       if (agentUser) {
-        // Agents always have the role 'Agent'
+        // [CRITICAL FIX] Check if Agent is 'Left'
+        if (agentUser.status === 'Left') {
+            setLoginError('Access Denied: Account is deactivated (Left).');
+            setLoading(false);
+            return;
+        }
+
         setUserRole('Agent');
         setCurrentUser(agentUser);
         setIsLoggedIn(true);
@@ -555,6 +582,61 @@ const [user, setUser] = useState(JSON.parse(localStorage.getItem('currentUser'))
       setLoading(false);
     }
   };
+
+  // [FINAL SECURITY CHECK] Heartbeat: Checks Passwords, Status & Existence
+  useEffect(() => {
+    // 1. Only run if we are currently logged in
+    if (!isLoggedIn || !currentUser) return;
+
+    const verifySecurityStatus = async () => {
+      const tableName = userRole === 'Agent' ? 'agents' : 'admins';
+      
+      // Fetch fresh data from DB
+      const { data: freshUser, error } = await supabase
+        .from(tableName)
+        .select('id, password, status, role') 
+        .eq('id', currentUser.id)
+        .maybeSingle();
+
+      // [CHECK 1] Network Safety
+      // If internet fails, 'error' is true. We RETURN here to prevent accidental logout.
+      if (error) {
+        console.warn("Security Check Skipped: Network Error");
+        return; 
+      }
+
+      // [CHECK 2] Does Account Exist? (Admin & Agent)
+      // If data is null, the ID was deleted from the database.
+      if (!freshUser) {
+        alert("Session Terminated: Your account no longer exists.");
+        handleLogout();
+        return;
+      }
+
+      // [CHECK 3] Agent Status 'Left'?
+      // Only applies if the logged-in user is an Agent.
+      if (userRole === 'Agent' && freshUser.status === 'Left') {
+        alert("Access Revoked: Your account is marked as 'Left'.");
+        handleLogout();
+        return;
+      }
+
+      // [CHECK 4] Password Changed? (Admin & Agent)
+      // Compares the password currently in your browser vs the new one in the DB.
+      // We check 'currentUser.password' to make sure we have something to compare against.
+      if (currentUser.password && freshUser.password !== currentUser.password) {
+        alert("Security Alert: Your password has been changed. Please login again.");
+        handleLogout();
+        return;
+      }
+    };
+
+    // Run this check every 5 seconds
+    const intervalId = setInterval(verifySecurityStatus, 5000);
+
+    // Cleanup: Stop checking if user logs out or closes tab
+    return () => clearInterval(intervalId);
+  }, [isLoggedIn, currentUser, userRole]);
 
   const handleLogout = () => {
     setIsLoggedIn(false);
@@ -575,29 +657,84 @@ const [user, setUser] = useState(JSON.parse(localStorage.getItem('currentUser'))
     localStorage.removeItem('ams_role');
     localStorage.removeItem('ams_active_tab');
   };
-  
-// --- MANAGEMENT PAYROLL STATS (Fixed Date Parsing + Visibility) ---
+
+  // [NEW] Security Watchdog: Immediate Logout on Password/Status Change
+  useEffect(() => {
+    if (!isLoggedIn || !currentUser) return;
+
+    // Determine which table to watch based on role
+    const tableName = userRole === 'Agent' ? 'agents' : 'admins';
+    const userId = currentUser.id;
+
+    // Create a Realtime Subscription
+    const channel = supabase
+      .channel(`security_watchdog_${userId}`)
+      .on(
+        'postgres_changes',
+        { 
+          event: '*', // Listen for UPDATE and DELETE
+          schema: 'public', 
+          table: tableName, 
+          filter: `id=eq.${userId}` // Only listen for THIS user's ID
+        },
+        (payload) => {
+          // 1. Handle Deletion (Account removed)
+          if (payload.eventType === 'DELETE') {
+            alert("Security Alert: Your account has been removed. Logging out.");
+            handleLogout();
+          }
+          
+          // 2. Handle Updates (Password or Status change)
+          if (payload.eventType === 'UPDATE') {
+            const newUser = payload.new;
+            
+            // Check if Password Changed
+            // (Compares DB password with the one stored in your browser session)
+            if (newUser.password !== currentUser.password) {
+              alert("Security Alert: Your password has been changed. Please login again.");
+              handleLogout();
+              return;
+            }
+
+            // Check Status (For Agents)
+            if (newUser.status === 'Left') {
+              alert("Security Alert: Your access has been revoked (Status: Left).");
+              handleLogout();
+              return;
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    // Cleanup subscription on unmount or logout
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [isLoggedIn, currentUser, userRole]);
+
+  // --- MANAGEMENT PAYROLL STATS (Fixed Date Parsing + Visibility) ---
   const managementPayrollStats = useMemo(() => {
     // 1. ROBUST DATE PARSING
     let year, month;
-    
+
     // Check if format is "YYYY-MM" (e.g. "2026-01")
     if (selectedMonth.includes('-')) {
-        const parts = selectedMonth.split('-');
-        year = parseInt(parts[0]);
-        month = parseInt(parts[1]);
+      const parts = selectedMonth.split('-');
+      year = parseInt(parts[0]);
+      month = parseInt(parts[1]);
     } else {
-        // Handle "January 2026" format
-        const dateObj = new Date(Date.parse(`1 ${selectedMonth}`)); // Add '1' to make it parseable
-        if (!isNaN(dateObj.getTime())) {
-            year = dateObj.getFullYear();
-            month = dateObj.getMonth() + 1; // getMonth is 0-indexed
-        } else {
-            // Fallback to current date
-            const now = new Date();
-            year = now.getFullYear();
-            month = now.getMonth() + 1;
-        }
+      // Handle "January 2026" format
+      const dateObj = new Date(Date.parse(`1 ${selectedMonth}`)); // Add '1' to make it parseable
+      if (!isNaN(dateObj.getTime())) {
+        year = dateObj.getFullYear();
+        month = dateObj.getMonth() + 1; // getMonth is 0-indexed
+      } else {
+        // Fallback to current date
+        const now = new Date();
+        year = now.getFullYear();
+        month = now.getMonth() + 1;
+      }
     }
 
     const currentMonthStr = `${year}-${String(month).padStart(2, '0')}`; // Standardize to YYYY-MM for matching
@@ -606,107 +743,107 @@ const [user, setUser] = useState(JSON.parse(localStorage.getItem('currentUser'))
 
     // --- HELPER 1: Precise Working Days (Excludes Sat/Sun) ---
     const getSafeWorkingDays = (start, end) => {
-        if (!start || !end || isNaN(start) || isNaN(end)) return 26; 
-        
-        let count = 0;
-        let curDate = new Date(start);
-        while (curDate <= end) {
-            const dayOfWeek = curDate.getDay();
-            if (dayOfWeek !== 0 && dayOfWeek !== 6) { // 0=Sun, 6=Sat (Exclude Weekends)
-                count++;
-            }
-            curDate.setDate(curDate.getDate() + 1);
+      if (!start || !end || isNaN(start) || isNaN(end)) return 26;
+
+      let count = 0;
+      let curDate = new Date(start);
+      while (curDate <= end) {
+        const dayOfWeek = curDate.getDay();
+        if (dayOfWeek !== 0 && dayOfWeek !== 6) { // 0=Sun, 6=Sat (Exclude Weekends)
+          count++;
         }
-        return count > 0 ? count : 26; 
+        curDate.setDate(curDate.getDate() + 1);
+      }
+      return count > 0 ? count : 26;
     };
 
     // --- HELPER 2: Speed Optimization (Maps instead of Loops) ---
     const attendanceMap = new Map();
     attendance.forEach(att => {
-        if (att.agentName) {
-            const key = att.agentName.trim().toLowerCase();
-            if (!attendanceMap.has(key)) attendanceMap.set(key, []);
-            attendanceMap.get(key).push(att);
-        }
+      if (att.agentName) {
+        const key = att.agentName.trim().toLowerCase();
+        if (!attendanceMap.has(key)) attendanceMap.set(key, []);
+        attendanceMap.get(key).push(att);
+      }
     });
 
     const bonusMap = new Map();
     // [FIX] Filter bonuses by matching the month string correctly
     bonuses.filter(b => {
-        // Handle both "January 2026" and "2026-01" in bonus records
-        return b.month === selectedMonth || b.month === currentMonthStr;
+      // Handle both "January 2026" and "2026-01" in bonus records
+      return b.month === selectedMonth || b.month === currentMonthStr;
     }).forEach(b => {
-         const key = (b.agentName || '').trim().toLowerCase();
-         bonusMap.set(key, (bonusMap.get(key) || 0) + (b.amount || 0));
+      const key = (b.agentName || '').trim().toLowerCase();
+      bonusMap.set(key, (bonusMap.get(key) || 0) + (b.amount || 0));
     });
 
     const fineMap = new Map();
     fines.filter(f => {
-        return f.month === selectedMonth || f.month === currentMonthStr;
+      return f.month === selectedMonth || f.month === currentMonthStr;
     }).forEach(f => {
-         const key = (f.agentName || '').trim().toLowerCase();
-         fineMap.set(key, (fineMap.get(key) || 0) + (f.amount || 0));
+      const key = (f.agentName || '').trim().toLowerCase();
+      fineMap.set(key, (fineMap.get(key) || 0) + (f.amount || 0));
     });
 
     // 2. Process All HR Records
     const allStats = hrRecords.map(emp => {
-        const cycleType = (emp.payroll_cycle_type || '').toLowerCase().trim();
-        const designation = (emp.designation || '').toLowerCase().trim();
-        const empNameKey = (emp.agent_name || '').trim().toLowerCase();
+      const cycleType = (emp.payroll_cycle_type || '').toLowerCase().trim();
+      const designation = (emp.designation || '').toLowerCase().trim();
+      const empNameKey = (emp.agent_name || '').trim().toLowerCase();
 
-        // A. Determine Cycle Dates
-        let cycleStart, cycleEnd;
-        if (cycleType === 'agent cycle') {
-            // Agent Cycle: 21st Previous Month to 20th Current Month
-            const prevMonth = month - 1 === 0 ? 12 : month - 1;
-            const prevYear = month - 1 === 0 ? year - 1 : year;
-            cycleStart = new Date(prevYear, prevMonth - 1, 21);
-            cycleEnd = new Date(year, month - 1, 20);
-            cycleEnd.setHours(23, 59, 59, 999);
-        } else {
-            // Standard Cycle: 1st to End of Month
-            cycleStart = new Date(year, month - 1, 1);
-            cycleEnd = new Date(year, month, 0); 
-            cycleEnd.setHours(23, 59, 59, 999);
-        }
+      // A. Determine Cycle Dates
+      let cycleStart, cycleEnd;
+      if (cycleType === 'agent cycle') {
+        // Agent Cycle: 21st Previous Month to 20th Current Month
+        const prevMonth = month - 1 === 0 ? 12 : month - 1;
+        const prevYear = month - 1 === 0 ? year - 1 : year;
+        cycleStart = new Date(prevYear, prevMonth - 1, 21);
+        cycleEnd = new Date(year, month - 1, 20);
+        cycleEnd.setHours(23, 59, 59, 999);
+      } else {
+        // Standard Cycle: 1st to End of Month
+        cycleStart = new Date(year, month - 1, 1);
+        cycleEnd = new Date(year, month, 0);
+        cycleEnd.setHours(23, 59, 59, 999);
+      }
 
-        // B. Calculate Working Days
-        const totalWorkingDays = getSafeWorkingDays(cycleStart, cycleEnd);
+      // B. Calculate Working Days
+      const totalWorkingDays = getSafeWorkingDays(cycleStart, cycleEnd);
 
-        // C. Get Attendance
-        const empAttRecords = attendanceMap.get(empNameKey) || [];
-        const daysPresent = empAttRecords.filter(a => {
-            const d = new Date(a.date);
-            return d >= cycleStart && d <= cycleEnd && (a.status === 'Present' || a.status === 'Late');
-        }).length;
+      // C. Get Attendance
+      const empAttRecords = attendanceMap.get(empNameKey) || [];
+      const daysPresent = empAttRecords.filter(a => {
+        const d = new Date(a.date);
+        return d >= cycleStart && d <= cycleEnd && (a.status === 'Present' || a.status === 'Late');
+      }).length;
 
-        // D. Financials
-        let rawSalary = emp.base_salary || emp.baseSalary || 0;
-        if (typeof rawSalary === 'string') rawSalary = parseInt(rawSalary.replace(/,/g, '')) || 0;
+      // D. Financials
+      let rawSalary = emp.base_salary || emp.baseSalary || 0;
+      if (typeof rawSalary === 'string') rawSalary = parseInt(rawSalary.replace(/,/g, '')) || 0;
 
-        let earnedBase = 0;
-        if (totalWorkingDays > 0) {
-            earnedBase = Math.round((rawSalary / totalWorkingDays) * daysPresent);
-        } else {
-            earnedBase = rawSalary;
-        }
+      let earnedBase = 0;
+      if (totalWorkingDays > 0) {
+        earnedBase = Math.round((rawSalary / totalWorkingDays) * daysPresent);
+      } else {
+        earnedBase = rawSalary;
+      }
 
-        const totalBonus = bonusMap.get(empNameKey) || 0;
-        const totalFine = fineMap.get(empNameKey) || 0;
-        const netSalary = earnedBase + totalBonus - totalFine;
+      const totalBonus = bonusMap.get(empNameKey) || 0;
+      const totalFine = fineMap.get(empNameKey) || 0;
+      const netSalary = earnedBase + totalBonus - totalFine;
 
-        return {
-            ...emp,
-            cycleTypeNormalized: cycleType,
-            designationNormalized: designation,
-            baseSalary: rawSalary, 
-            daysPresent,
-            totalWorkingDays, 
-            earnedBase,
-            totalBonus,
-            totalFine,
-            netSalary
-        };
+      return {
+        ...emp,
+        cycleTypeNormalized: cycleType,
+        designationNormalized: designation,
+        baseSalary: rawSalary,
+        daysPresent,
+        totalWorkingDays,
+        earnedBase,
+        totalBonus,
+        totalFine,
+        netSalary
+      };
     });
 
     // 3. Filter Lists
@@ -714,11 +851,11 @@ const [user, setUser] = useState(JSON.parse(localStorage.getItem('currentUser'))
     const managementStaff = allStats.filter(e => e.designationNormalized !== 'agent');
 
     return {
-        // Table 1: Standard (Default)
-        standard: managementStaff.filter(e => e.cycleTypeNormalized !== 'agent cycle'),
-        
-        // Table 2: Agent Cycle (Only if explicitly set)
-        agentCycle: managementStaff.filter(e => e.cycleTypeNormalized === 'agent cycle')
+      // Table 1: Standard (Default)
+      standard: managementStaff.filter(e => e.cycleTypeNormalized !== 'agent cycle'),
+
+      // Table 2: Agent Cycle (Only if explicitly set)
+      agentCycle: managementStaff.filter(e => e.cycleTypeNormalized === 'agent cycle')
     };
   }, [hrRecords, selectedMonth, attendance, bonuses, fines]);
 
@@ -737,16 +874,16 @@ const [user, setUser] = useState(JSON.parse(localStorage.getItem('currentUser'))
   // --- FILTERING LOGIC ---
 
   // Add this helper inside the component (e.g. near other useMemos)
-const allPossibleSellers = useMemo(() => {
-  // 1. Get all Active Agents
-  const agentNames = agents.map(a => a.name);
+  const allPossibleSellers = useMemo(() => {
+    // 1. Get all Active Agents
+    const agentNames = agents.map(a => a.name);
 
-  // 2. Get all HR/Management Names
-  const hrNames = hrRecords.map(h => h.agent_name);
+    // 2. Get all HR/Management Names
+    const hrNames = hrRecords.map(h => h.agent_name);
 
-  // 3. Merge and Remove Duplicates
-  return [...new Set([...agentNames, ...hrNames])].filter(Boolean).sort();
-}, [agents, hrRecords]);
+    // 3. Merge and Remove Duplicates
+    return [...new Set([...agentNames, ...hrNames])].filter(Boolean).sort();
+  }, [agents, hrRecords]);
 
   // 1. Helper: validAgents Set (Optimized for performance)
   // This creates a Set of names of agents who match the selected Team/Center
@@ -764,7 +901,7 @@ const allPossibleSellers = useMemo(() => {
 
   const dateRange = useMemo(() => getPayrollRange(selectedMonth), [selectedMonth]);
 
-// 2. Monthly Stats (Merged: Promoted Agents + Accurate Old Calc + Agent Restriction)
+  // 2. Monthly Stats (Merged: Promoted Agents + Accurate Old Calc + Agent Restriction)
   const monthlyStats = useMemo(() => {
     // 1. Define Cycle Boundaries
     const { start, end } = getPayrollRange(selectedMonth);
@@ -789,12 +926,12 @@ const allPossibleSellers = useMemo(() => {
 
     // Find HR records who are NOT in agents list but HAVE sales this month
     const relevantSales = sales.filter(s => new Date(s.date) >= start && new Date(s.date) <= end);
-    const activeSalesMap = new Map(); 
-    
+    const activeSalesMap = new Map();
+
     relevantSales.forEach(s => {
-       if (!activeSalesMap.has(s.agentName)) {
-           activeSalesMap.set(s.agentName, { team: s.team || s.teamLead, center: s.center });
-       }
+      if (!activeSalesMap.has(s.agentName)) {
+        activeSalesMap.set(s.agentName, { team: s.team || s.teamLead, center: s.center });
+      }
     });
 
     hrRecords.forEach(hr => {
@@ -805,7 +942,7 @@ const allPossibleSellers = useMemo(() => {
         combinedList.push({
           name: hr.agent_name,
           cnic: hr.cnic,
-          team: salesInfo.team || hr.team || 'Unassigned', 
+          team: salesInfo.team || hr.team || 'Unassigned',
           center: salesInfo.center || hr.center || 'Phase 7',
           activeDate: hr.joining_date,
           status: 'Promoted', // Internal flag
@@ -819,14 +956,14 @@ const allPossibleSellers = useMemo(() => {
     // STEP B: FILTERING (With Agent Restriction)
     // ---------------------------------------------------------
     const filteredAgentsList = combinedList.filter(a => {
-      
+
       // [CRITICAL FIX] Use 'currentUser' to match your Login Logic
       if (userRole === 'Agent') {
-         // Fallback to localStorage if state is unavailable on refresh
-         const loggedInCnic = currentUser?.cnic || JSON.parse(localStorage.getItem('ams_user'))?.cnic;
-         
-         // If we can't verify the user, hide the data
-         if (!loggedInCnic || a.cnic !== loggedInCnic) return false;
+        // Fallback to localStorage if state is unavailable on refresh
+        const loggedInCnic = currentUser?.cnic || JSON.parse(localStorage.getItem('ams_user'))?.cnic;
+
+        // If we can't verify the user, hide the data
+        if (!loggedInCnic || a.cnic !== loggedInCnic) return false;
       }
 
       // 1. Team/Center Check (Skip for Agents so they don't filter themselves out)
@@ -847,22 +984,22 @@ const allPossibleSellers = useMemo(() => {
 
       // 3. Left Date Check (From Your Accurate Code)
       if (a.status !== 'Promoted') {
-          const isLeft = a.status === 'Left' || hrRec?.status === 'Left';
+        const isLeft = a.status === 'Left' || hrRec?.status === 'Left';
 
-          if (isLeft) {
-            const dateValue = a.leftDate || a.left_date || hrRec?.leftDate || hrRec?.left_date;
-            const leaveDate = parseDate(dateValue);
+        if (isLeft) {
+          const dateValue = a.leftDate || a.left_date || hrRec?.leftDate || hrRec?.left_date;
+          const leaveDate = parseDate(dateValue);
 
-            if (leaveDate) {
-              // STRICT RULE: If they left strictly BEFORE the cycle started -> HIDE
-              if (leaveDate.getTime() < cycleStart.getTime()) {
-                return false;
-              }
-            } else {
-              // SAFETY: No date found -> Hide
+          if (leaveDate) {
+            // STRICT RULE: If they left strictly BEFORE the cycle started -> HIDE
+            if (leaveDate.getTime() < cycleStart.getTime()) {
               return false;
             }
+          } else {
+            // SAFETY: No date found -> Hide
+            return false;
           }
+        }
       }
 
       return true;
@@ -871,17 +1008,34 @@ const allPossibleSellers = useMemo(() => {
     // ---------------------------------------------------------
     // STEP C: ACCURATE CALCULATIONS (Restored Loop Logic)
     // ---------------------------------------------------------
+  // ---------------------------------------------------------
+    // STEP C: ACCURATE CALCULATIONS (Fixed Name Matching)
+    // ---------------------------------------------------------
     const agentStats = filteredAgentsList.map(agent => {
-      const approvedSales = sales.filter(s =>
-        s.agentName === agent.name &&
-        (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer') &&
-        new Date(s.date) >= start && new Date(s.date) <= end
-      );
+      // [FIX 1] Normalize Agent Name (Trim + Lowercase) for robust matching
+      // This ensures "Ali" matches "ali " or "ALI"
+      const targetName = agent.name?.toString().trim().toLowerCase();
 
-      const agentAttendance = attendance.filter(att =>
-        att.agentName === agent.name &&
-        new Date(att.date) >= start && new Date(att.date) <= end
-      );
+      const approvedSales = sales.filter(s => {
+        // [FIX 2] Normalize Sale Agent Name before comparing
+        const saleName = s.agentName?.toString().trim().toLowerCase();
+        const nameMatch = saleName === targetName;
+        
+        // [FIX 3] Expanded Disposition Check (Added HW-Xfer-CDR just in case)
+        const statusMatch = s.status === 'Sale' || 
+                            ['HW- Xfer', 'HW-IBXfer', 'HW-Xfer-CDR'].includes(s.disposition);
+        
+        const dateMatch = new Date(s.date) >= start && new Date(s.date) <= end;
+
+        return nameMatch && statusMatch && dateMatch;
+      });
+
+      const agentAttendance = attendance.filter(att => {
+        // [FIX 4] Normalize Attendance Name too
+        const attName = att.agentName?.toString().trim().toLowerCase();
+        const dateMatch = new Date(att.date) >= start && new Date(att.date) <= end;
+        return attName === targetName && dateMatch;
+      });
 
       // Daily Breakdown (Restored Exact Loop from Your Code)
       let dialingDays = 0;
@@ -895,7 +1049,7 @@ const allPossibleSellers = useMemo(() => {
         const attRecord = agentAttendance.find(a => a.date === dateStr);
         const isMarkedPresent = attRecord && (attRecord.status === 'Present' || attRecord.status === 'Late');
         const dailySalesCount = approvedSales.filter(s => s.date === dateStr).length;
-        
+
         const isWorkingDay = isMarkedPresent || dailySalesCount > 0;
 
         if (isWorkingDay) {
@@ -909,9 +1063,11 @@ const allPossibleSellers = useMemo(() => {
       }
 
       // Financials
-      const agentBonuses = bonuses.filter(b => b.agentName === agent.name && b.month === selectedMonth)
+      // [FIX 5] Fix Bonuses/Fines matching too
+      const agentBonuses = bonuses.filter(b => b.agentName?.toString().trim().toLowerCase() === targetName && b.month === selectedMonth)
         .reduce((sum, b) => sum + (b.amount || 0), 0);
-      const agentFines = fines.filter(f => f.agentName === agent.name && f.month === selectedMonth)
+        
+      const agentFines = fines.filter(f => f.agentName?.toString().trim().toLowerCase() === targetName && f.month === selectedMonth)
         .reduce((sum, f) => sum + (f.amount || 0), 0);
 
       const baseSalary = agent.baseSalary || 0;
@@ -923,7 +1079,12 @@ const allPossibleSellers = useMemo(() => {
         earnedBase = baseSalary;
       }
 
-      const hrRecord = hrRecords.find(h => (agent.cnic && h.cnic === agent.cnic) || (h.agent_name.toLowerCase() === agent.name.toLowerCase()));
+      // [FIX 6] Fix HR Record matching
+      const hrRecord = hrRecords.find(h => 
+        (agent.cnic && h.cnic === agent.cnic) || 
+        (h.agent_name?.toString().trim().toLowerCase() === targetName)
+      );
+      
       const netSalary = earnedBase + agentBonuses - agentFines;
 
       const finalLeftDate = agent.status === 'Promoted' ? null : (agent.leftDate || agent.left_date || hrRecord?.leftDate || null);
@@ -947,9 +1108,8 @@ const allPossibleSellers = useMemo(() => {
         accountNo: hrRecord?.account_number || '-'
       };
     });
-
     // Sort Alphabetically (A-Z) by Name
-return agentStats.sort((a, b) => a.name.localeCompare(b.name));
+    return agentStats.sort((a, b) => a.name.localeCompare(b.name));
   }, [agents, sales, fines, bonuses, attendance, hrRecords, selectedMonth, teamFilter, centerFilter, userRole, currentUser]);
 
   const managementStats = useMemo(() => {
@@ -973,12 +1133,12 @@ return agentStats.sort((a, b) => a.name.localeCompare(b.name));
       );
 
       const daysPresent = attRecords.filter(a => a.status === 'Present' || a.status === 'Late').length;
-      
+
       // [FIXED] Read directly from HR Record (base_salary)
-    // We fallback to 0 if missing. 
-    // Note: Supabase returns snake_case 'base_salary'.
-    // Make sure this line matches the DB column name
-const baseSalary = mgr.base_salary || mgr.baseSalary || 0;
+      // We fallback to 0 if missing. 
+      // Note: Supabase returns snake_case 'base_salary'.
+      // Make sure this line matches the DB column name
+      const baseSalary = mgr.base_salary || mgr.baseSalary || 0;
 
       const earnedBase = totalWorkingDays > 0 ? Math.round((baseSalary / totalWorkingDays) * daysPresent) : 0;
 
@@ -1053,20 +1213,20 @@ const baseSalary = mgr.base_salary || mgr.baseSalary || 0;
     return stats.sort((a, b) => b.totalSales - a.totalSales);
   }, [agents, sales, monthlyStats, getActiveDateRange, validAgentNames]);
 
-// 5. Sales Table (Smart Filter: Agents + HR Only)
+  // 5. Sales Table (Smart Filter: Agents + HR Only)
   const filteredSales = useMemo(() => {
     const { start, end } = getActiveDateRange;
-    
+
     // Normalize dates
-    const sDate = new Date(start); sDate.setHours(0,0,0,0);
-    const eDate = new Date(end); eDate.setHours(23,59,59,999);
+    const sDate = new Date(start); sDate.setHours(0, 0, 0, 0);
+    const eDate = new Date(end); eDate.setHours(23, 59, 59, 999);
 
     // [STEP 1] Create a "White List" of known people
     // We combine Active Agents AND HR Records.
     // If a name is not in this list, it's considered "Junk/Random" and hidden.
     const validPeopleSet = new Set([
-        ...agents.map(a => a.name),          // Active Agents
-        ...hrRecords.map(h => h.agent_name)  // HR/Management
+      ...agents.map(a => a.name),          // Active Agents
+      ...hrRecords.map(h => h.agent_name)  // HR/Management
     ]);
 
     return sales.filter(sale => {
@@ -1099,8 +1259,8 @@ const baseSalary = mgr.base_salary || mgr.baseSalary || 0;
       // 6. Permission Check (Agent View)
       let matchesPermission = true;
       if (userRole === 'Agent') {
-          const currentName = currentUser?.name || JSON.parse(localStorage.getItem('ams_user'))?.name;
-          if (sale.agentName !== currentName) matchesPermission = false;
+        const currentName = currentUser?.name || JSON.parse(localStorage.getItem('ams_user'))?.name;
+        if (sale.agentName !== currentName) matchesPermission = false;
       }
 
       return matchesDate && matchesStatus && matchesTeam && matchesCenter && matchesPermission && isRealPerson;
@@ -1172,7 +1332,7 @@ const baseSalary = mgr.base_salary || mgr.baseSalary || 0;
   }, [fines, searchQuery, selectedMonth, validAgentNames]);
 
 
-// 10. HR (Respects Team, Center, Status AND Designation)
+  // 10. HR (Respects Team, Center, Status AND Designation)
   const filteredHR = useMemo(() => {
     return hrRecords.filter(rec => {
       // 1. Search
@@ -1201,7 +1361,7 @@ const baseSalary = mgr.base_salary || mgr.baseSalary || 0;
     });
   }, [hrRecords, searchQuery, validAgentNames, teamFilter, centerFilter, agentStatusFilter, designationFilter]);
 
- const handleSaveAgent = async (e) => {
+  const handleSaveAgent = async (e) => {
     e.preventDefault();
     setLoading(true);
 
@@ -1226,7 +1386,6 @@ const baseSalary = mgr.base_salary || mgr.baseSalary || 0;
         baseSalary: editingAgent.baseSalary ? parseInt(editingAgent.baseSalary) : 0,
         activeDate: joiningDate,
         status: editingAgent.status || 'Active',
-        // If status is Active, clear the leftDate. If Left, set it.
         leftDate: editingAgent.status === 'Left' ? editingAgent.leftDate : null
       };
 
@@ -1238,7 +1397,6 @@ const baseSalary = mgr.base_salary || mgr.baseSalary || 0;
         Phone: editingAgent.contact_number || editingAgent.Phone || '',
         email: editingAgent.email || '',
         address: editingAgent.address || '',
-        // Ensure base_salary is saved to HR table too
         base_salary: editingAgent.baseSalary ? parseInt(editingAgent.baseSalary) : 0,
         joining_date: joiningDate,
         bank_name: editingAgent.bank_name || '',
@@ -1247,9 +1405,45 @@ const baseSalary = mgr.base_salary || mgr.baseSalary || 0;
         designation: editingAgent.designation || 'Agent'
       };
 
-      if (showEditAgent) {
-        // === UPDATE MODE ===
-        // Use upsert to handle cases where UI might be out of sync
+      // [CRITICAL FIX] Use the 'original_cnic' we saved when opening the modal
+      const oldCnic = editingAgent.original_cnic;
+
+      // Check if we are renaming: We have an Old CNIC, and it is different from the Input
+      const isRenaming = showEditAgent && oldCnic && oldCnic !== validCnic;
+
+      if (isRenaming) {
+        // === SCENARIO A: CNIC CHANGED (UPDATE OLD RECORD) ===
+        console.log(`Renaming Agent from ${oldCnic} to ${validCnic}`);
+
+        // 1. Check if new CNIC is taken
+        const { data: conflict } = await supabase.from('agents').select('cnic').eq('cnic', validCnic).maybeSingle();
+        if (conflict) throw new Error("The new CNIC is already in use.");
+
+        // 2. Update AGENTS Table (Target OLD CNIC)
+        const { error: agentError } = await supabase
+          .from('agents')
+          .update(agentPayload)
+          .eq('cnic', oldCnic);
+
+        if (agentError) throw new Error(`Agent Rename Failed: ${agentError.message}`);
+
+        // 3. Update HR RECORDS Table (Target OLD CNIC)
+        const { error: hrError } = await supabase
+          .from('hr_records')
+          .update(hrPayload)
+          .eq('cnic', oldCnic);
+
+        if (hrError) console.warn(`HR Rename Warning: ${hrError.message}`);
+
+        // 4. Update UI (Replace Old ID with New ID in list)
+        const mergedData = { ...agentPayload, ...hrPayload };
+
+        setAgents(prev => prev.map(a => a.cnic === oldCnic ? { ...a, ...mergedData } : a));
+        setHrRecords(prev => prev.map(h => h.cnic === oldCnic ? { ...h, ...mergedData } : h));
+
+      } else if (showEditAgent) {
+        // === SCENARIO B: NORMAL EDIT (SAME CNIC) ===
+
         const { error: agentError } = await supabase.from('agents').upsert(agentPayload, { onConflict: 'cnic' });
         if (agentError) throw new Error(`Agent Update Failed: ${agentError.message}`);
 
@@ -1259,18 +1453,16 @@ const baseSalary = mgr.base_salary || mgr.baseSalary || 0;
         // Update UI
         setAgents(prev => prev.map(a => a.cnic === editingAgent.cnic ? { ...a, ...agentPayload } : a));
         setHrRecords(prev => {
-          const exists = prev.find(h => h.cnic === editingAgent.cnic);
+          const exists = prev.some(h => h.cnic === editingAgent.cnic);
           const uiPayload = { ...hrPayload, baseSalary: agentPayload.baseSalary };
+
           if (exists) return prev.map(h => h.cnic === editingAgent.cnic ? { ...h, ...uiPayload } : h);
-          return [...prev, { ...uiPayload, id: Math.random() }];
+          return [...prev, { ...uiPayload, id: Math.random() }]; // Fallback if not found in local state
         });
 
       } else {
-        // === CREATE MODE ===
-        
-        // [FIX] Removed the "Check if exists" block. 
-        // We use UPSERT immediately. This fixes the "Already Exists" error for zombie records.
-        
+        // === SCENARIO C: CREATE NEW AGENT ===
+
         // 1. Upsert Agent
         const { data: savedAgent, error: agentError } = await supabase
           .from('agents')
@@ -1285,28 +1477,23 @@ const baseSalary = mgr.base_salary || mgr.baseSalary || 0;
           .upsert(hrPayload, { onConflict: 'cnic' })
           .select();
 
-        if (hrError) {
-          console.error("HR Sync Error:", hrError);
-          // Alert user but don't crash, as Agent was created/updated successfully
-          alert(`Agent saved, but HR sync warning: ${hrError.message}`);
+        if (hrError) console.error("HR Sync Error:", hrError);
+
+        // 3. Update UI
+        if (savedAgent && savedAgent.length > 0) {
+          setAgents(prev => {
+            const exists = prev.some(a => a.cnic === validCnic);
+            if (exists) return prev.map(a => a.cnic === validCnic ? savedAgent[0] : a);
+            return [...prev, savedAgent[0]];
+          });
         }
 
-        // 3. Update UI (Check for duplicates in local state before adding)
-        if (savedAgent && savedAgent.length > 0) {
-            setAgents(prev => {
-                const exists = prev.some(a => a.cnic === validCnic);
-                // If it existed (zombie), update it. If new, add it.
-                if (exists) return prev.map(a => a.cnic === validCnic ? savedAgent[0] : a);
-                return [...prev, savedAgent[0]];
-            });
-        }
-        
         if (savedHR && savedHR.length > 0) {
           const hrWithSalary = { ...savedHR[0], baseSalary: agentPayload.baseSalary };
           setHrRecords(prev => {
-             const exists = prev.some(h => h.cnic === validCnic);
-             if (exists) return prev.map(h => h.cnic === validCnic ? hrWithSalary : h);
-             return [...prev, hrWithSalary];
+            const exists = prev.some(h => h.cnic === validCnic);
+            if (exists) return prev.map(h => h.cnic === validCnic ? hrWithSalary : h);
+            return [...prev, hrWithSalary];
           });
         }
       }
@@ -1318,7 +1505,7 @@ const baseSalary = mgr.base_salary || mgr.baseSalary || 0;
 
     } catch (error) {
       console.error("Save Error:", error);
-      alert("CRITICAL ERROR: " + error.message);
+      alert("Error: " + error.message);
     } finally {
       setLoading(false);
     }
@@ -1461,21 +1648,21 @@ const baseSalary = mgr.base_salary || mgr.baseSalary || 0;
     }
   };
 
- // --- ATTENDANCE STATE ---
+  // --- ATTENDANCE STATE ---
   const [showEditAttendanceModal, setShowEditAttendanceModal] = useState(false);
   const [editingAttendance, setEditingAttendance] = useState(null);
 
- // --- HANDLER: Quick Add/Update (Mark Present/Absent from Table) ---
+  // --- HANDLER: Quick Add/Update (Mark Present/Absent from Table) ---
   const handleQuickAttendance = async (employeeName, newStatus, existingId = null) => {
     // 1. Define Defaults
-    const defaultLogin = "19:00"; 
-    const defaultLogout = "05:00"; 
-    
+    const defaultLogin = "19:00";
+    const defaultLogout = "05:00";
+
     // [FIX] If Absent, send "00:00" to satisfy DB constraint, otherwise use default
     const loginTime = newStatus === 'Absent' ? "00:00" : defaultLogin;
     const logoutTime = newStatus === 'Absent' ? "00:00" : defaultLogout;
-    
-    const isLate = false; 
+
+    const isLate = false;
 
     const payload = {
       date: customStartDate,
@@ -1494,7 +1681,7 @@ const baseSalary = mgr.base_salary || mgr.baseSalary || 0;
       const res = await supabase.from('attendance').update(payload).eq('id', existingId).select();
       error = res.error;
       data = res.data;
-      
+
       if (!error && data.length > 0) {
         setAttendance(attendance.map(a => a.id === existingId ? data[0] : a));
       }
@@ -1517,14 +1704,14 @@ const baseSalary = mgr.base_salary || mgr.baseSalary || 0;
     e.preventDefault();
     const formData = new FormData(e.target);
     const status = formData.get('status');
-    
+
     let newLogin = formData.get('loginTime');
     let newLogout = formData.get('logoutTime');
 
     // [FIX] If setting to Absent, force "00:00" to satisfy DB Not-Null Constraint
     if (status === 'Absent') {
-        newLogin = "00:00";
-        newLogout = "00:00";
+      newLogin = "00:00";
+      newLogout = "00:00";
     }
 
     // Ensure we don't send empty strings if user cleared the box manually
@@ -1532,7 +1719,7 @@ const baseSalary = mgr.base_salary || mgr.baseSalary || 0;
     if (!newLogout) newLogout = "00:00";
 
     // Auto-calculate late
-    const isLate = (status === 'Present' || status === 'Late') && newLogin > "19:15"; 
+    const isLate = (status === 'Present' || status === 'Late') && newLogin > "19:15";
 
     const updatedRecord = {
       loginTime: newLogin,
@@ -1549,7 +1736,7 @@ const baseSalary = mgr.base_salary || mgr.baseSalary || 0;
     if (error) {
       alert("Error updating attendance: " + error.message);
     } else {
-      setAttendance(attendance.map(a => 
+      setAttendance(attendance.map(a =>
         a.id === editingAttendance.id ? { ...a, ...updatedRecord } : a
       ));
       setShowEditAttendanceModal(false);
@@ -1573,7 +1760,7 @@ const baseSalary = mgr.base_salary || mgr.baseSalary || 0;
   const handleSaveMgmtFine = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
-    
+
     const newFine = {
       agentName: formData.get('employeeName'), // Using 'agentName' column so it matches DB schema
       reason: formData.get('reason'),
@@ -1583,7 +1770,7 @@ const baseSalary = mgr.base_salary || mgr.baseSalary || 0;
     };
 
     const { data, error } = await supabase.from('fines').insert([newFine]).select();
-    
+
     if (error) {
       alert("Error adding fine: " + error.message);
     } else {
@@ -1766,40 +1953,40 @@ const baseSalary = mgr.base_salary || mgr.baseSalary || 0;
     if (!error) { setBonuses([...bonuses, ...data]); setShowAddBonus(false); }
   };
 
-const handleSaveHR = async (e) => {
+  const handleSaveHR = async (e) => {
     e.preventDefault();
     setLoading(true);
-    console.log("🚀 Starting Save Process...");
 
     try {
       // 1. Sanitize Data
       const designationClean = (editingHR.designation || 'Agent').trim();
-      // Case-insensitive check: "Agent", "agent", "AGENT" are all valid
-      const isAgent = designationClean.toLowerCase() === 'agent'; 
-      
-      console.log("📝 Designation:", designationClean, "| Is Agent?", isAgent);
+      const isAgent = designationClean.toLowerCase() === 'agent';
 
-      // 2. Prepare HR Payload (With Salary Fix)
+      // [FIX] Detect CNIC Rename
+      const validCnic = editingHR.cnic ? editingHR.cnic.trim() : "";
+      const oldCnic = editingHR.original_cnic; // Must come from Edit Button
+      const isRenaming = editingHR.id && oldCnic && oldCnic !== validCnic;
+
+      if (!validCnic) throw new Error("CNIC is required.");
+
+      // 2. Prepare HR Payload
       const hrPayload = {
         agent_name: editingHR.agent_name,
         father_name: editingHR.father_name || '',
-        cnic: editingHR.cnic,
+        cnic: validCnic,
         Phone: editingHR.contact_number,
         email: editingHR.email,
         address: editingHR.address,
-        designation: designationClean, 
+        designation: designationClean,
         joining_date: editingHR.joining_date,
         bank_name: editingHR.bank_name || '',
         account_number: editingHR.account_number || '',
         status: editingHR.status || 'Active',
         payroll_cycle_type: editingHR.payroll_cycle_type || 'Agent Cycle',
-        // [FIX] Save to 'base_salary' column
-        base_salary: editingHR.baseSalary ? parseInt(editingHR.baseSalary) : 0 
+        base_salary: editingHR.baseSalary ? parseInt(editingHR.baseSalary) : 0
       };
 
-      console.log("📦 Sending HR Payload to DB:", hrPayload);
-
-      // 3. Prepare Agent Payload (Only used if isAgent is true)
+      // 3. Prepare Agent Payload
       const agentSyncPayload = {
         name: editingHR.agent_name,
         baseSalary: parseInt(editingHR.baseSalary) || 0,
@@ -1813,9 +2000,14 @@ const handleSaveHR = async (e) => {
 
       if (editingHR.id) {
         //Options: === UPDATE EXISTING ===
-        console.log("🔄 Updating Existing Record ID:", editingHR.id);
-        
-        // A. Update HR Table (Always)
+
+        // A. Handle Renaming Conflict Check (Agents Table)
+        if (isRenaming && isAgent) {
+          const { data: conflict } = await supabase.from('agents').select('cnic').eq('cnic', validCnic).maybeSingle();
+          if (conflict) throw new Error("This new CNIC is already assigned to another agent.");
+        }
+
+        // B. Update HR Table (Safe to use ID)
         const { error: hrError } = await supabase
           .from('hr_records')
           .update(hrPayload)
@@ -1823,52 +2015,54 @@ const handleSaveHR = async (e) => {
 
         if (hrError) throw new Error(`HR Update Failed: ${hrError.message}`);
 
-        // B. Handle Agents Table Logic
-        if (isAgent && editingHR.cnic) {
-          // 1. If Designation IS 'Agent' -> Sync Update to agents table
-          const { error: agentError } = await supabase
-            .from('agents')
-            .upsert({ ...agentSyncPayload, cnic: editingHR.cnic }, { onConflict: 'cnic' });
-            
-          if (agentError) console.warn("⚠️ Agent update warning:", agentError.message);
-          else console.log("✅ Agent Record Synced");
-        } 
-        else if (!isAgent && editingHR.cnic) {
-          // 2. [NEW] If Designation is NOT 'Agent' -> DELETE from agents table
-          console.log("🗑️ Designation changed from Agent. Removing from Agents table...");
-          const { error: deleteError } = await supabase
-            .from('agents')
-            .delete()
-            .eq('cnic', editingHR.cnic);
+        // C. Handle Agents Table Logic (Sync)
+        if (isAgent) {
+          if (isRenaming) {
+            // [CRITICAL FIX] If CNIC changed, find the OLD agent and update them
+            const { error: renameError } = await supabase
+              .from('agents')
+              .update({ ...agentSyncPayload, cnic: validCnic }) // Set new CNIC
+              .eq('cnic', oldCnic); // Find by OLD CNIC
 
-          if (deleteError) console.error("❌ Failed to remove from Agents table:", deleteError.message);
-          
-          // Remove from local agents state immediately
-          setAgents(prev => prev.filter(a => a.cnic !== editingHR.cnic));
+            if (renameError) console.error("Agent Rename Failed:", renameError);
+          } else {
+            // Normal Update
+            const { error: agentError } = await supabase
+              .from('agents')
+              .upsert({ ...agentSyncPayload, cnic: validCnic }, { onConflict: 'cnic' });
+            if (agentError) console.warn("Agent Sync Warning:", agentError);
+          }
         }
-        
-        // Update Local HR State
+        else {
+          // If NOT an agent (e.g. changed to Manager), remove from Agents table
+          const targetCnic = isRenaming ? oldCnic : validCnic;
+          if (targetCnic) {
+            await supabase.from('agents').delete().eq('cnic', targetCnic);
+            setAgents(prev => prev.filter(a => a.cnic !== targetCnic));
+          }
+        }
+
+        // Update Local State
         setHrRecords(prev => prev.map(h => h.id === editingHR.id ? { ...h, ...hrPayload, baseSalary: hrPayload.base_salary } : h));
-        
-        // Update Local Agents State (If they are still an agent)
+
         if (isAgent) {
           setAgents(prev => {
-             // Check if agent exists in list
-             const exists = prev.some(a => a.cnic === editingHR.cnic);
-             if (exists) {
-                 return prev.map(a => a.cnic === editingHR.cnic ? { ...a, ...agentSyncPayload } : a);
-             } else {
-                 // If we just turned them INTO an agent, add them to the list
-                 return [...prev, { ...agentSyncPayload, cnic: editingHR.cnic }];
-             }
+            // If renaming, replace the old CNIC entry
+            if (isRenaming) {
+              return prev.map(a => a.cnic === oldCnic ? { ...a, ...agentSyncPayload, cnic: validCnic } : a);
+            }
+            // Otherwise standard upsert logic in state
+            const exists = prev.some(a => a.cnic === validCnic);
+            return exists
+              ? prev.map(a => a.cnic === validCnic ? { ...a, ...agentSyncPayload } : a)
+              : [...prev, { ...agentSyncPayload, cnic: validCnic }];
           });
         }
 
       } else {
         //Options: === CREATE NEW ===
-        console.log("✨ Creating New Record...");
 
-        // A. Insert into HR Table
+        // 1. Insert into HR
         const { data: newHR, error: hrError } = await supabase
           .from('hr_records')
           .insert([hrPayload])
@@ -1876,29 +2070,27 @@ const handleSaveHR = async (e) => {
 
         if (hrError) throw new Error(`HR Insert Failed: ${hrError.message}`);
 
-        // B. Insert into Agents Table (ONLY IF DESIGNATION IS AGENT)
+        // 2. Insert into Agents (If Role is Agent)
         if (isAgent && editingHR.cnic) {
           const agentInsertPayload = {
             ...agentSyncPayload,
             cnic: editingHR.cnic,
-            password: '', // Default Password
+            password: '123', // [FIX] Added default password
             activeDate: editingHR.joining_date,
             leftDate: null
           };
 
-          const { error: agentError } = await supabase
-            .from('agents')
-            .upsert(agentInsertPayload, { onConflict: 'cnic' });
+          const { error: agentError } = await supabase.from('agents').upsert(agentInsertPayload, { onConflict: 'cnic' });
 
-          if (agentError) console.error("❌ Agent Insert Failed:", agentError.message);
-          else console.log("✅ New Agent Record Created");
-          
-          // Refresh Agent List
-          const { data: refreshedAgents } = await supabase.from('agents').select('*');
-          if (refreshedAgents) setAgents(refreshedAgents);
+          if (!agentError) {
+            // Add to local agent state (Avoid Duplicates)
+            setAgents(prev => {
+              if (prev.some(a => a.cnic === editingHR.cnic)) return prev;
+              return [...prev, agentInsertPayload];
+            });
+          }
         }
 
-        // Add to Local HR State
         if (newHR) {
           const hrWithSalary = { ...newHR[0], baseSalary: hrPayload.base_salary };
           setHrRecords(prev => [...prev, hrWithSalary]);
@@ -1910,7 +2102,7 @@ const handleSaveHR = async (e) => {
       setEditingHR(null);
 
     } catch (error) {
-      console.error("🚨 SAVE ERROR:", error);
+      console.error("Save Error:", error);
       alert('Error: ' + error.message);
     } finally {
       setLoading(false);
@@ -2124,21 +2316,21 @@ const handleSaveHR = async (e) => {
           }
         }
 
- // --- 3. IMPORT ATTENDANCE (Night Shift + Weekend Fix) ---
+        // --- 3. IMPORT ATTENDANCE (Night Shift + Weekend Fix) ---
         else if (importType === 'attendance') {
           // A. Group raw scans by "Shift Date" (not just Calendar Date)
           const dailyGroups = {};
 
           // Config: Hour to cut off "yesterday's shift"
           // If scan is before 12:00 PM (noon), it belongs to previous day
-          const SHIFT_CUTOFF_HOUR = 12; 
+          const SHIFT_CUTOFF_HOUR = 12;
 
           rows.slice(1).forEach((rawLine) => {
             const values = safeRow(rawLine);
-            
+
             // Map Columns (Col 2 = Name, Col 3 = Time)
-            const nameRaw = values[2]; 
-            const dateTimeRaw = values[3]; 
+            const nameRaw = values[2];
+            const dateTimeRaw = values[3];
 
             if (!nameRaw || !dateTimeRaw) return;
 
@@ -2150,15 +2342,15 @@ const handleSaveHR = async (e) => {
             const scanHour = dt.getHours();
 
             if (scanHour < SHIFT_CUTOFF_HOUR) {
-               // If before 12 PM, move 'shiftDate' back by 1 day
-               shiftDate.setDate(shiftDate.getDate() - 1);
+              // If before 12 PM, move 'shiftDate' back by 1 day
+              shiftDate.setDate(shiftDate.getDate() - 1);
             }
 
             // --- LOGIC 2: Skip Weekends (Sat/Sun) ---
             // getDay(): 0 = Sunday, 6 = Saturday
             const dayOfWeek = shiftDate.getDay();
             if (dayOfWeek === 0 || dayOfWeek === 6) {
-               return; // Skip this row entirely
+              return; // Skip this row entirely
             }
 
             // Generate Key based on SHIFT Date
@@ -2183,24 +2375,24 @@ const handleSaveHR = async (e) => {
             // This works perfectly even if Login is Jan 1st 19:00 and Logout is Jan 2nd 05:00
             group.scans.sort((a, b) => a - b);
 
-            const firstScan = group.scans[0]; 
+            const firstScan = group.scans[0];
             let lastScanDate = null;
 
             if (group.scans.length > 1) {
-               const potentialLast = group.scans[group.scans.length - 1]; 
-               
-               // Ignore double tap if within 5 mins (300,000 ms)
-               const diffMs = potentialLast - firstScan;
-               if (diffMs > 300000) { 
-                 lastScanDate = potentialLast;
-               }
+              const potentialLast = group.scans[group.scans.length - 1];
+
+              // Ignore double tap if within 5 mins (300,000 ms)
+              const diffMs = potentialLast - firstScan;
+              if (diffMs > 300000) {
+                lastScanDate = potentialLast;
+              }
             }
 
             return {
               // --- MAPPED EXACTLY TO YOUR SCHEMA ---
               date: group.date,
               agentName: group.name,
-              loginTime: normalizeTime(firstScan.toLocaleTimeString('en-GB', { hour12: false })), 
+              loginTime: normalizeTime(firstScan.toLocaleTimeString('en-GB', { hour12: false })),
               logoutTime: lastScanDate ? normalizeTime(lastScanDate.toLocaleTimeString('en-GB', { hour12: false })) : '',
               status: 'Present',
               late: false,
@@ -2210,13 +2402,13 @@ const handleSaveHR = async (e) => {
 
           // C. Insert into Supabase
           const { data, error } = await supabase
-            .from('attendance') 
-            .upsert(newAttendance, { onConflict: 'date, agentName' }) 
+            .from('attendance')
+            .upsert(newAttendance, { onConflict: 'date, agentName' })
             .select();
 
           if (!error) {
             alert(`Success! Processed ${data.length} records (Weekends excluded).`);
-            window.location.reload(); 
+            window.location.reload();
           } else {
             throw new Error(error.message);
           }
@@ -2270,7 +2462,7 @@ const handleSaveHR = async (e) => {
   };
 
 
-// 2. Mark as Left / Reactivate (Saves Date to BOTH tables)
+  // 2. Mark as Left / Reactivate (Saves Date to BOTH tables)
   const handleToggleHRStatus = async (id, currentStatus, cnic, agentName) => {
     if (!id) return alert("Error: Record ID is missing.");
 
@@ -2289,8 +2481,8 @@ const handleSaveHR = async (e) => {
         // A. Update HR Record (Now saving leftDate here too!)
         const { error: hrError } = await supabase
           .from('hr_records')
-          .update({ 
-            status: newStatus, 
+          .update({
+            status: newStatus,
             left_date: leftDateVal // Make sure your DB column is 'left_date' or 'leftDate'
           })
           .eq('id', id);
@@ -2455,29 +2647,34 @@ const handleSaveHR = async (e) => {
   }
 
   // Reusable Sub-Navigation Component
-const SubTabBar = ({ tabs, activeSubTab, setActiveSubTab }) => {
-  return (
-    <div className="bg-slate-800/50 border-b border-slate-700 mb-6">
-      <div className="flex gap-2 px-6">
-        {tabs.map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveSubTab(tab.id)}
-            className={`px-4 py-2 text-sm font-medium transition-colors ${
-              activeSubTab === tab.id
-                ? 'border-b-2 border-green-400 text-green-400'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+  const SubTabBar = ({ tabs, activeSubTab, setActiveSubTab }) => {
+    return (
+      <div className="bg-slate-800/50 border-b border-slate-700 mb-6">
+        <div className="flex gap-2 px-6">
+          {tabs.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveSubTab(tab.id)}
+              className={`px-4 py-2 text-sm font-medium transition-colors ${activeSubTab === tab.id
+                  ? 'border-b-2 border-green-400 text-green-400'
+                  : 'text-slate-400 hover:text-white'
+                }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
-    </div>
-  );
-};
+    );
+  };
 
   // MAIN DASHBOARD
+
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    setSearchQuery(''); // Reset search when switching tabs
+  };
+
   // Main Return Agent Payroll System
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
@@ -2492,12 +2689,16 @@ const SubTabBar = ({ tabs, activeSubTab, setActiveSubTab }) => {
               <div>
                 <h1 className="text-xl font-bold text-white">Shark Management System</h1>
                 <div className="flex items-center gap-2 text-xs text-slate-400 mt-0.5">
-                  <span className={`px-2 py-0.5 rounded-full font-medium ${userRole === 'Admin' ? 'bg-purple-100 text-purple-700' :
-                    userRole === 'QA' ? 'bg-orange-100 text-orange-700' :
-                      'bg-green-100 text-green-700'
-                    }`}>
-                    {userRole}
-                  </span>
+                  <span className={`px-2 py-0.5 rounded-full font-medium ${
+  userRole === 'SuperAdmin' ? 'bg-red-100 text-red-700 border border-red-200' : // Red for Super
+  userRole === 'Admin' ? 'bg-purple-100 text-purple-700' :                       // Purple for Admin
+  userRole === 'IT' ? 'bg-indigo-100 text-indigo-700' :                          // Indigo for IT
+  userRole === 'TL' ? 'bg-yellow-100 text-yellow-800' :                          // Yellow for Team Lead
+  userRole === 'QA' ? 'bg-orange-100 text-orange-700' :                          // Orange for QA
+  'bg-green-100 text-green-700'                                                  // Green for Agents
+}`}>
+  {userRole}
+</span>
                   <span>• {currentUser?.name}</span>
                 </div>
               </div>
@@ -2515,15 +2716,16 @@ const SubTabBar = ({ tabs, activeSubTab, setActiveSubTab }) => {
                 />
               </div>
 
-              {userRole === 'Admin' && (
-                <button
-                  onClick={() => setShowAdminModal(true)}
-                  className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm border border-slate-500 transition-colors mr-2"
-                >
-                  <Shield className="w-4 h-4" />
-                  Manage Access
-                </button>
-              )}
+{/* Allow Admin, SuperAdmin, AND IT to manage access */}
+{['Admin', 'SuperAdmin'].includes(userRole) && (
+  <button
+    onClick={() => setShowAdminModal(true)}
+    className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm border border-slate-500 transition-colors mr-2"
+  >
+    <Shield className="w-4 h-4" />
+    Manage Access
+  </button>
+)}
 
               <button
                 onClick={handleLogout}
@@ -2537,73 +2739,78 @@ const SubTabBar = ({ tabs, activeSubTab, setActiveSubTab }) => {
         </div>
       </div>
 
-      
-     {/* Navigation Tabs - Main Header Buttons */}
-<div className="bg-slate-800 border-b border-slate-700">
-  <div className="max-w-7xl mx-auto px-6">
-    <div className="flex gap-1 overflow-x-auto">
-      {['dashboard', 'sales', 'attendance', 'payroll'].map(tab => {
-        if (userRole === 'Agent' && (tab === 'payroll')) return null;
 
-        return (
-          <button
-            key={tab}
-            onClick={() => {
-              setActiveTab(tab);
-              setSearchQuery('');
-            }}
-            className={`px-6 py-3 text-sm font-medium capitalize transition-colors whitespace-nowrap ${activeTab === tab
-              ? 'border-b-2 border-blue-400 text-blue-400'
-              : 'text-slate-400 hover:text-white'
-              }`}
-          >
-            {tab}
-          </button>
-        );
-      })}
+{/* Navigation Tabs - Main Header Buttons */}
+      <div className="bg-slate-800 border-b border-slate-700">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="flex gap-1 overflow-x-auto pb-2 scrollbar-hide">
+            {[
+              'dashboard',
+              'sales',
+              'attendance',
+              'payroll',
+              'employees',
+              'bonuses',
+              'fines',
+              'management',
+              'super_controls' // <--- Use lowercase ID here
+            ].map(tab => {
 
-      {/* Employees Tab - Admin Only */}
-      {userRole === 'Admin' && (
-        <button
-          onClick={() => { setActiveTab('employees'); setSearchQuery(''); }}
-          className={`px-6 py-3 text-sm font-medium capitalize transition-colors ${activeTab === 'employees' ? 'border-b-2 border-blue-400 text-blue-400' : 'text-slate-400 hover:text-white'}`}
-        >
-          Employees
-        </button>
-      )}
+              // 1. SUPER ADMIN: Sees everything
+              if (userRole === 'SuperAdmin') {
+                // Pass (show all)
+              }
 
-      {/* Bonuses Tab - Visible to Admin and HR */}
-      {(userRole === 'Admin' || userRole === 'HR') && (
-        <button
-          onClick={() => { setActiveTab('bonuses'); setSearchQuery(''); }}
-          className={`px-6 py-3 text-sm font-medium capitalize transition-colors ${activeTab === 'bonuses' ? 'border-b-2 border-blue-400 text-blue-400' : 'text-slate-400 hover:text-white'}`}
-        >
-          Bonuses
-        </button>
-      )}
+              // 2. AGENT: Restricted View
+              else if (userRole === 'Agent') {
+                if (['payroll', 'employees', 'management', 'super_controls'].includes(tab)) return null;
+              }
 
-      {/* Fines Tab - Visible to Admin, HR, and QA */}
-      {(userRole === 'Admin' || userRole === 'HR' || userRole === 'QA') && (
-        <button
-          onClick={() => { setActiveTab('fines'); setSearchQuery(''); }}
-          className={`px-6 py-3 text-sm font-medium capitalize transition-colors ${activeTab === 'fines' ? 'border-b-2 border-blue-400 text-blue-400' : 'text-slate-400 hover:text-white'}`}
-        >
-          Fines
-        </button>
-      )}
+              // 3. TL (Team Lead): Operational View
+              else if (userRole === 'TL') {
+                // TLs don't see Payroll, HR Records, Management, or Super Controls
+                if (['payroll', 'employees', 'super_controls', 'management'].includes(tab)) return null;
+              }
 
-      {/* Management Tab - Admin & HR Only */}
-      {(userRole === 'Admin' || userRole === 'HR') && (
-        <button
-          onClick={() => { setActiveTab('management'); setSearchQuery(''); }}
-          className={`px-6 py-3 text-sm font-medium capitalize whitespace-nowrap transition-colors ${activeTab === 'management' ? 'border-b-2 border-blue-400 text-blue-400' : 'text-slate-400 hover:text-white'}`}
-        >
-          Management
-        </button>
-      )}
-    </div>
-  </div>
-</div>
+              // 4. IT Support: System View
+              else if (userRole === 'IT') {
+                // IT mainly needs Management (Access) and Dashboard. Hide operations.
+                if (['sales', 'payroll', 'employees', 'bonuses', 'fines', 'super_controls'].includes(tab)) return null;
+              }
+
+              // 5. ADMIN / HR / QA: Existing Logic
+              else {
+                if (tab === 'super_controls') return null; // Only SuperAdmin sees this
+                
+                // QA restrictions
+                if (userRole === 'QA' && ['payroll', 'employees', 'management'].includes(tab)) return null;
+              }
+
+              return (
+                <button
+                  key={tab}
+                  onClick={() => handleTabChange(tab)}
+                  className={`px-6 py-3 text-sm font-medium capitalize transition-colors whitespace-nowrap ${
+                    activeTab === tab
+                      ? tab === 'super_controls'
+                        ? 'border-b-2 border-purple-500 text-purple-400' // Special color for Super Tab
+                        : 'border-b-2 border-blue-400 text-blue-400'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {/* Display Name Logic */}
+                  {tab === 'super_controls' ? 'Super Controls' : tab}
+                </button>
+              );
+            })}
+            
+            {/* --- MANUAL BUTTONS REMOVED --- */}
+            {/* The manual blocks for Employees, Bonuses, Fines, Management are deleted */}
+            {/* because the loop above now creates them for you. */}
+
+          </div>
+        </div>
+      </div>
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-6 py-8">
@@ -2624,14 +2831,16 @@ const SubTabBar = ({ tabs, activeSubTab, setActiveSubTab }) => {
 
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {userRole === 'Admin' && (
-                <StatCard
-                  icon={<Users className="w-6 h-6" />}
-                  label="Active Agents"
-                  value={dashboardStats.totalAgents}
-                  color="blue"
-                />
-              )}
+             {/* [UPDATED] Visible to all Management/Ops Roles */}
+{['Admin', 'SuperAdmin', 'HR', 'TL', 'IT'].includes(userRole) && (
+  <StatCard
+    icon={<Users className="w-6 h-6" />}
+    label="Active Agents"
+    value={dashboardStats.totalAgents}
+    color="blue"
+  />
+)}
+
               <StatCard
                 icon={<TrendingUp className="w-6 h-6" />}
                 label="Total Sales"
@@ -2647,14 +2856,15 @@ const SubTabBar = ({ tabs, activeSubTab, setActiveSubTab }) => {
                 color="purple"
               />
 
-              {userRole === 'Admin' && (
-                <StatCard
-                  icon={<Calendar className="w-6 h-6" />}
-                  label="Total Payroll"
-                  value={`${(dashboardStats.totalPayroll / 1000).toFixed(0)}K PKR`}
-                  color="orange"
-                />
-              )}
+              {/* [UPDATED] Financials - Only for Admin, SuperAdmin, HR */}
+{['Admin', 'SuperAdmin', 'HR'].includes(userRole) && (
+  <StatCard
+    icon={<Calendar className="w-6 h-6" />}
+    label="Total Payroll"
+    value={`${(dashboardStats.totalPayroll / 1000).toFixed(0)}K PKR`}
+    color="orange"
+  />
+)}
             </div>
 
             {/* Top Performers Table */}
@@ -2722,364 +2932,366 @@ const SubTabBar = ({ tabs, activeSubTab, setActiveSubTab }) => {
           <div className="space-y-6">
 
 
-<SubTabBar
-      tabs={[
-        { id: 'agents', label: 'Agents' },
-        { id: 'hr', label: 'HR Records' }
-      ]}
-      activeSubTab={employeesSubTab}
-      setActiveSubTab={setEmployeesSubTab}
-    />
+            <SubTabBar
+              tabs={[
+                { id: 'agents', label: 'Agents' },
+                { id: 'hr', label: 'HR Records' }
+              ]}
+              activeSubTab={employeesSubTab}
+              setActiveSubTab={setEmployeesSubTab}
+            />
 
-    {employeesSubTab === 'agents' && (
-      <div className="space-y-6">
+            {employeesSubTab === 'agents' && (
+              <div className="space-y-6">
 
-            {/* Header & Buttons */}
-            <div className="flex justify-between items-center">
-              <h2 className="text-xl font-semibold text-white">Agent Management</h2>
-              <div className="flex gap-3">
-                {userRole === 'Admin' && (
-                  <>
-                    <button onClick={() => setShowAddCenterModal(true)} className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium">
-                      <Plus className="w-4 h-4" /> Add Center
-                    </button>
-                    <button onClick={() => setShowAddTeamModal(true)} className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm font-medium">
-                      <Plus className="w-4 h-4" /> Add Team
-                    </button>
-                    <button onClick={() => { setImportType('agents'); setShowImportModal(true); }} className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium">
-                      <Upload className="w-4 h-4" /> Import CSV
-                    </button>
-                    <button onClick={() => {
-                      setEditingAgent({});
-                      setShowEditAgent(false);
-                      setShowAddAgent(true);
-                    }} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
-                      <Plus className="w-4 h-4" /> Add Agent
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
+                {/* Header & Buttons */}
+                <div className="flex justify-between items-center">
+                  <h2 className="text-xl font-semibold text-white">Agent Management</h2>
+                  <div className="flex gap-3">
+                    {['Admin', 'SuperAdmin'].includes(userRole)&& (
+                      <>
+                        <button onClick={() => setShowAddCenterModal(true)} className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium">
+                          <Plus className="w-4 h-4" /> Add Center
+                        </button>
+                        <button onClick={() => setShowAddTeamModal(true)} className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm font-medium">
+                          <Plus className="w-4 h-4" /> Add Team
+                        </button>
+                        <button onClick={() => { setImportType('agents'); setShowImportModal(true); }} className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium">
+                          <Upload className="w-4 h-4" /> Import CSV
+                        </button>
+                        <button onClick={() => {
+                          setEditingAgent({});
+                          setShowEditAgent(false);
+                          setShowAddAgent(true);
+                        }} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
+                          <Plus className="w-4 h-4" /> Add Agent
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
 
-            {/* Filters */}
-            <div className="bg-slate-800 rounded-xl shadow-sm border border-slate-600 p-4">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <input type="text" placeholder="Search agents..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                <select value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <option value="All">All Teams</option>
-                  {teams.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-                <select value={centerFilter} onChange={(e) => setCenterFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <option value="All">All Centers</option>
-                  {centers.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-                <select value={agentStatusFilter} onChange={(e) => setAgentStatusFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <option value="All">All Status</option>
-                  <option value="Active">Active</option>
-                  <option value="Left">Inactive/Left</option>
-                </select>
-              </div>
-            </div>
+                {/* Filters */}
+                <div className="bg-slate-800 rounded-xl shadow-sm border border-slate-600 p-4">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <input type="text" placeholder="Search agents..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    <select value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      <option value="All">All Teams</option>
+                      {teams.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                    <select value={centerFilter} onChange={(e) => setCenterFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      <option value="All">All Centers</option>
+                      {centers.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    <select value={agentStatusFilter} onChange={(e) => setAgentStatusFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      <option value="All">All Status</option>
+                      <option value="Active">Active</option>
+                      <option value="Left">Inactive/Left</option>
+                    </select>
+                  </div>
+                </div>
 
-            {/* Scrollable Table Container */}
-            <div className="w-full overflow-x-auto rounded-lg shadow-md border border-slate-700">
-              <table className="w-full text-left border-collapse">
-                <thead className="bg-slate-900">
-                  <tr>
-                    <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[50px]">No.</th>
-                    <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[200px]">Agent</th>
-                    <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[180px]">Father Name</th>
-                    <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[200px]">Bank Details</th>
-                    <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[140px]">CNIC</th>
-                    <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[140px]">Team</th>
-                    <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[140px]">Center</th>
-                    <th className="py-3 px-4 text-sm font-medium text-slate-200 text-right min-w-[100px]">Salary</th>
+                {/* Scrollable Table Container */}
+                <div className="w-full overflow-x-auto rounded-lg shadow-md border border-slate-700">
+                  <table className="w-full text-left border-collapse">
+                    <thead className="bg-slate-900">
+                      <tr>
+                        <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[50px]">No.</th>
+                        <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[200px]">Agent</th>
+                        <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[180px]">Father Name</th>
+                        <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[200px]">Bank Details</th>
+                        <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[140px]">CNIC</th>
+                        <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[140px]">Team</th>
+                        <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[140px]">Center</th>
+                        <th className="py-3 px-4 text-sm font-medium text-slate-200 text-right min-w-[100px]">Salary</th>
 
-                    {/* [CHANGED] Renamed from "Active Date" to "Joining Date" */}
-                    <th className="py-3 px-4 text-sm font-medium text-slate-200 text-center min-w-[120px]">Joining Date</th>
+                        {/* [CHANGED] Renamed from "Active Date" to "Joining Date" */}
+                        <th className="py-3 px-4 text-sm font-medium text-slate-200 text-center min-w-[120px]">Joining Date</th>
 
-                    {userRole === 'Admin' && <th className="py-3 px-4 text-sm font-medium text-slate-200 text-center min-w-[140px]">Actions</th>}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredAgents.map((agent, idx) => {
-                    // Fetch linked HR Data
-                    const linkedHR = hrRecords.find(h => h.cnic === agent.cnic) || {};
-                    const displayFatherName = linkedHR.father_name || agent.father_name || '-';
-
-                    return (
-                      <tr key={agent.cnic || idx} className="border-b border-slate-700 hover:bg-slate-700">
-                        <td className="py-3 px-4 text-slate-300">{idx + 1}</td>
-
-                        {/* 1. Name & Status Combined */}
-                        <td className="py-3 px-4">
-                          <div className="font-medium text-white text-sm">{agent.name}</div>
-                          <div className={`text-[11px] mt-0.5 font-medium ${agent.status === 'Active' ? 'text-green-400' : 'text-red-400'}`}>
-                            {agent.status}
-                          </div>
-                        </td>
-
-                        {/* Father Name */}
-                        <td className="py-3 px-4 text-slate-300 text-sm">{displayFatherName}</td>
-
-                        {/* 2. Bank Details Combined */}
-                        <td className="py-3 px-4">
-                          <div className="text-sm text-slate-200">{linkedHR.bank_name || '-'}</div>
-                          <div className="text-xs text-slate-500 font-mono">{linkedHR.account_number || '-'}</div>
-                        </td>
-
-                        <td className="py-3 px-4 text-slate-400 text-xs font-mono">{agent.cnic || '-'}</td>
-                        <td className="py-3 px-4 text-slate-300 text-sm">{agent.team}</td>
-                        <td className="py-3 px-4 text-slate-300 text-xs">{agent.center || '-'}</td>
-                        <td className="py-3 px-4 text-right text-slate-100 font-mono">{agent.baseSalary ? agent.baseSalary.toLocaleString() : 0}</td>
-
-                        {/* [CHANGED] Joining Date + Left Date (if applicable) */}
-                        <td className="py-3 px-4 text-center">
-                          <div className="text-slate-300 text-xs">{linkedHR.joining_date || '-'}</div>
-                          {agent.status === 'Left' && agent.leftDate && (
-                            <div className="text-[10px] text-red-400 font-medium mt-0.5">
-                              Left: {agent.leftDate}
-                            </div>
-                          )}
-                        </td>
-
-                        {userRole === 'Admin' && (
-                          <td className="py-3 px-4">
-                            <div className="flex items-center justify-center gap-2">
-                              <button onClick={() => {
-                                const hrInfo = hrRecords.find(h => h.cnic === agent.cnic) || {};
-                                setEditingAgent({
-                                  ...agent,
-                                  ...hrInfo,
-                                  contact_number: agent.Phone || hrInfo.Phone,
-                                  active_date: hrInfo.joining_date || agent.activeDate
-                                });
-                                setShowEditAgent(true);
-                                setShowAddAgent(true);
-                              }} className="p-1.5 bg-blue-500/10 text-blue-400 rounded hover:bg-blue-500/20 transition-colors" title="Edit">
-                                <Pencil className="w-4 h-4" />
-                              </button>
-
-                              <button onClick={() => agent.status === 'Active' ? handleMarkAsLeft(agent.cnic) : handleReactivateAgent(agent.cnic)}
-                                className={`p-1.5 rounded transition-colors ${agent.status === 'Active' ? 'bg-orange-500/10 text-orange-400 hover:bg-orange-500/20' : 'bg-green-500/10 text-green-400 hover:bg-green-500/20'}`}>
-                                {agent.status === 'Active' ? <UserX className="w-4 h-4" /> : <RotateCcw className="w-4 h-4" />}
-                              </button>
-
-                              <button onClick={() => handleDeleteAgent(agent.cnic)} className="p-1.5 bg-red-500/10 text-red-400 rounded hover:bg-red-500/20 transition-colors" title="Delete">
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </td>
-                        )}
+                       {['Admin', 'SuperAdmin'].includes(userRole) && <th className="py-3 px-4 text-sm font-medium text-slate-200 text-center min-w-[140px]">Actions</th>}
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
+                    </thead>
+                    <tbody>
+                      {filteredAgents.map((agent, idx) => {
+                        // Fetch linked HR Data
+                        const linkedHR = hrRecords.find(h => h.cnic === agent.cnic) || {};
+                        const displayFatherName = linkedHR.father_name || agent.father_name || '-';
 
-    {employeesSubTab === 'hr' && (
-      <div className="space-y-6">
-        {/* HR Team Management */}
-            <div className="flex justify-between items-center">
-              <h2 className="text-xl font-semibold text-white">HR - Employment Data</h2>
-              <button
-                onClick={() => {
-                  setEditingHR({
-                    id: null,
-                    agent_name: '',
-                    father_name: '',
-                    designation: 'Agent',
-                    payroll_cycle_type: 'Agent Cycle',
-                    contact_number: '',
-                    email: '',
-                    address: '',
-                    cnic: '',
-                    joining_date: new Date().toISOString().split('T')[0],
-                    team: '',
-                    center: '',
-                    baseSalary: '',
-                    bank_name: '',
-                    account_number: ''
-                  });
-                  setShowAddEmployee(true);
-                }}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                <Plus className="w-4 h-4" /> Add Employee
-              </button>
-            </div>
+                        return (
+                          <tr key={agent.cnic || idx} className="border-b border-slate-700 hover:bg-slate-700">
+                            <td className="py-3 px-4 text-slate-300">{idx + 1}</td>
 
-            {/* Filter Grid */}
-            <div className="bg-slate-800 rounded-xl shadow-sm border border-slate-600 p-4 mb-6">
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-4"> {/* Changed cols-4 to cols-5 */}
+                            {/* 1. Name & Status Combined */}
+                            <td className="py-3 px-4">
+                              <div className="font-medium text-white text-sm">{agent.name}</div>
+                              <div className={`text-[11px] mt-0.5 font-medium ${agent.status === 'Active' ? 'text-green-400' : 'text-red-400'}`}>
+                                {agent.status}
+                              </div>
+                            </td>
 
-                {/* Existing Search Input */}
-                <input type="text" placeholder="Search by name or CNIC..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                            {/* Father Name */}
+                            <td className="py-3 px-4 text-slate-300 text-sm">{displayFatherName}</td>
 
-                {/* Existing Team Filter */}
-                <select value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <option value="All">All Teams</option>
-                  {teams.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
+                            {/* 2. Bank Details Combined */}
+                            <td className="py-3 px-4">
+                              <div className="text-sm text-slate-200">{linkedHR.bank_name || '-'}</div>
+                              <div className="text-xs text-slate-500 font-mono">{linkedHR.account_number || '-'}</div>
+                            </td>
 
-                {/* Existing Center Filter */}
-                <select value={centerFilter} onChange={(e) => setCenterFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <option value="All">All Centers</option>
-                  {centers.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
+                            <td className="py-3 px-4 text-slate-400 text-xs font-mono">{agent.cnic || '-'}</td>
+                            <td className="py-3 px-4 text-slate-300 text-sm">{agent.team}</td>
+                            <td className="py-3 px-4 text-slate-300 text-xs">{agent.center || '-'}</td>
+                            <td className="py-3 px-4 text-right text-slate-100 font-mono">{agent.baseSalary ? agent.baseSalary.toLocaleString() : 0}</td>
 
-               {/* Designation Filter */}
-                <select 
-                  value={designationFilter} 
-                  onChange={(e) => setDesignationFilter(e.target.value)} 
-                  className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="All">All Designations</option>
-                  
-                  {/* [NEW] Add this option */}
-                  <option value="All Management">All Management</option>
-                  
-                  {/* Dynamically list unique designations from DB */}
-                  {[...new Set(hrRecords.map(h => h.designation))].filter(Boolean).sort().map(d => (
-                    <option key={d} value={d}>{d}</option>
-                  ))}
-                </select>
+                            {/* [CHANGED] Joining Date + Left Date (if applicable) */}
+                            <td className="py-3 px-4 text-center">
+                              <div className="text-slate-300 text-xs">{linkedHR.joining_date || '-'}</div>
+                              {agent.status === 'Left' && agent.leftDate && (
+                                <div className="text-[10px] text-red-400 font-medium mt-0.5">
+                                  Left: {agent.leftDate}
+                                </div>
+                              )}
+                            </td>
 
-                {/* Existing Status Filter */}
-                <select value={agentStatusFilter} onChange={(e) => setAgentStatusFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <option value="All">All Status</option>
-                  <option value="Active">Active Only</option>
-                  <option value="Left">Left / Ex-Employees</option>
-                </select>
+                            {['Admin', 'SuperAdmin'].includes(userRole) && (
+                              <td className="py-3 px-4">
+                                <div className="flex items-center justify-center gap-2">
+                                  <button onClick={() => {
+                                    const hrInfo = hrRecords.find(h => h.cnic === agent.cnic) || {};
+                                    setEditingAgent({
+                                      ...agent,
+                                      ...hrInfo,
+                                      contact_number: agent.Phone || hrInfo.Phone,
+                                      active_date: hrInfo.joining_date || agent.activeDate,
+                                      original_cnic: agent.cnic
+                                    });
+                                    setShowEditAgent(true);
+                                    setShowAddAgent(true);
+                                  }} className="p-1.5 bg-blue-500/10 text-blue-400 rounded hover:bg-blue-500/20 transition-colors" title="Edit">
+                                    <Pencil className="w-4 h-4" />
+                                  </button>
+
+                                  <button onClick={() => agent.status === 'Active' ? handleMarkAsLeft(agent.cnic) : handleReactivateAgent(agent.cnic)}
+                                    className={`p-1.5 rounded transition-colors ${agent.status === 'Active' ? 'bg-orange-500/10 text-orange-400 hover:bg-orange-500/20' : 'bg-green-500/10 text-green-400 hover:bg-green-500/20'}`}>
+                                    {agent.status === 'Active' ? <UserX className="w-4 h-4" /> : <RotateCcw className="w-4 h-4" />}
+                                  </button>
+
+                                  <button onClick={() => handleDeleteAgent(agent.cnic)} className="p-1.5 bg-red-500/10 text-red-400 rounded hover:bg-red-500/20 transition-colors" title="Delete">
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
+            )}
 
-            {/* --- HR TABLE --- */}
-            <div className="w-full overflow-x-auto rounded-lg shadow-md border border-slate-700">
-              <table className="w-full text-left border-collapse">
-                <thead className="bg-slate-900">
-                  <tr>
-                    <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[50px]">No.</th>
-                    <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[220px]">Agent</th>
-                    <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[180px]">Father Name</th>
-                    <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[200px]">Bank Details</th>
-                    <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[140px]">Contact No</th>
-                    <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[140px]">Designation</th>
-                    <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[120px]">Team</th>
-                    <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[120px]">Center</th>
-                    <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[100px]">Salary</th>
-                    <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[160px]">CNIC</th>
-                    <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[140px]">Joining Date</th>
-                    <th className="py-3 px-4 text-sm font-medium text-center text-slate-200 min-w-[140px]">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredHR.map((rec, idx) => {
-                    const agentProfile = agents.find(a => (a.cnic && a.cnic === rec.cnic) || (a.name.toLowerCase() === rec.agent_name.toLowerCase())) || {};
+            {employeesSubTab === 'hr' && (
+              <div className="space-y-6">
+                {/* HR Team Management */}
+                <div className="flex justify-between items-center">
+                  <h2 className="text-xl font-semibold text-white">HR - Employment Data</h2>
+                  <button
+                    onClick={() => {
+                      setEditingHR({
+                        id: null,
+                        agent_name: '',
+                        father_name: '',
+                        designation: 'Agent',
+                        payroll_cycle_type: 'Agent Cycle',
+                        contact_number: '',
+                        email: '',
+                        address: '',
+                        cnic: '',
+                        joining_date: new Date().toISOString().split('T')[0],
+                        team: '',
+                        center: '',
+                        baseSalary: '',
+                        bank_name: '',
+                        account_number: '',
+                        original_cnic: null
+                      });
+                      setShowAddEmployee(true);
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    <Plus className="w-4 h-4" /> Add Employee
+                  </button>
+                </div>
 
-                    return (
-                      <tr key={rec.id} className="border-b border-slate-700 hover:bg-slate-700">
-                        <td className="py-3 px-4 text-slate-300">{idx + 1}</td>
+                {/* Filter Grid */}
+                <div className="bg-slate-800 rounded-xl shadow-sm border border-slate-600 p-4 mb-6">
+                  <div className="grid grid-cols-1 md:grid-cols-5 gap-4"> {/* Changed cols-4 to cols-5 */}
 
-                        {/* 1. Name & Status Combined */}
-                        <td className="py-3 px-4">
-                          <div className="font-medium text-white text-sm">{rec.agent_name}</div>
-                          <div className={`text-[11px] mt-0.5 font-medium ${rec.status === 'Active' ? 'text-green-400' : 'text-red-400'}`}>
-                            {rec.status || 'Active'}
-                          </div>
-                        </td>
+                    {/* Existing Search Input */}
+                    <input type="text" placeholder="Search by name or CNIC..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500" />
 
-                        <td className="py-3 px-4 text-slate-300 text-sm">{rec.father_name || '-'}</td>
+                    {/* Existing Team Filter */}
+                    <select value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      <option value="All">All Teams</option>
+                      {teams.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
 
-                        {/* 2. Bank Details Combined */}
-                        <td className="py-3 px-4">
-                          <div className="text-sm text-slate-200">{rec.bank_name || '-'}</div>
-                          <div className="text-xs text-slate-500 font-mono">{rec.account_number || '-'}</div>
-                        </td>
+                    {/* Existing Center Filter */}
+                    <select value={centerFilter} onChange={(e) => setCenterFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      <option value="All">All Centers</option>
+                      {centers.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
 
-                        <td className="py-3 px-4 text-slate-300 font-mono text-xs">{rec.Phone || '-'}</td>
-                        <td className="py-3 px-4 text-slate-300 text-sm">{rec.designation}</td>
-                        <td className="py-3 px-4 text-slate-300 text-sm">{agentProfile.team || '-'}</td>
-                        <td className="py-3 px-4 text-slate-300 text-xs">{agentProfile.center || '-'}</td>
-                        {/* [FIXED] Salary Display (Checks HR Record first for Management) */}
-<td className="py-3 px-4 text-right text-slate-100 font-mono">
-  {rec.base_salary 
-    ? parseInt(rec.base_salary).toLocaleString() 
-    : (agentProfile.baseSalary ? agentProfile.baseSalary.toLocaleString() : 0)
-  }
-</td>
-                        <td className="py-3 px-4 text-slate-400 text-xs font-mono">{rec.cnic}</td>
+                    {/* Designation Filter */}
+                    <select
+                      value={designationFilter}
+                      onChange={(e) => setDesignationFilter(e.target.value)}
+                      className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="All">All Designations</option>
 
-                        {/* [FIXED] Joining Date + Left Date (Check both HR and Agent records) */}
-                        <td className="py-3 px-4">
-                          <div className="text-slate-300 text-sm">{rec.joining_date}</div>
-                          
-                          {/* Show Left Date if status is Left */}
-                          {rec.status === 'Left' && (
-                            <div className="text-[10px] text-red-400 font-medium mt-0.5">
-                              {/* Check Agent Profile first, then fallback to HR Record */}
-                              Left: {agentProfile.leftDate || rec.left_date || rec.leftDate || 'N/A'}
-                            </div>
-                          )}
-                        </td>
+                      {/* [NEW] Add this option */}
+                      <option value="All Management">All Management</option>
 
-                       <td className="py-3 px-4">
-                          <div className="flex items-center justify-center gap-2">
-                            {/* Edit Button */}
-                            <button onClick={() => {
-                              const linkedAgent = agents.find(a => (a.cnic && a.cnic === rec.cnic) || (a.name === rec.agent_name)) || {};
-                              setEditingHR({
-                                id: rec.id,
-                                agent_name: rec.agent_name || '',
-                                father_name: rec.father_name || '',
-                                designation: rec.designation || '',
-                                cnic: rec.cnic || '',
-                                joining_date: rec.joining_date || '',
-                                contact_number: rec.Phone || rec.contact_number || linkedAgent.Phone || '',
-                                email: rec.email || linkedAgent.email || '',
-                                address: rec.address || linkedAgent.address || '',
-                                team: rec.team || linkedAgent.team || '',
-                                center: rec.center || linkedAgent.center || '',
-                                baseSalary: rec.base_salary || rec.baseSalary || linkedAgent.baseSalary || '',
-                                bank_name: rec.bank_name || linkedAgent.bank_name || '',
-                                account_number: rec.account_number || linkedAgent.account_number || '',
-                                payroll_cycle_type: rec.payroll_cycle_type || 'Agent Cycle'
-                              });
-                              setShowAddEmployee(true);
-                            }} className="p-1.5 bg-blue-500/10 text-blue-400 rounded hover:bg-blue-500/20 transition-colors" title="Edit">
-                              <Pencil className="w-4 h-4" />
-                            </button>
+                      {/* Dynamically list unique designations from DB */}
+                      {[...new Set(hrRecords.map(h => h.designation))].filter(Boolean).sort().map(d => (
+                        <option key={d} value={d}>{d}</option>
+                      ))}
+                    </select>
 
-                            {/* Toggle Status Button */}
-                            <button
-                              onClick={() => handleToggleHRStatus(rec.id, rec.status || 'Active', rec.cnic, rec.agent_name)}
-                              className="p-1.5 bg-orange-500/10 text-orange-400 rounded hover:bg-orange-500/20 transition-colors"
-                              title={rec.status === 'Active' ? "Mark as Left" : "Reactivate"}
-                            >
-                              {rec.status === 'Active' ? <UserX className="w-4 h-4" /> : <RotateCcw className="w-4 h-4" />}
-                            </button>
+                    {/* Existing Status Filter */}
+                    <select value={agentStatusFilter} onChange={(e) => setAgentStatusFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      <option value="All">All Status</option>
+                      <option value="Active">Active Only</option>
+                      <option value="Left">Left / Ex-Employees</option>
+                    </select>
+                  </div>
+                </div>
 
-                            {/* Delete Button */}
-                            <button
-                              onClick={() => handleDeleteHR(rec.id, rec.cnic, rec.agent_name)}
-                              className="p-1.5 bg-red-500/10 text-red-400 rounded hover:bg-red-500/20 transition-colors"
-                              title="Delete Permanently"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
+                {/* --- HR TABLE --- */}
+                <div className="w-full overflow-x-auto rounded-lg shadow-md border border-slate-700">
+                  <table className="w-full text-left border-collapse">
+                    <thead className="bg-slate-900">
+                      <tr>
+                        <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[50px]">No.</th>
+                        <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[220px]">Agent</th>
+                        <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[180px]">Father Name</th>
+                        <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[200px]">Bank Details</th>
+                        <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[140px]">Contact No</th>
+                        <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[140px]">Designation</th>
+                        <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[120px]">Team</th>
+                        <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[120px]">Center</th>
+                        <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[100px]">Salary</th>
+                        <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[160px]">CNIC</th>
+                        <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[140px]">Joining Date</th>
+                        <th className="py-3 px-4 text-sm font-medium text-center text-slate-200 min-w-[140px]">Actions</th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
+                    </thead>
+                    <tbody>
+                      {filteredHR.map((rec, idx) => {
+                        const agentProfile = agents.find(a => (a.cnic && a.cnic === rec.cnic) || (a.name.toLowerCase() === rec.agent_name.toLowerCase())) || {};
+
+                        return (
+                          <tr key={rec.id} className="border-b border-slate-700 hover:bg-slate-700">
+                            <td className="py-3 px-4 text-slate-300">{idx + 1}</td>
+
+                            {/* 1. Name & Status Combined */}
+                            <td className="py-3 px-4">
+                              <div className="font-medium text-white text-sm">{rec.agent_name}</div>
+                              <div className={`text-[11px] mt-0.5 font-medium ${rec.status === 'Active' ? 'text-green-400' : 'text-red-400'}`}>
+                                {rec.status || 'Active'}
+                              </div>
+                            </td>
+
+                            <td className="py-3 px-4 text-slate-300 text-sm">{rec.father_name || '-'}</td>
+
+                            {/* 2. Bank Details Combined */}
+                            <td className="py-3 px-4">
+                              <div className="text-sm text-slate-200">{rec.bank_name || '-'}</div>
+                              <div className="text-xs text-slate-500 font-mono">{rec.account_number || '-'}</div>
+                            </td>
+
+                            <td className="py-3 px-4 text-slate-300 font-mono text-xs">{rec.Phone || '-'}</td>
+                            <td className="py-3 px-4 text-slate-300 text-sm">{rec.designation}</td>
+                            <td className="py-3 px-4 text-slate-300 text-sm">{agentProfile.team || '-'}</td>
+                            <td className="py-3 px-4 text-slate-300 text-xs">{agentProfile.center || '-'}</td>
+                            {/* [FIXED] Salary Display (Checks HR Record first for Management) */}
+                            <td className="py-3 px-4 text-right text-slate-100 font-mono">
+                              {rec.base_salary
+                                ? parseInt(rec.base_salary).toLocaleString()
+                                : (agentProfile.baseSalary ? agentProfile.baseSalary.toLocaleString() : 0)
+                              }
+                            </td>
+                            <td className="py-3 px-4 text-slate-400 text-xs font-mono">{rec.cnic}</td>
+
+                            {/* [FIXED] Joining Date + Left Date (Check both HR and Agent records) */}
+                            <td className="py-3 px-4">
+                              <div className="text-slate-300 text-sm">{rec.joining_date}</div>
+
+                              {/* Show Left Date if status is Left */}
+                              {rec.status === 'Left' && (
+                                <div className="text-[10px] text-red-400 font-medium mt-0.5">
+                                  {/* Check Agent Profile first, then fallback to HR Record */}
+                                  Left: {agentProfile.leftDate || rec.left_date || rec.leftDate || 'N/A'}
+                                </div>
+                              )}
+                            </td>
+
+                            <td className="py-3 px-4">
+                              <div className="flex items-center justify-center gap-2">
+                                {/* Edit Button */}
+                                <button onClick={() => {
+                                  const linkedAgent = agents.find(a => (a.cnic && a.cnic === rec.cnic) || (a.name === rec.agent_name)) || {};
+                                  setEditingHR({
+                                    id: rec.id,
+                                    agent_name: rec.agent_name || '',
+                                    father_name: rec.father_name || '',
+                                    designation: rec.designation || '',
+                                    cnic: rec.cnic || '',
+                                    joining_date: rec.joining_date || '',
+                                    contact_number: rec.Phone || rec.contact_number || linkedAgent.Phone || '',
+                                    email: rec.email || linkedAgent.email || '',
+                                    address: rec.address || linkedAgent.address || '',
+                                    team: rec.team || linkedAgent.team || '',
+                                    center: rec.center || linkedAgent.center || '',
+                                    baseSalary: rec.base_salary || rec.baseSalary || linkedAgent.baseSalary || '',
+                                    bank_name: rec.bank_name || linkedAgent.bank_name || '',
+                                    account_number: rec.account_number || linkedAgent.account_number || '',
+                                    payroll_cycle_type: rec.payroll_cycle_type || 'Agent Cycle'
+                                  });
+                                  setShowAddEmployee(true);
+                                }} className="p-1.5 bg-blue-500/10 text-blue-400 rounded hover:bg-blue-500/20 transition-colors" title="Edit">
+                                  <Pencil className="w-4 h-4" />
+                                </button>
+
+                                {/* Toggle Status Button */}
+                                <button
+                                  onClick={() => handleToggleHRStatus(rec.id, rec.status || 'Active', rec.cnic, rec.agent_name)}
+                                  className="p-1.5 bg-orange-500/10 text-orange-400 rounded hover:bg-orange-500/20 transition-colors"
+                                  title={rec.status === 'Active' ? "Mark as Left" : "Reactivate"}
+                                >
+                                  {rec.status === 'Active' ? <UserX className="w-4 h-4" /> : <RotateCcw className="w-4 h-4" />}
+                                </button>
+
+                                {/* Delete Button */}
+                                <button
+                                  onClick={() => handleDeleteHR(rec.id, rec.cnic, rec.agent_name)}
+                                  className="p-1.5 bg-red-500/10 text-red-400 rounded hover:bg-red-500/20 transition-colors"
+                                  title="Delete Permanently"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -3089,643 +3301,1068 @@ const SubTabBar = ({ tabs, activeSubTab, setActiveSubTab }) => {
           <div className="space-y-6">
 
             <SubTabBar
-      tabs={[
-        { id: 'list', label: 'Sales List' },
-        { id: 'matrix', label: 'Monthly Matrix' }
-      ]}
-      activeSubTab={salesSubTab}
-      setActiveSubTab={setSalesSubTab}
-    />
-
-    {salesSubTab === 'list' && (
-      <div className="space-y-6">
-
-            {/* Header Section */}
-            <div className="flex justify-between items-center">
-              <h2 className="text-xl font-semibold text-white">Sales Management</h2>
-              <div className="flex gap-3">
-                {userRole === 'Admin' && (
-                  <>
-                    <button
-                      onClick={() => { setImportType('sales'); setShowImportModal(true); }}
-                      className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                    >
-                      <Upload className="w-4 h-4" /> Import CSV
-                    </button>
-                    <button
-                      onClick={() => {
-                        const name = window.prompt('Enter evaluator name:');
-                        if (name && name.trim()) setEvaluators(prev => [...prev, name.trim()]);
-                      }}
-                      className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                    >
-                      <Plus className="w-4 h-4" /> Add Evaluator
-                    </button>
-                  </>
-                )}
-                {(userRole === 'Admin' || userRole === 'Agent') && (
-                  <button
-                    onClick={() => setShowAddSale(true)}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                  >
-                    <Plus className="w-4 h-4" /> Submit Sale
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* DISPOSITION DASHBOARD CARDS (RESTORED) */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-green-500/10 border border-green-500/20 p-4 rounded-xl">
-                <p className="text-xs text-green-400 font-bold uppercase">Success Sales</p>
-                <p className="text-2xl font-black text-green-500">{salesStats.sales}</p>
-              </div>
-              <div className="bg-yellow-500/10 border border-yellow-500/20 p-4 rounded-xl">
-                <p className="text-xs text-yellow-400 font-bold uppercase">Unsuccessful</p>
-                <p className="text-2xl font-black text-yellow-500">{salesStats.unsuccessful}</p>
-              </div>
-              <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-xl">
-                <p className="text-xs text-red-400 font-bold uppercase">DNC / DNQ</p>
-                <p className="text-2xl font-black text-red-500">{salesStats.dncDnq}</p>
-              </div>
-              <div className="bg-orange-500/10 border border-orange-500/20 p-4 rounded-xl">
-                <p className="text-xs text-orange-400 font-bold uppercase">Pending Review</p>
-                <p className="text-2xl font-black text-orange-500">{salesStats.pending}</p>
-              </div>
-            </div>
-
-            {/* Date Filter Bar */}
-            <DateFilterBar
-              filterType={filterType} setFilterType={setFilterType}
-              dateVal={customStartDate} setDateVal={setCustomStartDate}
-              endVal={customEndDate} setEndVal={setCustomEndDate}
-              selectedMonth={selectedMonth} handleMonthChange={handleMonthChange}
+              tabs={[
+                { id: 'list', label: 'Sales List' },
+                { id: 'matrix', label: 'Monthly Matrix' }
+              ]}
+              activeSubTab={salesSubTab}
+              setActiveSubTab={setSalesSubTab}
             />
 
-            {/* Filters Section */}
-            <div className="bg-slate-800 rounded-xl shadow-sm border border-slate-600 p-4">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <input
-                  type="text"
-                  placeholder="Search agent, customer, phone..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500"
+            {salesSubTab === 'list' && (
+              <div className="space-y-6">
+
+                {/* Header Section */}
+                <div className="flex justify-between items-center">
+                  <h2 className="text-xl font-semibold text-white">Sales Management</h2>
+                  <div className="flex gap-3">
+                    {['Admin', 'SuperAdmin'].includes(userRole) && (
+                      <>
+                        <button
+                          onClick={() => { setImportType('sales'); setShowImportModal(true); }}
+                          className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                        >
+                          <Upload className="w-4 h-4" /> Import CSV
+                        </button>
+                        <button
+                          onClick={() => {
+                            const name = window.prompt('Enter evaluator name:');
+                            if (name && name.trim()) setEvaluators(prev => [...prev, name.trim()]);
+                          }}
+                          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                        >
+                          <Plus className="w-4 h-4" /> Add Evaluator
+                        </button>
+                      </>
+                    )}
+                    {(userRole === 'Admin' || userRole === 'Agent') && (
+                      <button
+                        onClick={() => setShowAddSale(true)}
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                      >
+                        <Plus className="w-4 h-4" /> Submit Sale
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* DISPOSITION DASHBOARD CARDS (RESTORED) */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="bg-green-500/10 border border-green-500/20 p-4 rounded-xl">
+                    <p className="text-xs text-green-400 font-bold uppercase">Success Sales</p>
+                    <p className="text-2xl font-black text-green-500">{salesStats.sales}</p>
+                  </div>
+                  <div className="bg-yellow-500/10 border border-yellow-500/20 p-4 rounded-xl">
+                    <p className="text-xs text-yellow-400 font-bold uppercase">Unsuccessful</p>
+                    <p className="text-2xl font-black text-yellow-500">{salesStats.unsuccessful}</p>
+                  </div>
+                  <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-xl">
+                    <p className="text-xs text-red-400 font-bold uppercase">DNC / DNQ</p>
+                    <p className="text-2xl font-black text-red-500">{salesStats.dncDnq}</p>
+                  </div>
+                  <div className="bg-orange-500/10 border border-orange-500/20 p-4 rounded-xl">
+                    <p className="text-xs text-orange-400 font-bold uppercase">Pending Review</p>
+                    <p className="text-2xl font-black text-orange-500">{salesStats.pending}</p>
+                  </div>
+                </div>
+
+                {/* Date Filter Bar */}
+                <DateFilterBar
+                  filterType={filterType} setFilterType={setFilterType}
+                  dateVal={customStartDate} setDateVal={setCustomStartDate}
+                  endVal={customEndDate} setEndVal={setCustomEndDate}
+                  selectedMonth={selectedMonth} handleMonthChange={handleMonthChange}
                 />
-                <select value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
-                  <option value="All">All Teams</option>
-                  {teams.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-                <select value={centerFilter} onChange={(e) => setCenterFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
-                  <option value="All">All Centers</option>
-                  {centers.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-                <select value={salesStatusFilter} onChange={(e) => setSalesStatusFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
-                  <option value="All">All Dispositions</option>
-                  <optgroup label="Success">
-                    <option value="HW- Xfer">HW- Xfer</option>
-                    <option value="HW-IBXfer">HW-IBXfer</option>
-                    <option value="HW-Xfer-CDR">HW-Xfer-CDR</option>
-                  </optgroup>
-                  <optgroup label="Unsuccessful">
-                    <option value="Unsuccessful">Unsuccessful</option>
-                    <option value="DNC">DNC</option>
-                    <option value="DNQ">DNQ</option>
-                    <option value="DNQ-Webform">DNQ-Webform</option>
-                    <option value="Review Pending">Review Pending</option>
-                  </optgroup>
-                </select>
-              </div>
-            </div>
 
-            {/* DATA TABLE (FULL COLUMNS & EDITABLE) */}
-            <div className="bg-slate-800/80 rounded-xl border border-slate-600 overflow-auto max-h-[70vh]">
-              <table className="w-full min-w-max border-collapse">
-                <thead className="sticky top-0 z-20">
-                  <tr className="bg-slate-900 border-b border-slate-700">
-                    <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">No.</th>
-                    <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Timestamp</th>
-                    <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase sticky left-0 bg-slate-900">Agent Name</th>
-                    <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Customer Name</th>
-                    <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Phone Number</th>
-                    <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">State</th>
-                    <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Zip</th>
-                    <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Address</th>
-                    <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase text-center">Campaign</th>
-                    <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Center</th>
-                    <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Team Lead</th>
-                    <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Comments</th>
-                    <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">List ID</th>
-                    <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase min-w-[150px]">Disposition</th>
-                    <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Duration</th>
-                    <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Xfer Time</th>
-                    <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Xfer Attempts</th>
-                    <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase min-w-[250px]">Feedback (Before)</th>
-                    <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Feedback (After)</th>
-                    <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Grading</th>
-                    <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Dock Details</th>
-                    <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Dock Reason</th> {/* NEW HEADER */}
-                    <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Evaluator</th>
-                    {(userRole === 'Admin' || userRole === 'QA') && <th className="text-center py-4 px-3 text-xs font-bold text-slate-400 uppercase">Actions</th>}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-700">
-                  {filteredSales.map((sale, idx) => {
-                    const disp = sale.disposition;
-                    let rowColor = "hover:bg-slate-700";
-                    if (['HW- Xfer', 'HW-IBXfer', 'HW-Xfer-CDR'].includes(disp)) rowColor = "bg-green-900/10 hover:bg-green-900/20";
-                    else if (['DNC', 'DNQ', 'DNQ-Dup', 'DNQ-Webform'].includes(disp)) rowColor = "bg-red-900/10 hover:bg-red-900/20";
-                    else if (['Review Pending', 'Pending Review'].includes(disp)) rowColor = "bg-orange-900/10 hover:bg-orange-900/20";
-                    else if (disp === 'Unsuccessful') rowColor = "bg-yellow-900/10 hover:bg-yellow-900/20";
+                {/* Filters Section */}
+                <div className="bg-slate-800 rounded-xl shadow-sm border border-slate-600 p-4">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <input
+                      type="text"
+                      placeholder="Search agent, customer, phone..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <select value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
+                      <option value="All">All Teams</option>
+                      {teams.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                    <select value={centerFilter} onChange={(e) => setCenterFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
+                      <option value="All">All Centers</option>
+                      {centers.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    <select value={salesStatusFilter} onChange={(e) => setSalesStatusFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
+                      <option value="All">All Dispositions</option>
+                      <optgroup label="Success">
+                        <option value="HW- Xfer">HW- Xfer</option>
+                        <option value="HW-IBXfer">HW-IBXfer</option>
+                        <option value="HW-Xfer-CDR">HW-Xfer-CDR</option>
+                      </optgroup>
+                      <optgroup label="Unsuccessful">
+                        <option value="Unsuccessful">Unsuccessful</option>
+                        <option value="DNC">DNC</option>
+                        <option value="DNQ">DNQ</option>
+                        <option value="DNQ-Webform">DNQ-Webform</option>
+                        <option value="Review Pending">Review Pending</option>
+                      </optgroup>
+                    </select>
+                  </div>
+                </div>
 
-                    return (
-                      <tr key={sale.id} className={`${rowColor} transition-colors`}>
-                        <td className="py-3 px-3 text-xs text-slate-400 font-mono">{idx + 1}</td>
-                        <td className="py-3 px-3 text-xs text-slate-300 whitespace-nowrap">{sale.timestamp || sale.date}</td>
-                        <td className="py-3 px-3 text-xs font-bold text-white sticky left-0 bg-inherit">{sale.agentName}</td>
-                        <td className="py-3 px-3 text-xs text-slate-300">{sale.customerName || '-'}</td>
-                        <td className="py-3 px-3 text-xs text-slate-300 font-mono">{sale.phoneNumber || '-'}</td>
-                        <td className="py-3 px-3 text-xs text-slate-400">{sale.state || '-'}</td>
-                        <td className="py-3 px-3 text-xs text-slate-400">{sale.zip || '-'}</td>
-                        <td className="py-3 px-3 text-xs text-slate-400">{sale.address || '-'}</td>
-                        <td className="py-3 px-3 text-xs text-slate-400 text-center">{sale.campaignType || '-'}</td>
-                        <td className="py-3 px-3 text-xs text-slate-400">{sale.center || '-'}</td>
-                        <td className="py-3 px-3 text-xs text-slate-400">{sale.teamLead || '-'}</td>
-                        <td className="py-3 px-3 text-xs text-slate-400">{sale.comments || '-'}</td>
-                        <td className="py-3 px-3 text-xs text-slate-400">{sale.listId || '-'}</td>
-
-                        {/* Editable Disposition */}
-                        <td className="py-3 px-3">
-                          {(userRole === 'Admin' || userRole === 'QA') ? (
-                            <select
-                              value={sale.disposition || ''}
-                              onChange={(e) => updateSaleDisposition(sale.id, e.target.value)}
-                              className="w-full px-2 py-1 text-xs bg-slate-900 text-white border border-slate-600 rounded outline-none focus:ring-1 focus:ring-blue-500"
-                            >
-                              <option value="">Select...</option>
-                              <optgroup label="Success">
-                                <option value="HW- Xfer">HW- Xfer</option>
-                                <option value="HW-IBXfer">HW-IBXfer</option>
-                                <option value="HW-Xfer-CDR">HW-Xfer-CDR</option>
-                              </optgroup>
-                              <optgroup label="Unsuccessful">
-                                <option value="Unsuccessful">Unsuccessful</option>
-                                <option value="HUWT">HUWT</option>
-                                <option value="DNC">DNC</option>
-                                <option value="DNQ">DNQ</option>
-                                <option value="DNQ-Dup">DNQ-Dup</option>
-                                <option value="DNQ-Webform">DNQ-Webform</option>
-                                <option value="Review Pending">Review Pending</option>
-                              </optgroup>
-                            </select>
-                          ) : (
-                            <span className={`text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wide
-                              ${['HW- Xfer', 'HW-IBXfer', 'HW-Xfer-CDR'].includes(sale.disposition) ? 'bg-green-500/20 text-green-400' :
-                                ['Unsuccessful', 'HUWT'].includes(sale.disposition) ? 'bg-yellow-500/20 text-yellow-400' :
-                                  ['Review Pending', 'Pending Review'].includes(sale.disposition) ? 'bg-orange-500/20 text-orange-400' :
-                                    'bg-red-500/20 text-red-400'}`}>
-                              {sale.disposition || '-'}
-                            </span>
-                          )}
-                        </td>
-
-                        {/* Editable Duration */}
-                        <td className="py-2 px-2">
-                          {(userRole === 'Admin' || userRole === 'QA') ? (
-                            <input
-                              type="text"
-                              // 1. Use defaultValue (Fast typing)
-                              defaultValue={sale.duration || ''}
-
-                              // 2. Save only when leaving the box
-                              onBlur={(e) => {
-                                if (e.target.value !== (sale.duration || '')) {
-                                  updateSaleField(sale.id, 'duration', e.target.value);
-                                }
-                              }}
-                              // 3. Save on Enter
-                              onKeyDown={(e) => e.key === 'Enter' && e.target.blur()}
-                              className="w-full px-1 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded"
-                            />
-                          ) : (
-                            <span className="text-xs text-slate-300">{sale.duration || '-'}</span>
-                          )}
-                        </td>
-
-                        {/* Editable Xfer Time */}
-                        <td className="py-2 px-2">
-                          {(userRole === 'Admin' || userRole === 'QA') ? (
-                            <input
-                              type="text"
-                              defaultValue={sale.xferTime || ''}
-                              onBlur={(e) => {
-                                if (e.target.value !== (sale.xferTime || '')) {
-                                  updateSaleField(sale.id, 'xferTime', e.target.value);
-                                }
-                              }}
-                              onKeyDown={(e) => e.key === 'Enter' && e.target.blur()}
-                              className="w-full px-1 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded"
-                            />
-                          ) : (
-                            <span className="text-xs text-slate-300">{sale.xferTime || '-'}</span>
-                          )}
-                        </td>
-
-                        {/* Editable Xfer Attempts */}
-                        <td className="py-2 px-2">
-                          {(userRole === 'Admin' || userRole === 'QA') ? (
-                            <select value={sale.xferAttempts || ''} onChange={(e) => updateSaleField(sale.id, 'xferAttempts', e.target.value)} className="w-full px-1 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded">
-                              <option value="">-</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option>
-                            </select>
-                          ) : (
-                            <span className="text-xs text-slate-300">{sale.xferAttempts || '-'}</span>
-                          )}
-                        </td>
-
-                        {/* Editable Feedback (Before) Paragraph Box */}
-                        <td className="py-3 px-3">
-                          {(userRole === 'Admin' || userRole === 'QA') ? (
-                            <textarea
-                              // 1. Use defaultValue
-                              defaultValue={sale.feedbackBeforeXfer || ''}
-
-                              // 2. Save only when clicking away (Blur)
-                              onBlur={(e) => {
-                                // Only save if text actually changed
-                                if (e.target.value !== (sale.feedbackBeforeXfer || '')) {
-                                  updateSaleField(sale.id, 'feedbackBeforeXfer', e.target.value);
-                                }
-                              }}
-                              rows={3}
-                              className="w-full min-w-[250px] px-2 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded resize-y placeholder-slate-500"
-                            />
-                          ) : (
-                            <div className="text-xs text-slate-300 whitespace-pre-wrap min-w-[250px]">{sale.feedbackBeforeXfer || '-'}</div>
-                          )}
-                        </td>
-
-                        {/* Editable Feedback (After) */}
-                        <td className="py-2 px-2">
-                          {(userRole === 'Admin' || userRole === 'QA') ? (
-                            <input
-                              type="text"
-                              defaultValue={sale.feedbackAfterXfer || ''}
-                              onBlur={(e) => {
-                                if (e.target.value !== (sale.feedbackAfterXfer || '')) {
-                                  updateSaleField(sale.id, 'feedbackAfterXfer', e.target.value);
-                                }
-                              }}
-                              onKeyDown={(e) => e.key === 'Enter' && e.target.blur()}
-                              className="w-full px-1 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded"
-                            />
-                          ) : (
-                            <span className="text-xs text-slate-300">{sale.feedbackAfterXfer || '-'}</span>
-                          )}
-                        </td>
-
-                        {/* Editable Grading */}
-                        <td className="py-3 px-3">
-                          {(userRole === 'Admin' || userRole === 'QA') ? (
-                            <select value={sale.grading || ''} onChange={(e) => updateSaleField(sale.id, 'grading', e.target.value)} className="w-full px-1 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded">
-                              <option value="">-</option><option value="Good">Good</option><option value="Bad">Bad</option><option value="Worst">Worst</option>
-                            </select>
-                          ) : (
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${sale.grading === 'Good' ? 'bg-green-500/20 text-green-400' : sale.grading === 'Bad' ? 'bg-red-500/20 text-red-400' : 'text-slate-500'}`}>
-                              {sale.grading || '-'}
-                            </span>
-                          )}
-                        </td>
-
-                       {/* Editable Dock Details (FINE AMOUNT) */}
-                        <td className="py-2 px-2">
-                          <input
-                            type="text"
-                            inputMode="numeric"
-                            placeholder="Fine"
-                            defaultValue={sale.dockDetails || ''}
-
-                            // --- 1. RESTRICTION: Disable if not Admin/QA ---
-                            disabled={userRole !== 'Admin' && userRole !== 'QA'}
-
-                            onInput={(e) => {
-                              e.target.value = e.target.value.replace(/\D/g, '');
-                            }}
-
-                            onBlur={(e) => {
-                              const val = e.target.value;
-                              if (val !== sale.dockDetails) {
-                                updateSaleField(sale.id, 'dockDetails', val);
-                              }
-                            }}
-
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.target.blur(); 
-                              }
-                            }}
-
-                            // --- 2. STYLING: Dim text if disabled ---
-                            className={`w-full px-1 py-1 text-xs border border-slate-600 rounded text-center font-mono outline-none transition-colors
-                              ${userRole !== 'Admin' && userRole !== 'QA' 
-                                ? 'bg-slate-800/50 text-slate-500 cursor-not-allowed' // Disabled Style
-                                : 'bg-slate-700 text-white placeholder-slate-400 focus:ring-1 focus:ring-blue-500' // Enabled Style
-                              }`}
-                          />
-                        </td>
-
-                        {/* DOCK REASON (Fine Reason) */}
-                        <td className="py-2 px-2 align-middle">
-                          <input
-                            type="text"
-                            placeholder="Reason..."
-                            defaultValue={sale.dockReason || sale.dockreason || ''}
-
-                            // --- 1. RESTRICTION: Disable if not Admin/QA ---
-                            disabled={userRole !== 'Admin' && userRole !== 'QA'}
-
-                            onBlur={(e) => {
-                              const val = e.target.value;
-                              updateSaleField(sale.id, 'dockreason', val);
-                            }}
-
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') e.target.blur();
-                            }}
-
-                            // --- 2. STYLING: Dim text if disabled ---
-                            className={`w-full px-1 py-1 text-xs border border-slate-600 rounded text-left transition-colors
-                              ${userRole !== 'Admin' && userRole !== 'QA' 
-                                ? 'bg-slate-800/50 text-slate-500 cursor-not-allowed' // Disabled Style
-                                : 'bg-slate-700 text-white focus:ring-1 focus:ring-blue-500' // Enabled Style
-                              }`}
-                          />
-                        </td>
-
-                        {/* Editable Evaluator */}
-                        <td className="py-2 px-2">
-                          {(userRole === 'Admin' || userRole === 'QA') ? (
-                            <select value={sale.evaluator || ''} onChange={(e) => updateSaleField(sale.id, 'evaluator', e.target.value)} className="w-full px-1 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded">
-                              <option value="">-</option>
-                              {evaluators.map(e => <option key={e} value={e}>{e}</option>)}
-                            </select>
-                          ) : (
-                            <span className="text-xs text-slate-300">{sale.evaluator || '-'}</span>
-                          )}
-                        </td>
-
-                        {(userRole === 'Admin' || userRole === 'QA') && (
-                          <td className="py-3 px-3 text-center">
-                            {/* [FIX] Added 'gap-2' here to separate the buttons */}
-                            <div className="flex items-center justify-center gap-2">
-
-                              {/* Edit Button */}
-                              <button
-                                onClick={() => setEditSale(sale)}
-                                className="p-1.5 bg-blue-500/20 text-blue-400 rounded-lg hover:bg-blue-500/30 transition-colors"
-                                title="Edit"
-                              >
-                                <Edit className="w-4 h-4" />
-                              </button>
-
-                              {/* Delete Button */}
-                              <button
-                                onClick={() => handleDeleteSale(sale.id)}
-                                className="p-1.5 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors"
-                                title="Delete"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-
-                            </div>
-                          </td>
-                        )}
+                {/* DATA TABLE (FULL COLUMNS & EDITABLE) */}
+                <div className="bg-slate-800/80 rounded-xl border border-slate-600 overflow-auto max-h-[70vh]">
+                  <table className="w-full min-w-max border-collapse">
+                    <thead className="sticky top-0 z-20">
+                      <tr className="bg-slate-900 border-b border-slate-700">
+                        <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">No.</th>
+                        <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Timestamp</th>
+                        <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase sticky left-0 bg-slate-900">Agent Name</th>
+                        <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Customer Name</th>
+                        <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Phone Number</th>
+                        <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">State</th>
+                        <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Zip</th>
+                        <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Address</th>
+                        <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase text-center">Campaign</th>
+                        <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Center</th>
+                        <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Team Lead</th>
+                        <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Comments</th>
+                        <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">List ID</th>
+                        <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase min-w-[150px]">Disposition</th>
+                        <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Duration</th>
+                        <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Xfer Time</th>
+                        <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Xfer Attempts</th>
+                        <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase min-w-[250px]">Feedback (Before)</th>
+                        <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Feedback (After)</th>
+                        <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Grading</th>
+                        <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Dock Details</th>
+                        <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Dock Reason</th> {/* NEW HEADER */}
+                        <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Evaluator</th>
+                        {(userRole === 'Admin' || userRole === 'QA'|| userRole === 'SuperAdmin') && <th className="text-center py-4 px-3 text-xs font-bold text-slate-400 uppercase">Actions</th>}
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-{salesSubTab === 'matrix' && (
-      <div className="space-y-6">
-        <div className="flex justify-between items-center">
-          <div>
-            <h2 className="text-xl text-white font-bold">Team Performance Matrix ({selectedMonth})</h2>
-            <p className="text-xs text-slate-400 mt-1 uppercase tracking-wider">Grouped by Team • Daily Breakdown</p>
-          </div>
-          <div className="text-sm text-slate-400 font-medium">
-            Cycle: {getPayrollRange(selectedMonth).start.toDateString()} - {getPayrollRange(selectedMonth).end.toDateString()}
-          </div>
-        </div>
+                    </thead>
+                    <tbody className="divide-y divide-slate-700">
+                      {filteredSales.map((sale, idx) => {
+                        const disp = sale.disposition;
+                        let rowColor = "hover:bg-slate-700";
+                        if (['HW- Xfer', 'HW-IBXfer', 'HW-Xfer-CDR'].includes(disp)) rowColor = "bg-green-900/10 hover:bg-green-900/20";
+                        else if (['DNC', 'DNQ', 'DNQ-Dup', 'DNQ-Webform'].includes(disp)) rowColor = "bg-red-900/10 hover:bg-red-900/20";
+                        else if (['Review Pending', 'Pending Review'].includes(disp)) rowColor = "bg-orange-900/10 hover:bg-orange-900/20";
+                        else if (disp === 'Unsuccessful') rowColor = "bg-yellow-900/10 hover:bg-yellow-900/20";
 
-        {/* --- FILTERS --- */}
-        <div className="bg-slate-800 rounded-xl shadow-sm border border-slate-600 p-4">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <input
-              type="text"
-              placeholder="Search agent name..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <select value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
-              <option value="All">All Teams</option>
-              {teams.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
-            <select value={centerFilter} onChange={(e) => setCenterFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
-              <option value="All">All Centers</option>
-              {centers.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <select value={agentStatusFilter} onChange={(e) => setAgentStatusFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
-              <option value="All">All Status</option>
-              <option value="Active">Active</option>
-              <option value="Left">Left / Ex-Employees</option>
-            </select>
-          </div>
-        </div>
-
-        {/* --- MATRIX LOGIC STARTS HERE --- */}
-        {(() => {
-          // 1. Prepare Dates
-          const { start, end } = getPayrollRange(selectedMonth);
-          const dateArray = getDaysArray(start, end);
-
-          // 2. [CRITICAL FIX] Calculate Filtered Data ONCE at the top
-          // This list will be used by BOTH the Rows (Body) and the Grand Total (Footer)
-          const displayedStats = monthlyStats.filter(stat => {
-             // Search Filter
-             const matchesSearch = !searchQuery || (stat.name && stat.name.toLowerCase().includes(searchQuery.toLowerCase()));
-             
-             // Status Filter (Active/Left)
-             const matchesStatus = agentStatusFilter === 'All' || stat.status === agentStatusFilter;
-             
-             // Team Filter
-             const matchesTeam = teamFilter === 'All' || stat.team === teamFilter;
-
-             // Center Filter
-             const matchesCenter = centerFilter === 'All' || stat.center === centerFilter;
-
-             return matchesSearch && matchesStatus && matchesTeam && matchesCenter;
-          });
-
-          // 3. Extract Unique Teams from the FILTERED list (so empty teams don't show)
-          const uniqueTeams = [...new Set(displayedStats.map(s => s.team))].filter(Boolean).sort();
-
-          return (
-            <div className="bg-slate-900 rounded-xl border border-slate-700 shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
-              <div className="overflow-auto relative">
-                <table className="w-full text-slate-300 border-collapse table-fixed">
-                  
-                  {/* --- HEADER --- */}
-                  <thead className="sticky top-0 z-40 shadow-md">
-                    <tr className="bg-slate-950">
-                      <th className="p-3 text-center border-b border-r border-slate-800 sticky left-0 z-50 bg-slate-950 w-12">No.</th>
-                      <th className="p-3 text-left border-b border-r border-slate-800 sticky left-12 z-50 bg-slate-950 w-44">Agent Name</th>
-
-                      {/* Metric Headers */}
-                      <th className="p-2 text-center border-b border-r border-slate-800 bg-blue-900/40 text-blue-400 text-[10px] font-bold w-14">LPD</th>
-                      <th className="p-2 text-center border-b border-r border-slate-800 bg-slate-800 text-slate-400 text-[10px] w-12">DAYS</th>
-                      <th className="p-2 text-center border-b border-slate-800 bg-red-900/20 text-red-400 text-[10px] w-10">0s</th>
-                      <th className="p-2 text-center border-b border-slate-800 bg-orange-900/20 text-orange-400 text-[10px] w-10">1s</th>
-                      <th className="p-2 text-center border-b border-slate-800 bg-yellow-900/20 text-yellow-400 text-[10px] w-10">2s</th>
-                      <th className="p-2 text-center border-b border-r border-slate-800 bg-green-900/20 text-green-400 text-[10px] w-10">3s</th>
-
-                      {/* Date Columns */}
-                      {dateArray.map(dateStr => {
-                        const d = new Date(dateStr);
-                        const isWeekend = d.getDay() === 0 || d.getDay() === 6;
                         return (
-                          <th key={dateStr} className={`p-2 text-center border-b border-slate-800 w-10 ${isWeekend ? 'bg-slate-800' : 'bg-slate-900'}`}>
-                            <div className="text-[10px] text-slate-500 uppercase">{d.toLocaleDateString('en-US', { weekday: 'narrow' })}</div>
-                            <div className={`text-xs font-bold ${isWeekend ? 'text-slate-500' : 'text-white'}`}>{d.getDate()}</div>
-                          </th>
+                          <tr key={sale.id} className={`${rowColor} transition-colors`}>
+                            <td className="py-3 px-3 text-xs text-slate-400 font-mono">{idx + 1}</td>
+                            <td className="py-3 px-3 text-xs text-slate-300 whitespace-nowrap">{sale.timestamp || sale.date}</td>
+                            <td className="py-3 px-3 text-xs font-bold text-white sticky left-0 bg-inherit">{sale.agentName}</td>
+                            <td className="py-3 px-3 text-xs text-slate-300">{sale.customerName || '-'}</td>
+                            <td className="py-3 px-3 text-xs text-slate-300 font-mono">{sale.phoneNumber || '-'}</td>
+                            <td className="py-3 px-3 text-xs text-slate-400">{sale.state || '-'}</td>
+                            <td className="py-3 px-3 text-xs text-slate-400">{sale.zip || '-'}</td>
+                            <td className="py-3 px-3 text-xs text-slate-400">{sale.address || '-'}</td>
+                            <td className="py-3 px-3 text-xs text-slate-400 text-center">{sale.campaignType || '-'}</td>
+                            <td className="py-3 px-3 text-xs text-slate-400">{sale.center || '-'}</td>
+                            <td className="py-3 px-3 text-xs text-slate-400">{sale.teamLead || '-'}</td>
+                            <td className="py-3 px-3 text-xs text-slate-400">{sale.comments || '-'}</td>
+                            <td className="py-3 px-3 text-xs text-slate-400">{sale.listId || '-'}</td>
+
+                            {/* Editable Disposition */}
+                            <td className="py-3 px-3">
+                              {(userRole === 'Admin' || userRole === 'QA') ? (
+                                <select
+                                  value={sale.disposition || ''}
+                                  onChange={(e) => updateSaleDisposition(sale.id, e.target.value)}
+                                  className="w-full px-2 py-1 text-xs bg-slate-900 text-white border border-slate-600 rounded outline-none focus:ring-1 focus:ring-blue-500"
+                                >
+                                  <option value="">Select...</option>
+                                  <optgroup label="Success">
+                                    <option value="HW- Xfer">HW- Xfer</option>
+                                    <option value="HW-IBXfer">HW-IBXfer</option>
+                                    <option value="HW-Xfer-CDR">HW-Xfer-CDR</option>
+                                  </optgroup>
+                                  <optgroup label="Unsuccessful">
+                                    <option value="Unsuccessful">Unsuccessful</option>
+                                    <option value="HUWT">HUWT</option>
+                                    <option value="DNC">DNC</option>
+                                    <option value="DNQ">DNQ</option>
+                                    <option value="DNQ-Dup">DNQ-Dup</option>
+                                    <option value="DNQ-Webform">DNQ-Webform</option>
+                                    <option value="Review Pending">Review Pending</option>
+                                  </optgroup>
+                                </select>
+                              ) : (
+                                <span className={`text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wide
+                              ${['HW- Xfer', 'HW-IBXfer', 'HW-Xfer-CDR'].includes(sale.disposition) ? 'bg-green-500/20 text-green-400' :
+                                    ['Unsuccessful', 'HUWT'].includes(sale.disposition) ? 'bg-yellow-500/20 text-yellow-400' :
+                                      ['Review Pending', 'Pending Review'].includes(sale.disposition) ? 'bg-orange-500/20 text-orange-400' :
+                                        'bg-red-500/20 text-red-400'}`}>
+                                  {sale.disposition || '-'}
+                                </span>
+                              )}
+                            </td>
+
+                            {/* Editable Duration */}
+                            <td className="py-2 px-2">
+                              {(userRole === 'Admin' || userRole === 'QA') ? (
+                                <input
+                                  type="text"
+                                  // 1. Use defaultValue (Fast typing)
+                                  defaultValue={sale.duration || ''}
+
+                                  // 2. Save only when leaving the box
+                                  onBlur={(e) => {
+                                    if (e.target.value !== (sale.duration || '')) {
+                                      updateSaleField(sale.id, 'duration', e.target.value);
+                                    }
+                                  }}
+                                  // 3. Save on Enter
+                                  onKeyDown={(e) => e.key === 'Enter' && e.target.blur()}
+                                  className="w-full px-1 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded"
+                                />
+                              ) : (
+                                <span className="text-xs text-slate-300">{sale.duration || '-'}</span>
+                              )}
+                            </td>
+
+                            {/* Editable Xfer Time */}
+                            <td className="py-2 px-2">
+                              {(userRole === 'Admin' || userRole === 'QA') ? (
+                                <input
+                                  type="text"
+                                  defaultValue={sale.xferTime || ''}
+                                  onBlur={(e) => {
+                                    if (e.target.value !== (sale.xferTime || '')) {
+                                      updateSaleField(sale.id, 'xferTime', e.target.value);
+                                    }
+                                  }}
+                                  onKeyDown={(e) => e.key === 'Enter' && e.target.blur()}
+                                  className="w-full px-1 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded"
+                                />
+                              ) : (
+                                <span className="text-xs text-slate-300">{sale.xferTime || '-'}</span>
+                              )}
+                            </td>
+
+                            {/* Editable Xfer Attempts */}
+                            <td className="py-2 px-2">
+                              {(userRole === 'Admin' || userRole === 'QA') ? (
+                                <select value={sale.xferAttempts || ''} onChange={(e) => updateSaleField(sale.id, 'xferAttempts', e.target.value)} className="w-full px-1 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded">
+                                  <option value="">-</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option>
+                                </select>
+                              ) : (
+                                <span className="text-xs text-slate-300">{sale.xferAttempts || '-'}</span>
+                              )}
+                            </td>
+
+                            {/* Editable Feedback (Before) Paragraph Box */}
+                            <td className="py-3 px-3">
+                              {(userRole === 'Admin' || userRole === 'QA') ? (
+                                <textarea
+                                  // 1. Use defaultValue
+                                  defaultValue={sale.feedbackBeforeXfer || ''}
+
+                                  // 2. Save only when clicking away (Blur)
+                                  onBlur={(e) => {
+                                    // Only save if text actually changed
+                                    if (e.target.value !== (sale.feedbackBeforeXfer || '')) {
+                                      updateSaleField(sale.id, 'feedbackBeforeXfer', e.target.value);
+                                    }
+                                  }}
+                                  rows={3}
+                                  className="w-full min-w-[250px] px-2 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded resize-y placeholder-slate-500"
+                                />
+                              ) : (
+                                <div className="text-xs text-slate-300 whitespace-pre-wrap min-w-[250px]">{sale.feedbackBeforeXfer || '-'}</div>
+                              )}
+                            </td>
+
+                            {/* Editable Feedback (After) */}
+                            <td className="py-2 px-2">
+                              {(userRole === 'Admin' || userRole === 'QA') ? (
+                                <input
+                                  type="text"
+                                  defaultValue={sale.feedbackAfterXfer || ''}
+                                  onBlur={(e) => {
+                                    if (e.target.value !== (sale.feedbackAfterXfer || '')) {
+                                      updateSaleField(sale.id, 'feedbackAfterXfer', e.target.value);
+                                    }
+                                  }}
+                                  onKeyDown={(e) => e.key === 'Enter' && e.target.blur()}
+                                  className="w-full px-1 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded"
+                                />
+                              ) : (
+                                <span className="text-xs text-slate-300">{sale.feedbackAfterXfer || '-'}</span>
+                              )}
+                            </td>
+
+                            {/* Editable Grading */}
+                            <td className="py-3 px-3">
+                              {(userRole === 'Admin' || userRole === 'QA') ? (
+                                <select value={sale.grading || ''} onChange={(e) => updateSaleField(sale.id, 'grading', e.target.value)} className="w-full px-1 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded">
+                                  <option value="">-</option><option value="Good">Good</option><option value="Bad">Bad</option><option value="Worst">Worst</option>
+                                </select>
+                              ) : (
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${sale.grading === 'Good' ? 'bg-green-500/20 text-green-400' : sale.grading === 'Bad' ? 'bg-red-500/20 text-red-400' : 'text-slate-500'}`}>
+                                  {sale.grading || '-'}
+                                </span>
+                              )}
+                            </td>
+
+                            {/* Editable Dock Details (FINE AMOUNT) */}
+                            <td className="py-2 px-2">
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                placeholder="Fine"
+                                defaultValue={sale.dockDetails || ''}
+
+                                // --- 1. RESTRICTION: Disable if not Admin/QA ---
+                               disabled={!['Admin', 'QA', 'SuperAdmin'].includes(userRole)}
+
+                                onInput={(e) => {
+                                  e.target.value = e.target.value.replace(/\D/g, '');
+                                }}
+
+                                onBlur={(e) => {
+                                  const val = e.target.value;
+                                  if (val !== sale.dockDetails) {
+                                    updateSaleField(sale.id, 'dockDetails', val);
+                                  }
+                                }}
+
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.target.blur();
+                                  }
+                                }}
+
+                                // --- 2. STYLING: Dim text if disabled ---
+                                className={`w-full px-1 py-1 text-xs border border-slate-600 rounded text-center font-mono outline-none transition-colors
+                              ${userRole !== 'Admin' && userRole !== 'QA'
+                                    ? 'bg-slate-800/50 text-slate-500 cursor-not-allowed' // Disabled Style
+                                    : 'bg-slate-700 text-white placeholder-slate-400 focus:ring-1 focus:ring-blue-500' // Enabled Style
+                                  }`}
+                              />
+                            </td>
+
+                            {/* DOCK REASON (Fine Reason) */}
+                            <td className="py-2 px-2 align-middle">
+                              <input
+                                type="text"
+                                placeholder="Reason..."
+                                defaultValue={sale.dockReason || sale.dockreason || ''}
+
+                                // --- 1. RESTRICTION: Disable if not Admin/QA ---
+                                disabled={!['Admin', 'QA', 'SuperAdmin'].includes(userRole)}
+
+                                onBlur={(e) => {
+                                  const val = e.target.value;
+                                  updateSaleField(sale.id, 'dockreason', val);
+                                }}
+
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') e.target.blur();
+                                }}
+
+                                // --- 2. STYLING: Dim text if disabled ---
+                                className={`w-full px-1 py-1 text-xs border border-slate-600 rounded text-left transition-colors
+                              ${userRole !== 'Admin' && userRole !== 'QA'
+                                    ? 'bg-slate-800/50 text-slate-500 cursor-not-allowed' // Disabled Style
+                                    : 'bg-slate-700 text-white focus:ring-1 focus:ring-blue-500' // Enabled Style
+                                  }`}
+                              />
+                            </td>
+
+                            {/* Editable Evaluator */}
+                            <td className="py-2 px-2">
+                              {(userRole === 'Admin' || userRole === 'QA') ? (
+                                <select value={sale.evaluator || ''} onChange={(e) => updateSaleField(sale.id, 'evaluator', e.target.value)} className="w-full px-1 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded">
+                                  <option value="">-</option>
+                                  {evaluators.map(e => <option key={e} value={e}>{e}</option>)}
+                                </select>
+                              ) : (
+                                <span className="text-xs text-slate-300">{sale.evaluator || '-'}</span>
+                              )}
+                            </td>
+
+                            {(userRole === 'Admin' || userRole === 'QA') && (
+                              <td className="py-3 px-3 text-center">
+                                {/* [FIX] Added 'gap-2' here to separate the buttons */}
+                                <div className="flex items-center justify-center gap-2">
+
+                                  {/* Edit Button */}
+                                  <button
+                                    onClick={() => setEditSale(sale)}
+                                    className="p-1.5 bg-blue-500/20 text-blue-400 rounded-lg hover:bg-blue-500/30 transition-colors"
+                                    title="Edit"
+                                  >
+                                    <Edit className="w-4 h-4" />
+                                  </button>
+
+                                  {/* Delete Button */}
+                                  <button
+                                    onClick={() => handleDeleteSale(sale.id)}
+                                    className="p-1.5 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors"
+                                    title="Delete"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+
+                                </div>
+                              </td>
+                            )}
+                          </tr>
                         );
                       })}
-                      <th className="p-3 text-center bg-slate-950 border-b border-l border-slate-800 font-bold text-green-400 sticky right-0 z-40 w-16 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">TOTAL</th>
-                    </tr>
-                  </thead>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+            {salesSubTab === 'matrix' && (
+              <div className="space-y-6">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h2 className="text-xl text-white font-bold">Team Performance Matrix ({selectedMonth})</h2>
+                    <p className="text-xs text-slate-400 mt-1 uppercase tracking-wider">Grouped by Team • Daily Breakdown</p>
+                  </div>
+                  <div className="text-sm text-slate-400 font-medium">
+                    Cycle: {getPayrollRange(selectedMonth).start.toDateString()} - {getPayrollRange(selectedMonth).end.toDateString()}
+                  </div>
+                </div>
 
-                  {/* --- BODY --- */}
-                  <tbody className="divide-y divide-slate-800">
-                    {uniqueTeams.map(teamName => {
-                        // Filter and Sort Agents for this Team (from displayedStats)
-                        const teamAgents = displayedStats
-                            .filter(s => s.team === teamName)
-                            .sort((a, b) => a.name.localeCompare(b.name));
+                {/* --- FILTERS --- */}
+                <div className="bg-slate-800 rounded-xl shadow-sm border border-slate-600 p-4">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <input
+                      type="text"
+                      placeholder="Search agent name..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <select value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
+                      <option value="All">All Teams</option>
+                      {teams.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                    <select value={centerFilter} onChange={(e) => setCenterFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
+                      <option value="All">All Centers</option>
+                      {centers.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    <select value={agentStatusFilter} onChange={(e) => setAgentStatusFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
+                      <option value="All">All Status</option>
+                      <option value="Active">Active</option>
+                      <option value="Left">Left / Ex-Employees</option>
+                    </select>
+                  </div>
+                </div>
 
-                        if (teamAgents.length === 0) return null;
+                {/* --- MATRIX LOGIC STARTS HERE --- */}
+                {(() => {
+                  // 1. Prepare Dates
+                  const { start, end } = getPayrollRange(selectedMonth);
+                  const dateArray = getDaysArray(start, end);
 
-                        // Calculate Team Sub-Totals
-                        const teamTotalSales = teamAgents.reduce((sum, a) => sum + a.totalSales, 0);
-                        const teamTotalDays = teamAgents.reduce((sum, a) => sum + a.dialingDays, 0);
-                        const teamAvgLPD = teamTotalDays > 0 ? (teamTotalSales / teamTotalDays).toFixed(2) : "0.00";
-                        
-                        // Get sales relevant to this team for daily breakdown
-                        const teamAllSales = sales.filter(s =>
-                          (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer') &&
-                          teamAgents.some(a => a.name?.toString().trim().toLowerCase() === s.agentName?.toString().trim().toLowerCase())
-                        );
+                  // 2. [CRITICAL FIX] Calculate Filtered Data ONCE at the top
+                  // This list will be used by BOTH the Rows (Body) and the Grand Total (Footer)
+                  const displayedStats = monthlyStats.filter(stat => {
+                    // Search Filter
+                    const matchesSearch = !searchQuery || (stat.name && stat.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
-                        return (
-                          <React.Fragment key={teamName}>
-                            {/* Team Header Row */}
-                            <tr className="bg-slate-800/80 sticky top-[53px] z-30">
-                                  <td colSpan={2} className="p-2 px-4 border-r border-slate-700 font-black text-blue-400 uppercase tracking-widest text-sm sticky left-0 z-30 bg-slate-800">
-                                    {teamName}
-                                  </td>
-                                  <td className="text-center font-bold text-blue-300 border-r border-slate-700 bg-slate-800">{teamAvgLPD}</td>
-                                  <td className="text-center text-slate-400 border-r border-slate-700 bg-slate-800">{teamTotalDays}</td>
-                                  <td colSpan={4} className="bg-slate-800 border-r border-slate-700"></td>
+                    // Status Filter (Active/Left)
+                    const matchesStatus = agentStatusFilter === 'All' || stat.status === agentStatusFilter;
 
-                                  {dateArray.map(d => {
-                                    const dailyCount = teamAllSales.filter(s => s.date === d).length;
+                    // Team Filter
+                    const matchesTeam = teamFilter === 'All' || stat.team === teamFilter;
+
+                    // Center Filter
+                    const matchesCenter = centerFilter === 'All' || stat.center === centerFilter;
+
+                    return matchesSearch && matchesStatus && matchesTeam && matchesCenter;
+                  });
+
+                  // 3. Extract Unique Teams from the FILTERED list (so empty teams don't show)
+                  const uniqueTeams = [...new Set(displayedStats.map(s => s.team))].filter(Boolean).sort();
+
+                  return (
+                    <div className="bg-slate-900 rounded-xl border border-slate-700 shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
+                      <div className="overflow-auto relative">
+                        <table className="w-full text-slate-300 border-collapse table-fixed">
+
+                          {/* --- HEADER --- */}
+                          <thead className="sticky top-0 z-40 shadow-md">
+                            <tr className="bg-slate-950">
+                              <th className="p-3 text-center border-b border-r border-slate-800 sticky left-0 z-50 bg-slate-950 w-12">No.</th>
+                              <th className="p-3 text-left border-b border-r border-slate-800 sticky left-12 z-50 bg-slate-950 w-44">Agent Name</th>
+
+                              {/* Metric Headers */}
+                              <th className="p-2 text-center border-b border-r border-slate-800 bg-blue-900/40 text-blue-400 text-[10px] font-bold w-14">LPD</th>
+                              <th className="p-2 text-center border-b border-r border-slate-800 bg-slate-800 text-slate-400 text-[10px] w-12">DAYS</th>
+                              <th className="p-2 text-center border-b border-slate-800 bg-red-900/20 text-red-400 text-[10px] w-10">0s</th>
+                              <th className="p-2 text-center border-b border-slate-800 bg-orange-900/20 text-orange-400 text-[10px] w-10">1s</th>
+                              <th className="p-2 text-center border-b border-slate-800 bg-yellow-900/20 text-yellow-400 text-[10px] w-10">2s</th>
+                              <th className="p-2 text-center border-b border-r border-slate-800 bg-green-900/20 text-green-400 text-[10px] w-10">3s</th>
+
+                              {/* Date Columns */}
+                              {dateArray.map(dateStr => {
+                                const d = new Date(dateStr);
+                                const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+                                return (
+                                  <th key={dateStr} className={`p-2 text-center border-b border-slate-800 w-10 ${isWeekend ? 'bg-slate-800' : 'bg-slate-900'}`}>
+                                    <div className="text-[10px] text-slate-500 uppercase">{d.toLocaleDateString('en-US', { weekday: 'narrow' })}</div>
+                                    <div className={`text-xs font-bold ${isWeekend ? 'text-slate-500' : 'text-white'}`}>{d.getDate()}</div>
+                                  </th>
+                                );
+                              })}
+                              <th className="p-3 text-center bg-slate-950 border-b border-l border-slate-800 font-bold text-green-400 sticky right-0 z-40 w-16 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">TOTAL</th>
+                            </tr>
+                          </thead>
+
+                          {/* --- BODY --- */}
+                          <tbody className="divide-y divide-slate-800">
+                            {uniqueTeams.map(teamName => {
+                              // Filter and Sort Agents for this Team (from displayedStats)
+                              const teamAgents = displayedStats
+                                .filter(s => s.team === teamName)
+                                .sort((a, b) => a.name.localeCompare(b.name));
+
+                              if (teamAgents.length === 0) return null;
+
+                              // Calculate Team Sub-Totals
+                              const teamTotalSales = teamAgents.reduce((sum, a) => sum + a.totalSales, 0);
+                              const teamTotalDays = teamAgents.reduce((sum, a) => sum + a.dialingDays, 0);
+                              const teamAvgLPD = teamTotalDays > 0 ? (teamTotalSales / teamTotalDays).toFixed(2) : "0.00";
+
+                              // Get sales relevant to this team for daily breakdown
+                              const teamAllSales = sales.filter(s =>
+                                (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer') &&
+                                teamAgents.some(a => a.name?.toString().trim().toLowerCase() === s.agentName?.toString().trim().toLowerCase())
+                              );
+
+                              return (
+                                <React.Fragment key={teamName}>
+                                  {/* Team Header Row */}
+                                  <tr className="bg-slate-800/80 sticky top-[53px] z-30">
+                                    <td colSpan={2} className="p-2 px-4 border-r border-slate-700 font-black text-blue-400 uppercase tracking-widest text-sm sticky left-0 z-30 bg-slate-800">
+                                      {teamName}
+                                    </td>
+                                    <td className="text-center font-bold text-blue-300 border-r border-slate-700 bg-slate-800">{teamAvgLPD}</td>
+                                    <td className="text-center text-slate-400 border-r border-slate-700 bg-slate-800">{teamTotalDays}</td>
+                                    <td colSpan={4} className="bg-slate-800 border-r border-slate-700"></td>
+
+                                    {dateArray.map(d => {
+                                      const dailyCount = teamAllSales.filter(s => s.date === d).length;
+                                      return (
+                                        <td key={d} className={`text-center text-[10px] border-b border-slate-700 font-bold ${dailyCount > 0 ? 'text-blue-300 bg-blue-500/10' : 'text-slate-600 bg-slate-800/30'}`}>
+                                          {dailyCount > 0 ? dailyCount : '-'}
+                                        </td>
+                                      );
+                                    })}
+
+                                    <td className="text-center font-black text-green-400 sticky right-0 z-30 bg-slate-800 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
+                                      {teamTotalSales}
+                                    </td>
+                                  </tr>
+
+                                  {/* Agent Rows */}
+                                  {teamAgents.map((stat, idx) => {
+                                    const agentSales = sales.filter(s =>
+                                      s.agentName?.toString().trim().toLowerCase() === stat.name?.toString().trim().toLowerCase() &&
+                                      (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer')
+                                    );
+
+                                    // Get Agent's Join Date for comparison
+                                    const hrRec = hrRecords.find(h => h.cnic === stat.cnic) || {};
+                                    const joinDateStr = hrRec.joining_date || stat.activeDate || stat.active_date;
+                                    const joinDate = joinDateStr ? new Date(joinDateStr) : null;
+                                    if (joinDate) joinDate.setHours(0, 0, 0, 0);
+
+                                    const isLeft = stat.status === 'Left';
+                                    const rowClass = isLeft ? 'bg-red-900/10 hover:bg-red-900/20' : 'hover:bg-blue-900/10';
+                                    const nameClass = isLeft ? 'text-red-400' : 'text-slate-200';
+
                                     return (
-                                      <td key={d} className={`text-center text-[10px] border-b border-slate-700 font-bold ${dailyCount > 0 ? 'text-blue-300 bg-blue-500/10' : 'text-slate-600 bg-slate-800/30'}`}>
-                                        {dailyCount > 0 ? dailyCount : '-'}
-                                      </td>
+                                      <tr key={stat.id} className={`${rowClass} transition-colors group`}>
+                                        <td className="p-2 text-center border-r border-slate-800 bg-slate-900 text-slate-600 font-mono text-[10px] sticky left-0 z-10 group-hover:text-white">{idx + 1}</td>
+
+                                        <td className="p-2 px-3 font-medium border-r border-slate-800 bg-slate-900 sticky left-12 z-10 truncate text-xs">
+                                          <div className={nameClass}>{stat.name}</div>
+                                          {stat.isPromoted ? (
+                                            <div className="text-[9px] text-red-500 font-bold uppercase mt-0.5 tracking-tighter">
+                                              PROMOTED TO {stat.designation.toUpperCase()}
+                                            </div>
+                                          ) : (
+                                            isLeft && (
+                                              <div className="text-[9px] text-red-500/80 font-mono mt-0.5">
+                                                LEFT: {stat.leftDate || 'N/A'}
+                                              </div>
+                                            )
+                                          )}
+                                        </td>
+
+                                        <td className="p-1 text-center border-r border-slate-800 bg-blue-500/5 font-bold text-blue-400 text-xs">{stat.lpd}</td>
+                                        <td className="p-1 text-center border-r border-slate-800 text-slate-400 text-[10px]">{stat.dialingDays}</td>
+                                        <td className="p-1 text-center text-red-400 text-[10px]">{stat.daysOn0}</td>
+                                        <td className="p-1 text-center text-orange-300/80 text-[10px]">{stat.daysOn1}</td>
+                                        <td className="p-1 text-center text-yellow-300/80 text-[10px]">{stat.daysOn2}</td>
+                                        <td className="p-1 text-center border-r border-slate-800 text-green-400 font-bold text-[10px]">{stat.daysOn3}</td>
+
+                                        {dateArray.map(dateStr => {
+                                          const currentDate = new Date(dateStr);
+                                          currentDate.setHours(0, 0, 0, 0);
+
+                                          // 1. Is this date BEFORE they joined?
+                                          const isBeforeJoining = joinDate && currentDate < joinDate;
+
+                                          const dailyCount = agentSales.filter(s => s.date === dateStr).length;
+                                          const hasAttendance = attendance.some(a =>
+                                            a.date === dateStr &&
+                                            a.agentName?.toString().trim().toLowerCase() === stat.name?.toString().trim().toLowerCase() &&
+                                            (a.status === 'Present' || a.status === 'Late')
+                                          );
+
+                                          const isWorkingDay = sales.some(s => s.date === dateStr && (s.status === 'Sale' || ['HW- Xfer', 'HW-IBXfer'].includes(s.disposition)));
+
+                                          let cellContent = '-';
+                                          let cellClass = 'text-slate-700';
+
+                                          if (dailyCount > 0) {
+                                            cellContent = dailyCount;
+                                            cellClass = 'bg-green-500/10 text-green-400 font-bold';
+                                          }
+                                          else if (!isBeforeJoining) {
+                                            if (hasAttendance) {
+                                              cellContent = '0';
+                                              cellClass = 'bg-red-500/20 text-red-400 font-bold';
+                                            }
+                                            else if (isWorkingDay) {
+                                              cellContent = 'A';
+                                              cellClass = 'text-red-500 font-black';
+                                            }
+                                          }
+
+                                          return (
+                                            <td key={dateStr} className={`p-1 text-center border-b border-slate-800 text-[11px] ${cellClass}`}>
+                                              {cellContent}
+                                            </td>
+                                          );
+                                        })}
+
+                                        <td className="p-2 text-center font-bold text-white bg-slate-900 sticky right-0 z-10 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
+                                          {stat.totalSales}
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </React.Fragment>
+                              );
+                            })}
+                          </tbody>
+
+                          {/* --- FOOTER (Grand Totals using DISPLAYEDSTATS) --- */}
+                          <tfoot className="sticky bottom-0 z-40 shadow-[0_-4px_10px_rgba(0,0,0,0.5)]">
+                            <tr className="bg-slate-950 border-t-2 border-blue-500 font-black text-white">
+                              <td colSpan={2} className="p-3 text-left sticky left-0 bg-slate-950 z-50 uppercase tracking-tighter">Grand Total</td>
+                              <td className="text-center text-blue-400 bg-slate-950">
+                                {/* Calculate Average LPD for VISIBLE agents only */}
+                                {(displayedStats.reduce((s, a) => s + a.totalSales, 0) / (displayedStats.reduce((s, a) => s + a.dialingDays, 0) || 1)).toFixed(2)}
+                              </td>
+                              <td className="text-center text-slate-400 bg-slate-950">
+                                {displayedStats.reduce((s, a) => s + a.dialingDays, 0)}
+                              </td>
+                              <td colSpan={4} className="bg-slate-950"></td>
+
+                              {dateArray.map(d => {
+                                // Grand Total for each day must check displayedStats
+                                // We check if the sale belongs to ANY agent in the displayedStats list
+                                const dailyGrandTotal = sales.filter(s =>
+                                  s.date === d &&
+                                  (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer') &&
+                                  displayedStats.some(agent => agent.name?.toString().trim().toLowerCase() === s.agentName?.toString().trim().toLowerCase())
+                                ).length;
+
+                                return (
+                                  <td key={d} className="bg-slate-950 text-center text-xs font-bold text-green-400">
+                                    {dailyGrandTotal > 0 ? dailyGrandTotal : ''}
+                                  </td>
+                                );
+                              })}
+
+                              <td className="p-3 text-center text-green-400 text-lg sticky right-0 bg-slate-950 z-50 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
+                                {displayedStats.reduce((s, a) => s + a.totalSales, 0)}
+                              </td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
+          </div>
+        )}
+        ```
+
+        {/* =====================================================================================
+            TAB: MANAGEMENT PAYROLL (Buttons Added + Data Fixed)
+           ===================================================================================== */}
+        {activeTab === 'management' && (
+
+          <div className="space-y-6">
+            <SubTabBar
+              tabs={[
+                { id: 'payroll', label: 'Payroll' },
+                { id: 'attendance', label: 'Attendance' }
+              ]}
+              activeSubTab={managementSubTab}
+              setActiveSubTab={setManagementSubTab}
+            />
+
+            {managementSubTab === 'payroll' && (
+              <div className="space-y-8 animate-in fade-in duration-300">
+
+                {/* Header Section */}
+                <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-slate-800 p-6 rounded-2xl border border-slate-700">
+                  <div>
+                    <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
+                      Management Payroll
+                    </h2>
+                    <p className="text-slate-400 text-sm mt-1">
+                      Payroll Breakdown for {selectedMonth}
+                    </p>
+                  </div>
+
+                  {/* [NEW] Action Buttons for Management */}
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => setShowMgmtBonus(true)} // Opens NEW Modal
+                      className="flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-lg shadow-green-900/20"
+                    >
+                      <Plus className="w-4 h-4" /> Add Bonus
+                    </button>
+                    <button
+                      onClick={() => setShowMgmtFine(true)} // Opens NEW Modal
+                      className="flex items-center gap-2 bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-lg shadow-red-900/20"
+                    >
+                      <Plus className="w-4 h-4" /> Add Fine
+                    </button>
+                  </div>
+                </div>
+
+                {/* --- RENDER TABLES --- */}
+                {(() => {
+                  const { standard, agentCycle } = managementPayrollStats;
+
+                  const renderPayrollTable = (title, staffList, badgeColor) => (
+                    <div className="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden mb-8 shadow-xl">
+                      <div className="p-5 border-b border-slate-700 flex items-center gap-3">
+                        <h3 className="text-lg font-semibold text-white">{title}</h3>
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${badgeColor} text-white font-medium`}>
+                          {staffList.length} Employees
+                        </span>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="bg-slate-900 text-slate-400 text-xs uppercase tracking-wider">
+                              <th className="p-4 font-medium border-b border-slate-700">Employee</th>
+                              <th className="p-4 font-medium border-b border-slate-700">Designation</th>
+                              <th className="p-4 font-medium border-b border-slate-700 text-center">Attendance</th>
+                              <th className="p-4 font-medium border-b border-slate-700 text-right">Base Salary</th>
+                              <th className="p-4 font-medium border-b border-slate-700 text-right">Earned Base</th>
+                              <th className="p-4 font-medium border-b border-slate-700 text-right text-green-400">Bonus</th>
+                              <th className="p-4 font-medium border-b border-slate-700 text-right text-red-400">Fine</th>
+                              <th className="p-4 font-medium border-b border-slate-700 text-right text-blue-400">Net Salary</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-700">
+                            {staffList.length > 0 ? (
+                              staffList.map((emp, idx) => (
+                                <tr key={idx} className="hover:bg-slate-700/20 text-sm group">
+                                  <td className="p-4 font-medium text-white">{emp.agent_name}</td>
+                                  <td className="p-4 text-slate-400">{emp.designation}</td>
+                                  <td className="p-4 text-center">
+                                    <span className={`px-2 py-1 rounded text-xs font-mono ${emp.daysPresent === emp.totalWorkingDays ? 'bg-green-500/20 text-green-400' : 'bg-slate-700 text-blue-300'}`}>
+                                      {emp.daysPresent} / {emp.totalWorkingDays}
+                                    </span>
+                                  </td>
+                                  <td className="p-4 text-right text-slate-400 font-mono text-xs">
+                                    {emp.baseSalary?.toLocaleString()}
+                                  </td>
+                                  <td className="p-4 text-right text-slate-200 font-mono">
+                                    {emp.earnedBase?.toLocaleString()}
+                                  </td>
+                                  <td className="p-4 text-right font-mono text-green-400">
+                                    {emp.totalBonus > 0 ? `+${emp.totalBonus.toLocaleString()}` : '-'}
+                                  </td>
+                                  <td className="p-4 text-right font-mono text-red-400">
+                                    {emp.totalFine > 0 ? `-${emp.totalFine.toLocaleString()}` : '-'}
+                                  </td>
+                                  <td className="p-4 text-right font-bold font-mono text-blue-300 text-base bg-slate-800/30">
+                                    {emp.netSalary?.toLocaleString()} <span className="text-xs text-slate-500">PKR</span>
+                                  </td>
+                                </tr>
+                              ))
+                            ) : (
+                              <tr>
+                                <td colSpan="8" className="p-8 text-center text-slate-500 italic">
+                                  No employees found in this cycle.
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+
+                  return (
+                    <>
+                      {renderPayrollTable("Standard Month Cycle (1st - 30th)", standard, "bg-purple-500/20 border border-purple-500/30")}
+                      {renderPayrollTable("Agent Cycle (21st - 20th)", agentCycle, "bg-orange-500/20 border border-orange-500/30")}
+                    </>
+                  );
+                })()}
+              </div>
+            )}
+
+            {managementSubTab === 'attendance' && (
+              <div className="space-y-6">
+                {/* =====================================================================================
+    TAB: MANAGEMENT ATTENDANCE MATRIX (HR/QA/TL/IT Staff)
+   ===================================================================================== */}
+
+                <div className="space-y-6">
+                  {/* Header */}
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <h2 className="text-xl text-white font-bold">Management Attendance Matrix ({selectedMonth})</h2>
+                      <p className="text-xs text-slate-400 mt-1 uppercase tracking-wider">Login Times • Late Tracking • Non-Agent Staff</p>
+                    </div>
+                  </div>
+
+                  {/* --- [ADDED] FILTER BAR --- */}
+                  <div className="bg-slate-800 rounded-xl shadow-sm border border-slate-600 p-4">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                      <input
+                        type="text"
+                        placeholder="Search employee..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <select value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="All">All Teams</option>
+                        {teams.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                      <select value={centerFilter} onChange={(e) => setCenterFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="All">All Centers</option>
+                        {centers.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                      <select value={agentStatusFilter} onChange={(e) => setAgentStatusFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="All">All Status</option>
+                        <option value="Active">Active</option>
+                        <option value="Left">Left / Ex-Employees</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* --- LOGIC STARTS --- */}
+                  {(() => {
+                    // Helper: Format time to 12-hour
+                    const formatTo12Hour = (timeStr) => {
+                      if (!timeStr) return '';
+                      const [h, m] = timeStr.toString().split(':');
+                      if (!h || !m) return timeStr;
+                      let hours = parseInt(h);
+                      const ampm = hours >= 12 ? 'PM' : 'AM';
+                      hours = hours % 12;
+                      hours = hours ? hours : 12;
+                      return `${hours}:${m} ${ampm}`;
+                    };
+
+                    // Helper: Calculate late status
+                    const getLateStatus = (timeStr) => {
+                      if (!timeStr) return { isLate: false, color: 'text-green-400' };
+                      const [h, m] = timeStr.toString().split(':').map(Number);
+                      let loginMins = h * 60 + m;
+                      if (h < 12) loginMins += 1440;
+                      const shiftStartMins = 19 * 60;
+                      const diff = loginMins - shiftStartMins;
+                      if (diff <= 0) return { isLate: false, color: 'text-green-400' };
+                      else if (diff <= 10) return { isLate: true, color: 'text-yellow-400 font-bold' };
+                      else return { isLate: true, color: 'text-red-500 font-bold' };
+                    };
+
+                    // [FIXED] Filter Logic using Search/Team/Center/Status
+                    const allManagementStaff = hrRecords
+                      .filter(emp => {
+                        // 1. Must NOT be an Agent
+                        const designation = (emp.designation || '').toLowerCase().trim();
+                        if (designation === 'agent') return false;
+
+                        // 2. Search Filter
+                        const matchesSearch = !searchQuery || (emp.agent_name && emp.agent_name.toLowerCase().includes(searchQuery.toLowerCase()));
+
+                        // 3. Team Filter
+                        const matchesTeam = teamFilter === 'All' || emp.team === teamFilter;
+
+                        // 4. Center Filter
+                        const matchesCenter = centerFilter === 'All' || emp.center === centerFilter;
+
+                        // 5. Status Filter (Allows seeing Left employees)
+                        const matchesStatus = agentStatusFilter === 'All' || emp.status === agentStatusFilter;
+
+                        return matchesSearch && matchesTeam && matchesCenter && matchesStatus;
+                      })
+                      .sort((a, b) => a.agent_name.localeCompare(b.agent_name));
+
+                    // Split by cycle type
+                    const agentCycleStaff = allManagementStaff.filter(emp =>
+                      (emp.payroll_cycle_type || '').toLowerCase().includes('agent')
+                    );
+
+                    const standardCycleStaff = allManagementStaff.filter(emp =>
+                      !(emp.payroll_cycle_type || '').toLowerCase().includes('agent')
+                    );
+
+                    // Reusable table renderer
+                    const renderAttendanceTable = (staff, cycleType, themeColor) => {
+                      if (staff.length === 0) return null;
+
+                      const { start, end } = cycleType === 'agent'
+                        ? getPayrollRange(selectedMonth)
+                        : getStandardMonthRange(selectedMonth);
+
+                      const dateArray = getDaysArray(start, end);
+
+                      return (
+                        <div className="bg-slate-900 rounded-xl border border-slate-700 shadow-2xl overflow-hidden flex flex-col max-h-[70vh] mb-8">
+                          <div className="p-4 bg-slate-800 border-b border-slate-700">
+                            <h3 className={`text-lg font-bold ${themeColor === 'orange' ? 'text-orange-400' : 'text-purple-400'}`}>
+                              {cycleType === 'agent' ? 'Agent Cycle (21st - 20th)' : 'Standard Month Cycle (1st - End of Month)'}
+                            </h3>
+                            <p className="text-xs text-slate-400 mt-1">
+                              Cycle: {start.toDateString()} - {end.toDateString()}
+                            </p>
+                          </div>
+
+                          <div className="overflow-auto relative">
+                            <table className="w-full text-slate-300 border-collapse table-fixed">
+
+                              {/* --- HEADER --- */}
+                              <thead className="sticky top-0 z-40 shadow-md">
+                                <tr className="bg-slate-950">
+                                  <th className="p-3 text-center border-b border-r border-slate-800 sticky left-0 z-50 bg-slate-950 w-12">No.</th>
+                                  <th className="p-3 text-left border-b border-r border-slate-800 sticky left-12 z-50 bg-slate-950 w-44">Employee Name</th>
+                                  <th className="p-3 text-left border-b border-r border-slate-800 bg-slate-950 w-32">Designation</th>
+
+                                  {/* Attendance Metrics */}
+                                  <th className="p-2 text-center border-b border-slate-800 bg-green-900/20 text-green-400 text-[10px] font-bold w-10" title="Days Present">P</th>
+                                  <th className="p-2 text-center border-b border-slate-800 bg-yellow-900/20 text-yellow-400 text-[10px] font-bold w-10" title="Days Late">L</th>
+                                  <th className="p-2 text-center border-b border-r border-slate-800 bg-red-900/20 text-red-400 text-[10px] font-bold w-10" title="Days Absent">A</th>
+
+                                  {/* Date Columns */}
+                                  {dateArray.map(dateStr => {
+                                    const d = new Date(dateStr);
+                                    const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+                                    return (
+                                      <th key={dateStr} className={`p-2 text-center border-b border-slate-800 w-16 ${isWeekend ? 'bg-slate-800' : 'bg-slate-900'}`}>
+                                        <div className="text-[10px] text-slate-500 uppercase">{d.toLocaleDateString('en-US', { weekday: 'narrow' })}</div>
+                                        <div className={`text-xs font-bold ${isWeekend ? 'text-slate-500' : 'text-white'}`}>{d.getDate()}</div>
+                                      </th>
                                     );
                                   })}
 
-                                  <td className="text-center font-black text-green-400 sticky right-0 z-30 bg-slate-800 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
-                                    {teamTotalSales}
-                                  </td>
+                                  {/* Summary Column */}
+                                  <th className="p-3 text-center bg-slate-950 border-b border-l border-slate-800 font-bold text-yellow-400 sticky right-0 z-40 w-20 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
+                                    LATE %
+                                  </th>
                                 </tr>
+                              </thead>
 
-                            {/* Agent Rows */}
-                            {teamAgents.map((stat, idx) => {
-                              const agentSales = sales.filter(s =>
-                                  s.agentName?.toString().trim().toLowerCase() === stat.name?.toString().trim().toLowerCase() &&
-                                  (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer')
-                                );
-
-                                  // Get Agent's Join Date for comparison
-                                  const hrRec = hrRecords.find(h => h.cnic === stat.cnic) || {};
-                                  const joinDateStr = hrRec.joining_date || stat.activeDate || stat.active_date;
-                                  const joinDate = joinDateStr ? new Date(joinDateStr) : null;
+                              <tbody className="divide-y divide-slate-800">
+                                {staff.map((emp, idx) => {
+                                  const joinDate = emp.joining_date ? new Date(emp.joining_date) : null;
                                   if (joinDate) joinDate.setHours(0, 0, 0, 0);
 
-                                  const isLeft = stat.status === 'Left';
-                                  const rowClass = isLeft ? 'bg-red-900/10 hover:bg-red-900/20' : 'hover:bg-blue-900/10';
+                                  const empRecords = attendance.filter(a => a.agentName === emp.agent_name);
+                                  const presentCount = empRecords.filter(a => a.status === 'Present').length;
+                                  const lateCount = empRecords.filter(a =>
+                                    a.status === 'Present' && getLateStatus(a.loginTime).isLate
+                                  ).length;
+
+                                  let absentCount = 0;
+                                  dateArray.forEach(dStr => {
+                                    const dObj = new Date(dStr);
+                                    dObj.setHours(0, 0, 0, 0);
+                                    if (dObj.getDay() === 0 || dObj.getDay() === 6) return;
+                                    if (dObj > new Date()) return;
+                                    if (joinDate && dObj < joinDate) return;
+
+                                    const hasRec = empRecords.some(a => a.date === dStr);
+                                    if (!hasRec) absentCount++;
+                                    else if (empRecords.find(a => a.date === dStr).status === 'Absent') absentCount++;
+                                  });
+
+                                  const latePercentage = presentCount > 0 ? Math.round((lateCount / presentCount) * 100) : 0;
+
+                                  // Visual for Left Employees
+                                  const isLeft = emp.status === 'Left';
+                                  const rowClass = isLeft ? 'hover:bg-red-900/10' : `hover:${themeColor === 'orange' ? 'bg-orange-900/10' : 'bg-purple-900/10'}`;
                                   const nameClass = isLeft ? 'text-red-400' : 'text-slate-200';
 
                                   return (
-                                    <tr key={stat.id} className={`${rowClass} transition-colors group`}>
+                                    <tr key={emp.id} className={`${rowClass} transition-colors group`}>
                                       <td className="p-2 text-center border-r border-slate-800 bg-slate-900 text-slate-600 font-mono text-[10px] sticky left-0 z-10 group-hover:text-white">{idx + 1}</td>
-
                                       <td className="p-2 px-3 font-medium border-r border-slate-800 bg-slate-900 sticky left-12 z-10 truncate text-xs">
-                                        <div className={nameClass}>{stat.name}</div>
-                                          {stat.isPromoted ? (
-                                              <div className="text-[9px] text-red-500 font-bold uppercase mt-0.5 tracking-tighter">
-                                                  PROMOTED TO {stat.designation.toUpperCase()}
-                                              </div>
-                                          ) : (
-                                              isLeft && (
-                                                <div className="text-[9px] text-red-500/80 font-mono mt-0.5">
-                                                    LEFT: {stat.leftDate || 'N/A'}
-                                                </div>
-                                              )
-                                          )}
+                                        <div className={nameClass}>{emp.agent_name}</div>
+                                        {isLeft && <div className="text-[9px] text-red-500 font-mono mt-0.5">LEFT</div>}
                                       </td>
+                                      <td className="p-2 px-3 text-xs text-slate-400 border-r border-slate-800 bg-slate-900">{emp.designation}</td>
 
-                                      <td className="p-1 text-center border-r border-slate-800 bg-blue-500/5 font-bold text-blue-400 text-xs">{stat.lpd}</td>
-                                      <td className="p-1 text-center border-r border-slate-800 text-slate-400 text-[10px]">{stat.dialingDays}</td>
-                                      <td className="p-1 text-center text-red-400 text-[10px]">{stat.daysOn0}</td>
-                                      <td className="p-1 text-center text-orange-300/80 text-[10px]">{stat.daysOn1}</td>
-                                      <td className="p-1 text-center text-yellow-300/80 text-[10px]">{stat.daysOn2}</td>
-                                      <td className="p-1 text-center border-r border-slate-800 text-green-400 font-bold text-[10px]">{stat.daysOn3}</td>
+                                      <td className="p-1 text-center border-b border-slate-800 text-green-400 font-bold text-[10px]">{presentCount}</td>
+                                      <td className="p-1 text-center border-b border-slate-800 text-yellow-400 font-bold text-[10px]">{lateCount}</td>
+                                      <td className="p-1 text-center border-b border-r border-slate-800 text-red-400 font-bold text-[10px]">{absentCount}</td>
 
+                                      {/* Daily Cells */}
                                       {dateArray.map(dateStr => {
                                         const currentDate = new Date(dateStr);
                                         currentDate.setHours(0, 0, 0, 0);
-
-                                        // 1. Is this date BEFORE they joined?
+                                        const isWeekend = currentDate.getDay() === 0 || currentDate.getDay() === 6;
                                         const isBeforeJoining = joinDate && currentDate < joinDate;
 
-                                        const dailyCount = agentSales.filter(s => s.date === dateStr).length;
-                                        const hasAttendance = attendance.some(a =>
-                                          a.date === dateStr &&
-                                          a.agentName?.toString().trim().toLowerCase() === stat.name?.toString().trim().toLowerCase() &&
-                                          (a.status === 'Present' || a.status === 'Late')
-                                        );
-                                        
-                                        const isWorkingDay = sales.some(s => s.date === dateStr && (s.status === 'Sale' || ['HW- Xfer', 'HW-IBXfer'].includes(s.disposition)));
+                                        const record = empRecords.find(a => a.date === dateStr);
 
                                         let cellContent = '-';
                                         let cellClass = 'text-slate-700';
 
-                                        if (dailyCount > 0) {
-                                          cellContent = dailyCount;
-                                          cellClass = 'bg-green-500/10 text-green-400 font-bold';
+                                        if (isBeforeJoining) {
+                                          cellContent = '•';
+                                          cellClass = 'text-slate-800';
                                         }
-                                        else if (!isBeforeJoining) {
-                                          if (hasAttendance) {
-                                            cellContent = '0';
-                                            cellClass = 'bg-red-500/20 text-red-400 font-bold';
-                                          }
-                                          else if (isWorkingDay) {
+                                        else if (record) {
+                                          if (record.status === 'Absent') {
                                             cellContent = 'A';
-                                            cellClass = 'text-red-500 font-black';
+                                            cellClass = 'bg-red-500/10 text-red-500 font-bold';
+                                          } else {
+                                            cellContent = formatTo12Hour(record.loginTime) || 'OK';
+                                            const status = getLateStatus(record.loginTime);
+                                            if (status.isLate) {
+                                              cellClass = `bg-slate-800/50 ${status.color} font-mono text-[10px]`;
+                                            } else {
+                                              cellClass = 'text-green-400 font-mono text-[10px]';
+                                            }
+                                          }
+                                        } else {
+                                          if (isWeekend) {
+                                            cellContent = '';
+                                            cellClass = 'bg-slate-800/30';
+                                          } else if (currentDate <= new Date()) {
+                                            cellContent = 'A';
+                                            cellClass = 'text-red-500/50 font-bold';
                                           }
                                         }
 
@@ -3736,1076 +4373,651 @@ const SubTabBar = ({ tabs, activeSubTab, setActiveSubTab }) => {
                                         );
                                       })}
 
-                                      <td className="p-2 text-center font-bold text-white bg-slate-900 sticky right-0 z-10 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
-                                        {stat.totalSales}
+                                      {/* Row Summary */}
+                                      <td className={`p-2 text-center font-bold sticky right-0 z-10 bg-slate-900 shadow-[-4px_0_10px_rgba(0,0,0,0.5)] ${latePercentage > 20 ? 'text-red-400' : 'text-slate-400'}`}>
+                                        {latePercentage}%
                                       </td>
                                     </tr>
                                   );
-                            })}
-                          </React.Fragment>
-                        );
-                      })}
-                  </tbody>
+                                })}
+                              </tbody>
 
-                  {/* --- FOOTER (Grand Totals using DISPLAYEDSTATS) --- */}
-                  <tfoot className="sticky bottom-0 z-40 shadow-[0_-4px_10px_rgba(0,0,0,0.5)]">
-                    <tr className="bg-slate-950 border-t-2 border-blue-500 font-black text-white">
-                      <td colSpan={2} className="p-3 text-left sticky left-0 bg-slate-950 z-50 uppercase tracking-tighter">Grand Total</td>
-                      <td className="text-center text-blue-400 bg-slate-950">
-                        {/* Calculate Average LPD for VISIBLE agents only */}
-                        {(displayedStats.reduce((s, a) => s + a.totalSales, 0) / (displayedStats.reduce((s, a) => s + a.dialingDays, 0) || 1)).toFixed(2)}
-                      </td>
-                      <td className="text-center text-slate-400 bg-slate-950">
-                        {displayedStats.reduce((s, a) => s + a.dialingDays, 0)}
-                      </td>
-                      <td colSpan={4} className="bg-slate-950"></td>
+                              {/* --- FOOTER --- */}
+                              <tfoot className="sticky bottom-0 z-40 shadow-[0_-4px_10px_rgba(0,0,0,0.5)]">
+                                <tr className={`bg-slate-950 border-t-2 ${themeColor === 'orange' ? 'border-orange-500' : 'border-purple-500'} font-black text-white`}>
+                                  <td colSpan={3} className="p-3 text-left sticky left-0 bg-slate-950 z-50 uppercase tracking-tighter">Total</td>
 
-                      {dateArray.map(d => {
-                        // Grand Total for each day must check displayedStats
-                        // We check if the sale belongs to ANY agent in the displayedStats list
-                        const dailyGrandTotal = sales.filter(s =>
-                          s.date === d &&
-                          (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer') &&
-                          displayedStats.some(agent => agent.name?.toString().trim().toLowerCase() === s.agentName?.toString().trim().toLowerCase())
-                        ).length;
+                                  {/* Grand Metrics */}
+                                  <td className="text-center text-green-400 bg-slate-950 text-[10px]">
+                                    {attendance.filter(a =>
+                                      a.status === 'Present' &&
+                                      staff.some(s => s.agent_name === a.agentName)
+                                    ).length}
+                                  </td>
+                                  <td className="text-center text-yellow-400 bg-slate-950 text-[10px]">
+                                    {attendance.filter(a =>
+                                      a.late === true &&
+                                      staff.some(s => s.agent_name === a.agentName)
+                                    ).length}
+                                  </td>
+                                  <td className="text-center text-red-400 bg-slate-950 border-r border-slate-800 text-[10px]">
+                                    -
+                                  </td>
 
-                        return (
-                          <td key={d} className="bg-slate-950 text-center text-xs font-bold text-green-400">
-                            {dailyGrandTotal > 0 ? dailyGrandTotal : ''}
-                          </td>
-                        );
-                      })}
+                                  {/* Daily Grand Totals */}
+                                  {dateArray.map(d => {
+                                    const dailyTotal = attendance.filter(a =>
+                                      a.date === d &&
+                                      a.status === 'Present' &&
+                                      staff.some(s => s.agent_name === a.agentName)
+                                    ).length;
+                                    return (
+                                      <td key={d} className="bg-slate-950 text-center text-[10px] font-bold text-slate-500">
+                                        {dailyTotal > 0 ? dailyTotal : ''}
+                                      </td>
+                                    );
+                                  })}
 
-                      <td className="p-3 text-center text-green-400 text-lg sticky right-0 bg-slate-950 z-50 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
-                        {displayedStats.reduce((s, a) => s + a.totalSales, 0)}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </div>
-          );
-        })()}
-      </div>
-    )}
-
-        </div>
-    )}
-```
-
-{/* =====================================================================================
-            TAB: MANAGEMENT PAYROLL (Buttons Added + Data Fixed)
-           ===================================================================================== */}
-        {activeTab === 'management' && (
-
-<div className="space-y-6">
-    <SubTabBar
-      tabs={[
-        { id: 'payroll', label: 'Payroll' },
-        { id: 'attendance', label: 'Attendance' }
-      ]}
-      activeSubTab={managementSubTab}
-      setActiveSubTab={setManagementSubTab}
-    />
-
-    {managementSubTab === 'payroll' && (
-          <div className="space-y-8 animate-in fade-in duration-300">
-            
-            {/* Header Section */}
-            <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-slate-800 p-6 rounded-2xl border border-slate-700">
-              <div>
-                <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
-                  Management Payroll
-                </h2>
-                <p className="text-slate-400 text-sm mt-1">
-                  Payroll Breakdown for {selectedMonth}
-                </p>
-              </div>
-              
-             {/* [NEW] Action Buttons for Management */}
-              <div className="flex items-center gap-3">
-                 <button 
-                    onClick={() => setShowMgmtBonus(true)} // Opens NEW Modal
-                    className="flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-lg shadow-green-900/20"
-                 >
-                    <Plus className="w-4 h-4" /> Add Bonus
-                 </button>
-                 <button 
-                    onClick={() => setShowMgmtFine(true)} // Opens NEW Modal
-                    className="flex items-center gap-2 bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-lg shadow-red-900/20"
-                 >
-                    <Plus className="w-4 h-4" /> Add Fine
-                 </button>
-              </div>
-            </div>
-
-            {/* --- RENDER TABLES --- */}
-            {(() => {
-                const { standard, agentCycle } = managementPayrollStats;
-
-                const renderPayrollTable = (title, staffList, badgeColor) => (
-                    <div className="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden mb-8 shadow-xl">
-                        <div className="p-5 border-b border-slate-700 flex items-center gap-3">
-                            <h3 className="text-lg font-semibold text-white">{title}</h3>
-                            <span className={`text-xs px-2 py-0.5 rounded-full ${badgeColor} text-white font-medium`}>
-                                {staffList.length} Employees
-                            </span>
-                        </div>
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse">
-                                <thead>
-                                    <tr className="bg-slate-900 text-slate-400 text-xs uppercase tracking-wider">
-                                        <th className="p-4 font-medium border-b border-slate-700">Employee</th>
-                                        <th className="p-4 font-medium border-b border-slate-700">Designation</th>
-                                        <th className="p-4 font-medium border-b border-slate-700 text-center">Attendance</th>
-                                        <th className="p-4 font-medium border-b border-slate-700 text-right">Base Salary</th>
-                                        <th className="p-4 font-medium border-b border-slate-700 text-right">Earned Base</th>
-                                        <th className="p-4 font-medium border-b border-slate-700 text-right text-green-400">Bonus</th>
-                                        <th className="p-4 font-medium border-b border-slate-700 text-right text-red-400">Fine</th>
-                                        <th className="p-4 font-medium border-b border-slate-700 text-right text-blue-400">Net Salary</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-700">
-                                    {staffList.length > 0 ? (
-                                        staffList.map((emp, idx) => (
-                                            <tr key={idx} className="hover:bg-slate-700/20 text-sm group">
-                                                <td className="p-4 font-medium text-white">{emp.agent_name}</td>
-                                                <td className="p-4 text-slate-400">{emp.designation}</td>
-                                                <td className="p-4 text-center">
-                                                    <span className={`px-2 py-1 rounded text-xs font-mono ${emp.daysPresent === emp.totalWorkingDays ? 'bg-green-500/20 text-green-400' : 'bg-slate-700 text-blue-300'}`}>
-                                                        {emp.daysPresent} / {emp.totalWorkingDays}
-                                                    </span>
-                                                </td>
-                                                <td className="p-4 text-right text-slate-400 font-mono text-xs">
-                                                    {emp.baseSalary?.toLocaleString()}
-                                                </td>
-                                                <td className="p-4 text-right text-slate-200 font-mono">
-                                                    {emp.earnedBase?.toLocaleString()}
-                                                </td>
-                                                <td className="p-4 text-right font-mono text-green-400">
-                                                    {emp.totalBonus > 0 ? `+${emp.totalBonus.toLocaleString()}` : '-'}
-                                                </td>
-                                                <td className="p-4 text-right font-mono text-red-400">
-                                                    {emp.totalFine > 0 ? `-${emp.totalFine.toLocaleString()}` : '-'}
-                                                </td>
-                                                <td className="p-4 text-right font-bold font-mono text-blue-300 text-base bg-slate-800/30">
-                                                    {emp.netSalary?.toLocaleString()} <span className="text-xs text-slate-500">PKR</span>
-                                                </td>
-                                            </tr>
-                                        ))
-                                    ) : (
-                                        <tr>
-                                            <td colSpan="8" className="p-8 text-center text-slate-500 italic">
-                                                No employees found in this cycle.
-                                            </td>
-                                        </tr>
-                                    )}
-                                </tbody>
+                                  <td className={`p-3 text-center ${themeColor === 'orange' ? 'text-orange-400' : 'text-purple-400'} text-lg sticky right-0 bg-slate-950 z-50 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]`}>
+                                    -
+                                  </td>
+                                </tr>
+                              </tfoot>
                             </table>
+                          </div>
                         </div>
-                    </div>
-                );
-
-                return (
-                    <>
-                        {renderPayrollTable("Standard Month Cycle (1st - 30th)", standard, "bg-purple-500/20 border border-purple-500/30")}
-                        {renderPayrollTable("Agent Cycle (21st - 20th)", agentCycle, "bg-orange-500/20 border border-orange-500/30")}
-                    </>
-                );
-            })()}
-          </div>
-    )}
-
-    {managementSubTab === 'attendance' && (
-      <div className="space-y-6">
-        {/* =====================================================================================
-    TAB: MANAGEMENT ATTENDANCE MATRIX (HR/QA/TL/IT Staff)
-   ===================================================================================== */}
-
-<div className="space-y-6">
-    {/* Header */}
-    <div className="flex justify-between items-center">
-      <div>
-        <h2 className="text-xl text-white font-bold">Management Attendance Matrix ({selectedMonth})</h2>
-        <p className="text-xs text-slate-400 mt-1 uppercase tracking-wider">Login Times • Late Tracking • Non-Agent Staff</p>
-      </div>
-    </div>
-
-    {/* --- [ADDED] FILTER BAR --- */}
-    <div className="bg-slate-800 rounded-xl shadow-sm border border-slate-600 p-4">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <input
-          type="text"
-          placeholder="Search employee..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500"
-        />
-        <select value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
-          <option value="All">All Teams</option>
-          {teams.map(t => <option key={t} value={t}>{t}</option>)}
-        </select>
-        <select value={centerFilter} onChange={(e) => setCenterFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
-          <option value="All">All Centers</option>
-          {centers.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <select value={agentStatusFilter} onChange={(e) => setAgentStatusFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
-          <option value="All">All Status</option>
-          <option value="Active">Active</option>
-          <option value="Left">Left / Ex-Employees</option>
-        </select>
-      </div>
-    </div>
-
-    {/* --- LOGIC STARTS --- */}
-    {(() => {
-      // Helper: Format time to 12-hour
-      const formatTo12Hour = (timeStr) => {
-        if (!timeStr) return '';
-        const [h, m] = timeStr.toString().split(':');
-        if (!h || !m) return timeStr;
-        let hours = parseInt(h);
-        const ampm = hours >= 12 ? 'PM' : 'AM';
-        hours = hours % 12;
-        hours = hours ? hours : 12;
-        return `${hours}:${m} ${ampm}`;
-      };
-
-      // Helper: Calculate late status
-      const getLateStatus = (timeStr) => {
-        if (!timeStr) return { isLate: false, color: 'text-green-400' };
-        const [h, m] = timeStr.toString().split(':').map(Number);
-        let loginMins = h * 60 + m;
-        if (h < 12) loginMins += 1440;
-        const shiftStartMins = 19 * 60;
-        const diff = loginMins - shiftStartMins;
-        if (diff <= 0) return { isLate: false, color: 'text-green-400' };
-        else if (diff <= 10) return { isLate: true, color: 'text-yellow-400 font-bold' };
-        else return { isLate: true, color: 'text-red-500 font-bold' };
-      };
-
-      // [FIXED] Filter Logic using Search/Team/Center/Status
-      const allManagementStaff = hrRecords
-        .filter(emp => {
-          // 1. Must NOT be an Agent
-          const designation = (emp.designation || '').toLowerCase().trim();
-          if (designation === 'agent') return false;
-
-          // 2. Search Filter
-          const matchesSearch = !searchQuery || (emp.agent_name && emp.agent_name.toLowerCase().includes(searchQuery.toLowerCase()));
-
-          // 3. Team Filter
-          const matchesTeam = teamFilter === 'All' || emp.team === teamFilter;
-
-          // 4. Center Filter
-          const matchesCenter = centerFilter === 'All' || emp.center === centerFilter;
-
-          // 5. Status Filter (Allows seeing Left employees)
-          const matchesStatus = agentStatusFilter === 'All' || emp.status === agentStatusFilter;
-
-          return matchesSearch && matchesTeam && matchesCenter && matchesStatus;
-        })
-        .sort((a, b) => a.agent_name.localeCompare(b.agent_name));
-
-      // Split by cycle type
-      const agentCycleStaff = allManagementStaff.filter(emp => 
-        (emp.payroll_cycle_type || '').toLowerCase().includes('agent')
-      );
-      
-      const standardCycleStaff = allManagementStaff.filter(emp => 
-        !(emp.payroll_cycle_type || '').toLowerCase().includes('agent')
-      );
-
-      // Reusable table renderer
-      const renderAttendanceTable = (staff, cycleType, themeColor) => {
-        if (staff.length === 0) return null;
-
-        const { start, end } = cycleType === 'agent' 
-          ? getPayrollRange(selectedMonth) 
-          : getStandardMonthRange(selectedMonth);
-        
-        const dateArray = getDaysArray(start, end);
-
-        return (
-          <div className="bg-slate-900 rounded-xl border border-slate-700 shadow-2xl overflow-hidden flex flex-col max-h-[70vh] mb-8">
-            <div className="p-4 bg-slate-800 border-b border-slate-700">
-              <h3 className={`text-lg font-bold ${themeColor === 'orange' ? 'text-orange-400' : 'text-purple-400'}`}>
-                {cycleType === 'agent' ? 'Agent Cycle (21st - 20th)' : 'Standard Month Cycle (1st - End of Month)'}
-              </h3>
-              <p className="text-xs text-slate-400 mt-1">
-                Cycle: {start.toDateString()} - {end.toDateString()}
-              </p>
-            </div>
-
-            <div className="overflow-auto relative">
-              <table className="w-full text-slate-300 border-collapse table-fixed">
-                
-                {/* --- HEADER --- */}
-                <thead className="sticky top-0 z-40 shadow-md">
-                  <tr className="bg-slate-950">
-                    <th className="p-3 text-center border-b border-r border-slate-800 sticky left-0 z-50 bg-slate-950 w-12">No.</th>
-                    <th className="p-3 text-left border-b border-r border-slate-800 sticky left-12 z-50 bg-slate-950 w-44">Employee Name</th>
-                    <th className="p-3 text-left border-b border-r border-slate-800 bg-slate-950 w-32">Designation</th>
-
-                    {/* Attendance Metrics */}
-                    <th className="p-2 text-center border-b border-slate-800 bg-green-900/20 text-green-400 text-[10px] font-bold w-10" title="Days Present">P</th>
-                    <th className="p-2 text-center border-b border-slate-800 bg-yellow-900/20 text-yellow-400 text-[10px] font-bold w-10" title="Days Late">L</th>
-                    <th className="p-2 text-center border-b border-r border-slate-800 bg-red-900/20 text-red-400 text-[10px] font-bold w-10" title="Days Absent">A</th>
-
-                    {/* Date Columns */}
-                    {dateArray.map(dateStr => {
-                      const d = new Date(dateStr);
-                      const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-                      return (
-                        <th key={dateStr} className={`p-2 text-center border-b border-slate-800 w-16 ${isWeekend ? 'bg-slate-800' : 'bg-slate-900'}`}>
-                          <div className="text-[10px] text-slate-500 uppercase">{d.toLocaleDateString('en-US', { weekday: 'narrow' })}</div>
-                          <div className={`text-xs font-bold ${isWeekend ? 'text-slate-500' : 'text-white'}`}>{d.getDate()}</div>
-                        </th>
                       );
-                    })}
-                    
-                    {/* Summary Column */}
-                    <th className="p-3 text-center bg-slate-950 border-b border-l border-slate-800 font-bold text-yellow-400 sticky right-0 z-40 w-20 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
-                      LATE %
-                    </th>
-                  </tr>
-                </thead>
-
-                <tbody className="divide-y divide-slate-800">
-                  {staff.map((emp, idx) => {
-                    const joinDate = emp.joining_date ? new Date(emp.joining_date) : null;
-                    if (joinDate) joinDate.setHours(0, 0, 0, 0);
-
-                    const empRecords = attendance.filter(a => a.agentName === emp.agent_name);
-                    const presentCount = empRecords.filter(a => a.status === 'Present').length;
-                    const lateCount = empRecords.filter(a => 
-                      a.status === 'Present' && getLateStatus(a.loginTime).isLate
-                    ).length;
-
-                    let absentCount = 0;
-                    dateArray.forEach(dStr => {
-                      const dObj = new Date(dStr);
-                      dObj.setHours(0, 0, 0, 0);
-                      if (dObj.getDay() === 0 || dObj.getDay() === 6) return;
-                      if (dObj > new Date()) return;
-                      if (joinDate && dObj < joinDate) return;
-
-                      const hasRec = empRecords.some(a => a.date === dStr);
-                      if (!hasRec) absentCount++;
-                      else if (empRecords.find(a => a.date === dStr).status === 'Absent') absentCount++;
-                    });
-
-                    const latePercentage = presentCount > 0 ? Math.round((lateCount / presentCount) * 100) : 0;
-
-                    // Visual for Left Employees
-                    const isLeft = emp.status === 'Left';
-                    const rowClass = isLeft ? 'hover:bg-red-900/10' : `hover:${themeColor === 'orange' ? 'bg-orange-900/10' : 'bg-purple-900/10'}`;
-                    const nameClass = isLeft ? 'text-red-400' : 'text-slate-200';
+                    };
 
                     return (
-                      <tr key={emp.id} className={`${rowClass} transition-colors group`}>
-                        <td className="p-2 text-center border-r border-slate-800 bg-slate-900 text-slate-600 font-mono text-[10px] sticky left-0 z-10 group-hover:text-white">{idx + 1}</td>
-                        <td className="p-2 px-3 font-medium border-r border-slate-800 bg-slate-900 sticky left-12 z-10 truncate text-xs">
-                          <div className={nameClass}>{emp.agent_name}</div>
-                          {isLeft && <div className="text-[9px] text-red-500 font-mono mt-0.5">LEFT</div>}
-                        </td>
-                        <td className="p-2 px-3 text-xs text-slate-400 border-r border-slate-800 bg-slate-900">{emp.designation}</td>
+                      <>
+                        {/* Table 1: Agent Cycle (21st - 20th) */}
+                        {renderAttendanceTable(agentCycleStaff, 'agent', 'orange')}
 
-                        <td className="p-1 text-center border-b border-slate-800 text-green-400 font-bold text-[10px]">{presentCount}</td>
-                        <td className="p-1 text-center border-b border-slate-800 text-yellow-400 font-bold text-[10px]">{lateCount}</td>
-                        <td className="p-1 text-center border-b border-r border-slate-800 text-red-400 font-bold text-[10px]">{absentCount}</td>
-
-                        {/* Daily Cells */}
-                        {dateArray.map(dateStr => {
-                          const currentDate = new Date(dateStr);
-                          currentDate.setHours(0, 0, 0, 0);
-                          const isWeekend = currentDate.getDay() === 0 || currentDate.getDay() === 6;
-                          const isBeforeJoining = joinDate && currentDate < joinDate;
-
-                          const record = empRecords.find(a => a.date === dateStr);
-
-                          let cellContent = '-';
-                          let cellClass = 'text-slate-700';
-
-                          if (isBeforeJoining) {
-                            cellContent = '•';
-                            cellClass = 'text-slate-800';
-                          } 
-                          else if (record) {
-                            if (record.status === 'Absent') {
-                              cellContent = 'A';
-                              cellClass = 'bg-red-500/10 text-red-500 font-bold';
-                            } else {
-                              cellContent = formatTo12Hour(record.loginTime) || 'OK';
-                              const status = getLateStatus(record.loginTime);
-                              if (status.isLate) {
-                                cellClass = `bg-slate-800/50 ${status.color} font-mono text-[10px]`;
-                              } else {
-                                cellClass = 'text-green-400 font-mono text-[10px]';
-                              }
-                            }
-                          } else {
-                            if (isWeekend) {
-                              cellContent = '';
-                              cellClass = 'bg-slate-800/30';
-                            } else if (currentDate <= new Date()) {
-                              cellContent = 'A';
-                              cellClass = 'text-red-500/50 font-bold';
-                            }
-                          }
-
-                          return (
-                            <td key={dateStr} className={`p-1 text-center border-b border-slate-800 text-[11px] ${cellClass}`}>
-                              {cellContent}
-                            </td>
-                          );
-                        })}
-
-                        {/* Row Summary */}
-                        <td className={`p-2 text-center font-bold sticky right-0 z-10 bg-slate-900 shadow-[-4px_0_10px_rgba(0,0,0,0.5)] ${latePercentage > 20 ? 'text-red-400' : 'text-slate-400'}`}>
-                          {latePercentage}%
-                        </td>
-                      </tr>
+                        {/* Table 2: Standard Cycle (1st - End of Month) */}
+                        {renderAttendanceTable(standardCycleStaff, 'standard', 'purple')}
+                      </>
                     );
-                  })}
-                </tbody>
-
-                {/* --- FOOTER --- */}
-                <tfoot className="sticky bottom-0 z-40 shadow-[0_-4px_10px_rgba(0,0,0,0.5)]">
-                  <tr className={`bg-slate-950 border-t-2 ${themeColor === 'orange' ? 'border-orange-500' : 'border-purple-500'} font-black text-white`}>
-                    <td colSpan={3} className="p-3 text-left sticky left-0 bg-slate-950 z-50 uppercase tracking-tighter">Total</td>
-                    
-                    {/* Grand Metrics */}
-                    <td className="text-center text-green-400 bg-slate-950 text-[10px]">
-                      {attendance.filter(a => 
-                        a.status === 'Present' && 
-                        staff.some(s => s.agent_name === a.agentName)
-                      ).length}
-                    </td>
-                    <td className="text-center text-yellow-400 bg-slate-950 text-[10px]">
-                      {attendance.filter(a => 
-                        a.late === true && 
-                        staff.some(s => s.agent_name === a.agentName)
-                      ).length}
-                    </td>
-                    <td className="text-center text-red-400 bg-slate-950 border-r border-slate-800 text-[10px]">
-                      -
-                    </td>
-
-                    {/* Daily Grand Totals */}
-                    {dateArray.map(d => {
-                      const dailyTotal = attendance.filter(a => 
-                        a.date === d && 
-                        a.status === 'Present' && 
-                        staff.some(s => s.agent_name === a.agentName)
-                      ).length;
-                      return (
-                        <td key={d} className="bg-slate-950 text-center text-[10px] font-bold text-slate-500">
-                          {dailyTotal > 0 ? dailyTotal : ''}
-                        </td>
-                      );
-                    })}
-
-                    <td className={`p-3 text-center ${themeColor === 'orange' ? 'text-orange-400' : 'text-purple-400'} text-lg sticky right-0 bg-slate-950 z-50 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]`}>
-                      -
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
+                  })()}
+                </div>
+              </div>
+            )}
           </div>
-        );
-      };
+        )}
 
-      return (
-        <>
-          {/* Table 1: Agent Cycle (21st - 20th) */}
-          {renderAttendanceTable(agentCycleStaff, 'agent', 'orange')}
-
-          {/* Table 2: Standard Cycle (1st - End of Month) */}
-          {renderAttendanceTable(standardCycleStaff, 'standard', 'purple')}
-        </>
-      );
-    })()}
-  </div>
-      </div>
-    )}
-  </div>
-)}
-
-{/* =====================================================================================
+        {/* =====================================================================================
             TAB: ATTENDANCE Tab (Fixed Time Calculation Logic)
            ===================================================================================== */}
         {activeTab === 'attendance' && (
           <div className="space-y-6">
 
             <SubTabBar
-      tabs={[
-        { id: 'daily', label: 'Daily Attendance' },
-        { id: 'matrix', label: 'Attendance Matrix' }
-      ]}
-      activeSubTab={attendanceSubTab}
-      setActiveSubTab={setAttendanceSubTab}
-    />
+              tabs={[
+                { id: 'daily', label: 'Daily Attendance' },
+                { id: 'matrix', label: 'Attendance Matrix' }
+              ]}
+              activeSubTab={attendanceSubTab}
+              setActiveSubTab={setAttendanceSubTab}
+            />
 
-    {attendanceSubTab === 'daily' && (
-      <div className="space-y-6">
-            
-            {/* Header */}
-            <div className="flex justify-between items-center bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg">
-              <div>
-                <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                  <Clock className="w-6 h-6 text-blue-400" /> Daily Attendance
-                </h2>
-                <div className="flex items-center gap-3 text-sm mt-1">
-                  <span className="text-slate-400">Status for <span className="text-blue-400 font-mono font-bold">{customStartDate}</span></span>
-                  <span className="w-1 h-1 rounded-full bg-slate-600"></span>
-                  <span className="text-slate-400">Late Threshold: <span className="text-yellow-400 font-mono font-bold">{formatTime(lateTime)}</span></span>
+            {attendanceSubTab === 'daily' && (
+              <div className="space-y-6">
+
+                {/* Header */}
+                <div className="flex justify-between items-center bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg">
+                  <div>
+                    <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                      <Clock className="w-6 h-6 text-blue-400" /> Daily Attendance
+                    </h2>
+                    <div className="flex items-center gap-3 text-sm mt-1">
+                      <span className="text-slate-400">Status for <span className="text-blue-400 font-mono font-bold">{customStartDate}</span></span>
+                      <span className="w-1 h-1 rounded-full bg-slate-600"></span>
+                      <span className="text-slate-400">Late Threshold: <span className="text-yellow-400 font-mono font-bold">{formatTime(lateTime)}</span></span>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3">
+                    {/* Set Late Time Button (Admin Only) */}
+                    {['Admin', 'SuperAdmin'].includes(userRole) && (
+                      <button
+                        onClick={() => setShowLateTimeModal(true)}
+                        className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition-colors text-sm font-medium shadow-lg shadow-purple-900/20"
+                      >
+                        <Clock className="w-4 h-4" /> Set Late Time
+                      </button>
+                    )}
+
+                    <input
+                      type="date"
+                      value={customStartDate}
+                      onChange={(e) => setCustomStartDate(e.target.value)}
+                      className="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+
+                    {['Admin', 'SuperAdmin'].includes(userRole) && (
+                      <button
+                        onClick={() => { setImportType('attendance'); setShowImportModal(true); }}
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors text-sm font-medium shadow-lg shadow-blue-900/20"
+                      >
+                        <Upload className="w-4 h-4" /> Import CSV
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-              
-              <div className="flex gap-3">
-                 {/* Set Late Time Button (Admin Only) */}
-                 {userRole === 'Admin' && (
-                   <button
-                     onClick={() => setShowLateTimeModal(true)}
-                     className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition-colors text-sm font-medium shadow-lg shadow-purple-900/20"
-                   >
-                     <Clock className="w-4 h-4" /> Set Late Time
-                   </button>
-                 )}
 
-                 <input 
-                   type="date" 
-                   value={customStartDate} 
-                   onChange={(e) => setCustomStartDate(e.target.value)}
-                   className="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
-                 />
-                 
-                 {userRole === 'Admin' && (
-                  <button
-                    onClick={() => { setImportType('attendance'); setShowImportModal(true); }}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors text-sm font-medium shadow-lg shadow-blue-900/20"
-                  >
-                    <Upload className="w-4 h-4" /> Import CSV
-                  </button>
-                 )}
-              </div>
-            </div>
+                {/* Attendance Table */}
+                <div className="bg-slate-800 rounded-xl shadow-xl border border-slate-700 overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead className="bg-slate-900 text-slate-400 text-xs uppercase tracking-wider">
+                        <tr>
+                          <th className="p-4 font-medium border-b border-slate-700">Employee Name</th>
+                          <th className="p-4 font-medium border-b border-slate-700">Designation</th>
+                          <th className="p-4 font-medium border-b border-slate-700 text-center">Login / Logout</th>
+                          <th className="p-4 font-medium border-b border-slate-700 text-center">Late Status</th>
+                          <th className="p-4 font-medium border-b border-slate-700 text-center">Status</th>
+                          <th className="p-4 font-medium border-b border-slate-700 text-center">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-700">
+                        {(() => {
+                          // 1. Get Unique List of ALL Employees
+                          const allStaff = [
+                            ...agents.map(a => ({ name: a.name, role: 'Agent', status: a.status, cnic: a.cnic })),
+                            ...hrRecords.map(h => ({ name: h.agent_name, role: h.designation || 'Staff', status: h.status, cnic: h.cnic }))
+                          ].filter(p => p.status === 'Active')
+                            .sort((a, b) => a.name.localeCompare(b.name));
 
-            {/* Attendance Table */}
-            <div className="bg-slate-800 rounded-xl shadow-xl border border-slate-700 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead className="bg-slate-900 text-slate-400 text-xs uppercase tracking-wider">
-                    <tr>
-                      <th className="p-4 font-medium border-b border-slate-700">Employee Name</th>
-                      <th className="p-4 font-medium border-b border-slate-700">Designation</th>
-                      <th className="p-4 font-medium border-b border-slate-700 text-center">Login / Logout</th>
-                      <th className="p-4 font-medium border-b border-slate-700 text-center">Late Status</th>
-                      <th className="p-4 font-medium border-b border-slate-700 text-center">Status</th>
-                      <th className="p-4 font-medium border-b border-slate-700 text-center">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-700">
-                    {(() => {
-  // 1. Get Unique List of ALL Employees
-  const allStaff = [
-    ...agents.map(a => ({ name: a.name, role: 'Agent', status: a.status, cnic: a.cnic })),
-    ...hrRecords.map(h => ({ name: h.agent_name, role: h.designation || 'Staff', status: h.status, cnic: h.cnic }))
-  ].filter(p => p.status === 'Active')
-   .sort((a, b) => a.name.localeCompare(b.name));
+                          let uniqueStaff = Array.from(new Map(allStaff.map(item => [item.name, item])).values());
 
-  let uniqueStaff = Array.from(new Map(allStaff.map(item => [item.name, item])).values());
+                          // [NEW] Filter for Agent users - show ONLY their own record
+                          if (userRole === 'Agent') {
+                            const loggedInCnic = currentUser?.cnic || JSON.parse(localStorage.getItem('ams_user'))?.cnic;
+                            uniqueStaff = uniqueStaff.filter(emp => emp.cnic === loggedInCnic);
+                          }
 
-  // [NEW] Filter for Agent users - show ONLY their own record
-  if (userRole === 'Agent') {
-    const loggedInCnic = currentUser?.cnic || JSON.parse(localStorage.getItem('ams_user'))?.cnic;
-    uniqueStaff = uniqueStaff.filter(emp => emp.cnic === loggedInCnic);
-  }
+                          // --- HELPER: Bulletproof Time Parser ---
+                          // Handles "19:00", "07:00 PM", "7:00pm", "19:00:00"
+                          const getMinutes = (timeStr) => {
+                            if (!timeStr) return 0;
 
-                      // --- HELPER: Bulletproof Time Parser ---
-                      // Handles "19:00", "07:00 PM", "7:00pm", "19:00:00"
-                      const getMinutes = (timeStr) => {
-                          if (!timeStr) return 0;
-                          
-                          // Normalize string (Remove spaces, uppercase)
-                          const cleanStr = timeStr.toString().trim().toUpperCase();
-                          const isPM = cleanStr.includes('PM');
-                          const isAM = cleanStr.includes('AM');
+                            // Normalize string (Remove spaces, uppercase)
+                            const cleanStr = timeStr.toString().trim().toUpperCase();
+                            const isPM = cleanStr.includes('PM');
+                            const isAM = cleanStr.includes('AM');
 
-                          // Extract just the numbers (HH:MM)
-                          // Remove letters to handle "07:00PM" -> "07:00"
-                          const timePart = cleanStr.replace(/[A-Z\s]/g, '');
-                          let [h, m] = timePart.split(':').map(Number);
+                            // Extract just the numbers (HH:MM)
+                            // Remove letters to handle "07:00PM" -> "07:00"
+                            const timePart = cleanStr.replace(/[A-Z\s]/g, '');
+                            let [h, m] = timePart.split(':').map(Number);
 
-                          if (isNaN(h)) h = 0;
-                          if (isNaN(m)) m = 0;
+                            if (isNaN(h)) h = 0;
+                            if (isNaN(m)) m = 0;
 
-                          // 12-hour to 24-hour conversion
-                          if (isPM && h < 12) h += 12;
-                          if (isAM && h === 12) h = 0;
+                            // 12-hour to 24-hour conversion
+                            if (isPM && h < 12) h += 12;
+                            if (isAM && h === 12) h = 0;
 
-                          return h * 60 + m;
-                      };
+                            return h * 60 + m;
+                          };
 
-                      return uniqueStaff.map((emp, idx) => {
-  // --- DEBUGGING: Remove this after fixing ---
-  // Check if we can find this employee in the attendance list
-  const found = attendance.find(a => a.agentName?.toString().trim().toLowerCase() === emp.name.toString().trim().toLowerCase());
-  if (!found && idx < 5) { 
-     // Log the first few failures to the Console (F12)
-     console.log("FAILED MATCH:", emp.name);
-     console.log("Available Attendance Names:", attendance.map(a => a.agentName));
-  }
-  // ------------------------------------------
+                          return uniqueStaff.map((emp, idx) => {
+                            // --- DEBUGGING: Remove this after fixing ---
+                            // Check if we can find this employee in the attendance list
+                            const found = attendance.find(a => a.agentName?.toString().trim().toLowerCase() === emp.name.toString().trim().toLowerCase());
+                            if (!found && idx < 5) {
+                              // Log the first few failures to the Console (F12)
+                              console.log("FAILED MATCH:", emp.name);
+                              console.log("Available Attendance Names:", attendance.map(a => a.agentName));
+                            }
+                            // ------------------------------------------
 
-  const record = attendance.find(a => 
-    a.agentName?.toString().trim().toLowerCase() === emp.name.toString().trim().toLowerCase() && 
-    a.date === customStartDate
-  );
+                            const record = attendance.find(a =>
+                              a.agentName?.toString().trim().toLowerCase() === emp.name.toString().trim().toLowerCase() &&
+                              a.date === customStartDate
+                            );
 
-                        // --- DISPLAY LOGIC ---
-                        const isAbsent = !record || record.status === 'Absent';
-                        
-                        let timeDisplay;
-                        if (isAbsent) {
-                            timeDisplay = <span className="text-slate-600 text-xs italic">-- : --</span>;
-                        } else {
-                            timeDisplay = (
-                             <div className="flex flex-col items-center">
-                               <span className="text-white font-mono text-xs">{formatTime(record.loginTime)}</span>
-                               <span className="text-slate-500 font-mono text-[10px]">{formatTime(record.logoutTime)}</span>
-                             </div>
-                           );
-                        }
+                            // --- DISPLAY LOGIC ---
+                            const isAbsent = !record || record.status === 'Absent';
 
-                        // --- DYNAMIC LATE CALCULATION ---
-                        let lateBadge = <span className="text-slate-600 text-xs">-</span>;
-                        
-                        if (record && !isAbsent && record.loginTime) {
+                            let timeDisplay;
+                            if (isAbsent) {
+                              timeDisplay = <span className="text-slate-600 text-xs italic">-- : --</span>;
+                            } else {
+                              timeDisplay = (
+                                <div className="flex flex-col items-center">
+                                  <span className="text-white font-mono text-xs">{formatTime(record.loginTime)}</span>
+                                  <span className="text-slate-500 font-mono text-[10px]">{formatTime(record.logoutTime)}</span>
+                                </div>
+                              );
+                            }
+
+                            // --- DYNAMIC LATE CALCULATION ---
+                            let lateBadge = <span className="text-slate-600 text-xs">-</span>;
+
+                            if (record && !isAbsent && record.loginTime) {
                               let loginMinutes = getMinutes(record.loginTime);
                               // Use the Global 'lateTime' state (e.g. "18:45" or "19:15")
                               // Default fallback is 19:15 (7:15 PM)
                               let cutoffMinutes = getMinutes(lateTime || "19:15");
-                              
+
                               // --- NIGHT SHIFT FIX ---
                               // If Threshold is PM (e.g., 6:45 PM -> 1125 mins)
                               // And Login is AM (e.g., 1:00 AM -> 60 mins)
                               // Treat Login as "Next Day" by adding 24 hours (1440 mins)
                               if (cutoffMinutes > 720 && loginMinutes < 720) {
-                                  loginMinutes += 1440; 
+                                loginMinutes += 1440;
                               }
 
                               if (loginMinutes > cutoffMinutes) {
-                                 const diff = loginMinutes - cutoffMinutes;
-                                 
-                                 if (diff <= 10) {
-                                    // Late <= 10 mins (Grace Period - Yellow)
-                                    lateBadge = (
-                                      <div className="flex items-center justify-center gap-1 px-2 py-1 bg-yellow-500/10 text-yellow-400 rounded text-[10px] font-bold border border-yellow-500/20 w-fit mx-auto">
-                                        <Clock className="w-3 h-3" /> 
-                                        <span>Late ({diff}m)</span>
-                                      </div>
-                                    );
-                                 } else {
-                                    // Late > 10 mins (Red)
-                                    lateBadge = (
-                                      <div className="flex items-center justify-center gap-1 px-2 py-1 bg-red-500/10 text-red-400 rounded text-[10px] font-bold border border-red-500/20 w-fit mx-auto">
-                                        <AlertTriangle className="w-3 h-3" /> 
-                                        <span>Late ({diff}m)</span>
-                                      </div>
-                                    );
-                                 }
-                              } else {
-                                 lateBadge = <span className="text-green-500/50 text-[10px] font-medium tracking-wide">ON TIME</span>;
-                              }
-                        }
+                                const diff = loginMinutes - cutoffMinutes;
 
-                        // Status Badge
-                        let statusBadge;
-                        if (isAbsent) {
-                            statusBadge = (
-                              <div className="flex items-center justify-center gap-1.5 px-2 py-1 rounded-full bg-red-500/10 text-red-400 border border-red-500/20 w-fit mx-auto">
-                                <XCircle className="w-3 h-3" />
-                                <span className="text-[10px] font-bold">ABSENT</span>
-                              </div>
-                            );
-                        } else {
-                            statusBadge = (
-                              <div className="flex items-center justify-center gap-1.5 px-2 py-1 rounded-full bg-green-500/10 text-green-400 border border-green-500/20 w-fit mx-auto">
-                                <CheckCircle className="w-3 h-3" />
-                                <span className="text-[10px] font-bold">PRESENT</span>
-                              </div>
-                            );
-                        }
-
-                        return (
-                          <tr key={idx} className="hover:bg-slate-700/30 transition-colors border-b border-slate-800 last:border-0">
-                            <td className="p-4 text-white font-medium">{emp.name}</td>
-                            <td className="p-4 text-slate-400 text-xs">{emp.role}</td>
-                            <td className="p-4 text-center">{timeDisplay}</td>
-                            <td className="p-4 text-center">{lateBadge}</td>
-                            <td className="p-4 text-center">{statusBadge}</td>
-                            
-                            {/* ACTION BUTTONS */}
-                            <td className="p-4">
-                              <div className="flex items-center justify-center gap-2">
-                                
-                                {isAbsent && (
-                                    <button 
-                                      onClick={() => handleQuickAttendance(emp.name, 'Present', record?.id)}
-                                      className="p-1.5 bg-green-500/10 text-green-400 rounded hover:bg-green-500/20 transition-colors border border-green-500/20"
-                                      title="Mark Present (Default Time)"
-                                    >
-                                      <CheckCircle className="w-4 h-4" />
-                                    </button>
-                                )}
-
-                                {!isAbsent && (
-                                    <button 
-                                      onClick={() => handleQuickAttendance(emp.name, 'Absent', record?.id)}
-                                      className="p-1.5 bg-red-500/10 text-red-400 rounded hover:bg-red-500/20 transition-colors border border-red-500/20"
-                                      title="Mark Absent"
-                                    >
-                                      <XCircle className="w-4 h-4" />
-                                    </button>
-                                )}
-
-                                {!isAbsent && record && (
-                                    <button 
-                                      onClick={() => { setEditingAttendance(record); setShowEditAttendanceModal(true); }}
-                                      className="p-1.5 bg-blue-500/10 text-blue-400 rounded hover:bg-blue-500/30 transition-colors border border-blue-500/20"
-                                      title="Manual Edit"
-                                    >
-                                      <Pencil className="w-4 h-4" />
-                                    </button>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      });
-                    })()}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-
-    {attendanceSubTab === 'matrix' && (
-      <div className="space-y-6">
-
-    <div className="bg-slate-900 rounded-xl border border-slate-700 shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
-      <div className="overflow-auto relative">
-        <table className="w-full text-slate-300 border-collapse table-fixed">
-          
-          {/* --- HEADER --- */}
-          <thead className="sticky top-0 z-40 shadow-md">
-            <tr className="bg-slate-950">
-              <th className="p-3 text-center border-b border-r border-slate-800 sticky left-0 z-50 bg-slate-950 w-12">No.</th>
-              <th className="p-3 text-left border-b border-r border-slate-800 sticky left-12 z-50 bg-slate-950 w-44">Agent Name</th>
-
-              {/* Attendance Metrics */}
-              <th className="p-2 text-center border-b border-slate-800 bg-green-900/20 text-green-400 text-[10px] font-bold w-10" title="Days Present">P</th>
-              <th className="p-2 text-center border-b border-slate-800 bg-yellow-900/20 text-yellow-400 text-[10px] font-bold w-10" title="Days Late">L</th>
-              <th className="p-2 text-center border-b border-r border-slate-800 bg-red-900/20 text-red-400 text-[10px] font-bold w-10" title="Days Absent">A</th>
-
-              {/* Date Columns */}
-              {getDaysArray(getPayrollRange(selectedMonth).start, getPayrollRange(selectedMonth).end).map(dateStr => {
-                const d = new Date(dateStr);
-                const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-                return (
-                  <th key={dateStr} className={`p-2 text-center border-b border-slate-800 w-16 ${isWeekend ? 'bg-slate-800' : 'bg-slate-900'}`}>
-                    <div className="text-[10px] text-slate-500 uppercase">{d.toLocaleDateString('en-US', { weekday: 'narrow' })}</div>
-                    <div className={`text-xs font-bold ${isWeekend ? 'text-slate-500' : 'text-white'}`}>{d.getDate()}</div>
-                  </th>
-                );
-              })}
-              
-              {/* Summary Column */}
-              <th className="p-3 text-center bg-slate-950 border-b border-l border-slate-800 font-bold text-yellow-400 sticky right-0 z-40 w-20 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
-                LATE %
-              </th>
-            </tr>
-          </thead>
-
-          <tbody className="divide-y divide-slate-800">
-            {(() => {
-              const { start, end } = getPayrollRange(selectedMonth);
-              const dateArray = getDaysArray(start, end);
-
-              let filteredAgents = agents;
-  if (userRole === 'Agent') {
-    const loggedInCnic = currentUser?.cnic || JSON.parse(localStorage.getItem('ams_user'))?.cnic;
-    filteredAgents = agents.filter(a => a.cnic === loggedInCnic);
-  }
-
-
-              // --- HELPER: Convert 24h to 12h (HH:MM PM) ---
-const formatTo12Hour = (timeStr) => {
-  if (!timeStr) return '';
-  
-  // Split "18:34:00" into ["18", "34", "00"]
-  const [h, m] = timeStr.toString().split(':');
-  if (!h || !m) return timeStr; // Return original if invalid
-
-  let hours = parseInt(h);
-  const ampm = hours >= 12 ? 'PM' : 'AM';
-  
-  // Convert 24h to 12h
-  hours = hours % 12;
-  hours = hours ? hours : 12; // Handle midnight (0 -> 12)
-  
-  return `${hours}:${m} ${ampm}`;
-};
-
-// --- HELPER: Calculate Late Status (Based on 7:00 PM / 19:00 Start) ---
-              const getLateStatus = (timeStr) => {
-                if (!timeStr) return { isLate: false, color: 'text-green-400' };
-
-                const [h, m] = timeStr.toString().split(':').map(Number);
-                
-                // 1. Convert Login Time to Minutes
-                let loginMins = h * 60 + m;
-                
-                // 2. Handle Night Shift Crossing (e.g., 01:00 AM counts as 25:00)
-                // If hour is 0-11 (AM), add 24 hours (1440 mins) to compare correctly against 19:00
-                if (h < 12) loginMins += 1440;
-
-                // 3. Define Shift Start (19:00 = 1140 mins)
-                const shiftStartMins = 19 * 60; 
-
-                const diff = loginMins - shiftStartMins;
-
-                // 4. Determine Color & Status
-                if (diff <= 0) {
-                    return { isLate: false, color: 'text-green-400' }; // On Time
-                } else if (diff <= 10) {
-                    return { isLate: true, color: 'text-yellow-400 font-bold' }; // Late <= 10 mins
-                } else {
-                    return { isLate: true, color: 'text-red-500 font-bold' }; // Late > 10 mins
-                }
-              };
-
-              // Get Unique Teams
-const uniqueTeams = [...new Set([...teams, ...filteredAgents.map(a => a.team)])].filter(Boolean).sort();
-
-return uniqueTeams.map(teamName => {
-  // Filter Agents by Team (using filtered list)
-  const teamAgents = filteredAgents
-  .filter(a => a.team === teamName && a.status === 'Active')
-  .sort((a, b) => a.name.localeCompare(b.name)); // <--- Added Sort Here
-  if (teamAgents.length === 0) return null;
-
-  // --- TEAM SUMMARY CALCULATIONS ---
-  const teamTotalPresent = teamAgents.reduce((sum, agent) => {
-    return sum + attendance.filter(a => 
-      a.agentName?.toString().trim().toLowerCase() === agent.name?.toString().trim().toLowerCase() && 
-      a.status === 'Present'
-    ).length;
-  }, 0);
-
-  const teamTotalLate = teamAgents.reduce((sum, agent) => {
-     return sum + attendance.filter(a => 
-       a.agentName?.toString().trim().toLowerCase() === agent.name?.toString().trim().toLowerCase() && 
-       getLateStatus(a.loginTime).isLate
-     ).length;
-  }, 0);
-
-  return (
-    <React.Fragment key={teamName}>
-      {/* --- TEAM ROW (Hide for Agent users) --- */}
-      {userRole !== 'Agent' && (
-        <tr className="bg-slate-800/80 sticky top-[53px] z-30">
-          <td colSpan={2} className="p-2 px-4 border-r border-slate-700 font-black text-blue-400 uppercase tracking-widest text-sm sticky left-0 z-30 bg-slate-800">
-            {teamName}
-          </td>
-          <td className="text-center font-bold text-green-500/50 bg-slate-800 text-[10px]">{teamTotalPresent}</td>
-          <td className="text-center font-bold text-yellow-500/50 bg-slate-800 text-[10px]">{teamTotalLate}</td>
-          <td className="text-center bg-slate-800 border-r border-slate-700"></td>
-
-          {/* Team Daily Breakdown (Count of people present that day) */}
-          {dateArray.map(d => {
-            const dailyPresentCount = attendance.filter(a => 
-              a.date === d && 
-              a.status === 'Present' && 
-              teamAgents.some(agent => agent.name === a.agentName)
-            ).length;
-
-            return (
-              <td key={d} className={`text-center text-[10px] border-b border-slate-700 font-bold ${dailyPresentCount > 0 ? 'text-blue-300 bg-blue-500/10' : 'text-slate-600 bg-slate-800/30'}`}>
-                {dailyPresentCount > 0 ? dailyPresentCount : '-'}
-              </td>
-            );
-          })}
-
-          <td className="text-center font-black text-slate-500 sticky right-0 z-30 bg-slate-800 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
-             -
-          </td>
-        </tr>
-      )}
-
-      {/* --- AGENT ROWS --- */}
-      {teamAgents.map((agent, idx) => {
-                      // Join Date Logic
-                      const hrRec = hrRecords.find(h => h.cnic === agent.cnic) || {};
-                      const joinDateStr = hrRec.joining_date || agent.activeDate;
-                      const joinDate = joinDateStr ? new Date(joinDateStr) : null;
-                      if (joinDate) joinDate.setHours(0, 0, 0, 0);
-
-                      // Metrics Calculation
-                      // --- AGENT METRICS ---
-// The Fix: Normalize both names before matching
-const agentRecs = attendance.filter(a => 
-  a.agentName?.toString().trim().toLowerCase() === agent.name?.toString().trim().toLowerCase()
-);
-                      const presentCount = agentRecs.filter(a => a.status === 'Present').length;
-                      const lateCount = agentRecs.filter(a => 
-                    a.status === 'Present' && 
-                    getLateStatus(a.loginTime).isLate // <--- USES NEW HELPER
-                ).length;
-                      
-                      // Absent Calc: Working days passed since join date where no attendance found
-                      let absentCount = 0;
-                      dateArray.forEach(dStr => {
-                         const dObj = new Date(dStr);
-                         dObj.setHours(0,0,0,0);
-                         // Skip weekends
-                         if (dObj.getDay() === 0 || dObj.getDay() === 6) return; 
-                         // Skip future
-                         if (dObj > new Date()) return;
-                         // Skip before joined
-                         if (joinDate && dObj < joinDate) return;
-
-                         const hasRec = agentRecs.some(a => a.date === dStr);
-                         if (!hasRec) absentCount++;
-                         else if (agentRecs.find(a => a.date === dStr).status === 'Absent') absentCount++;
-                      });
-
-                      const latePercentage = presentCount > 0 ? Math.round((lateCount / presentCount) * 100) : 0;
-
-                      return (
-                        <tr key={agent.id} className="hover:bg-blue-900/10 transition-colors group">
-                          <td className="p-2 text-center border-r border-slate-800 bg-slate-900 text-slate-600 font-mono text-[10px] sticky left-0 z-10 group-hover:text-white">{idx + 1}</td>
-
-                          <td className="p-2 px-3 font-medium border-r border-slate-800 bg-slate-900 sticky left-12 z-10 truncate text-xs text-slate-200">
-                            {agent.name}
-                          </td>
-
-                          <td className="p-1 text-center border-b border-slate-800 text-green-400 font-bold text-[10px]">{presentCount}</td>
-                          <td className="p-1 text-center border-b border-slate-800 text-yellow-400 font-bold text-[10px]">{lateCount}</td>
-                          <td className="p-1 text-center border-b border-r border-slate-800 text-red-400 font-bold text-[10px]">{absentCount}</td>
-
-                          {/* Daily Cells */}
-                          {dateArray.map(dateStr => {
-                            const currentDate = new Date(dateStr);
-                            currentDate.setHours(0, 0, 0, 0);
-                            const isWeekend = currentDate.getDay() === 0 || currentDate.getDay() === 6;
-
-                            // 1. Before Join?
-                            const isBeforeJoining = joinDate && currentDate < joinDate;
-
-                            // 2. Find Record
-                            const record = agentRecs.find(a => a.date === dateStr);
-
-                            let cellContent = '-';
-                            let cellClass = 'text-slate-700';
-
-                            if (isBeforeJoining) {
-                                cellContent = '•';
-                                cellClass = 'text-slate-800';
-                            } 
-                            else if (record) {
-                                if (record.status === 'Absent') {
-                                    cellContent = 'A';
-                                    cellClass = 'bg-red-500/10 text-red-500 font-bold';
+                                if (diff <= 10) {
+                                  // Late <= 10 mins (Grace Period - Yellow)
+                                  lateBadge = (
+                                    <div className="flex items-center justify-center gap-1 px-2 py-1 bg-yellow-500/10 text-yellow-400 rounded text-[10px] font-bold border border-yellow-500/20 w-fit mx-auto">
+                                      <Clock className="w-3 h-3" />
+                                      <span>Late ({diff}m)</span>
+                                    </div>
+                                  );
                                 } else {
-                                    // 1. Format Time to 12h
-                                    cellContent = formatTo12Hour(record.loginTime) || 'OK';
-
-                                    // 2. Calculate Color Dynamically
-                                    // We use the helper to decide Yellow vs Red vs Green
-                                    const status = getLateStatus(record.loginTime);
-
-                                    if (status.isLate) {
-                                        // Use the color returned by getLateStatus (Yellow or Red)
-                                        cellClass = `bg-slate-800/50 ${status.color} font-mono text-[10px]`;
-                                    } else {
-                                        // On Time (Green)
-                                        cellClass = 'text-green-400 font-mono text-[10px]';
-                                    }
+                                  // Late > 10 mins (Red)
+                                  lateBadge = (
+                                    <div className="flex items-center justify-center gap-1 px-2 py-1 bg-red-500/10 text-red-400 rounded text-[10px] font-bold border border-red-500/20 w-fit mx-auto">
+                                      <AlertTriangle className="w-3 h-3" />
+                                      <span>Late ({diff}m)</span>
+                                    </div>
+                                  );
                                 }
+                              } else {
+                                lateBadge = <span className="text-green-500/50 text-[10px] font-medium tracking-wide">ON TIME</span>;
+                              }
+                            }
+
+                            // Status Badge
+                            let statusBadge;
+                            if (isAbsent) {
+                              statusBadge = (
+                                <div className="flex items-center justify-center gap-1.5 px-2 py-1 rounded-full bg-red-500/10 text-red-400 border border-red-500/20 w-fit mx-auto">
+                                  <XCircle className="w-3 h-3" />
+                                  <span className="text-[10px] font-bold">ABSENT</span>
+                                </div>
+                              );
                             } else {
-                                // No Record
-                                if (isWeekend) {
-                                    cellContent = '';
-                                    cellClass = 'bg-slate-800/30';
-                                } else if (currentDate <= new Date()) {
-                                    cellContent = 'A'; // Marked absent if workday passed with no scan
-                                    cellClass = 'text-red-500/50 font-bold';
-                                }
+                              statusBadge = (
+                                <div className="flex items-center justify-center gap-1.5 px-2 py-1 rounded-full bg-green-500/10 text-green-400 border border-green-500/20 w-fit mx-auto">
+                                  <CheckCircle className="w-3 h-3" />
+                                  <span className="text-[10px] font-bold">PRESENT</span>
+                                </div>
+                              );
                             }
 
                             return (
-                              <td key={dateStr} className={`p-1 text-center border-b border-slate-800 text-[11px] ${cellClass}`}>
-                                {cellContent}
+                              <tr key={idx} className="hover:bg-slate-700/30 transition-colors border-b border-slate-800 last:border-0">
+                                <td className="p-4 text-white font-medium">{emp.name}</td>
+                                <td className="p-4 text-slate-400 text-xs">{emp.role}</td>
+                                <td className="p-4 text-center">{timeDisplay}</td>
+                                <td className="p-4 text-center">{lateBadge}</td>
+                                <td className="p-4 text-center">{statusBadge}</td>
+
+                                {/* ACTION BUTTONS */}
+                                <td className="p-4">
+                                  <div className="flex items-center justify-center gap-2">
+
+                                    {isAbsent && (
+                                      <button
+                                        onClick={() => handleQuickAttendance(emp.name, 'Present', record?.id)}
+                                        className="p-1.5 bg-green-500/10 text-green-400 rounded hover:bg-green-500/20 transition-colors border border-green-500/20"
+                                        title="Mark Present (Default Time)"
+                                      >
+                                        <CheckCircle className="w-4 h-4" />
+                                      </button>
+                                    )}
+
+                                    {!isAbsent && (
+                                      <button
+                                        onClick={() => handleQuickAttendance(emp.name, 'Absent', record?.id)}
+                                        className="p-1.5 bg-red-500/10 text-red-400 rounded hover:bg-red-500/20 transition-colors border border-red-500/20"
+                                        title="Mark Absent"
+                                      >
+                                        <XCircle className="w-4 h-4" />
+                                      </button>
+                                    )}
+
+                                    {!isAbsent && record && (
+                                      <button
+                                        onClick={() => { setEditingAttendance(record); setShowEditAttendanceModal(true); }}
+                                        className="p-1.5 bg-blue-500/10 text-blue-400 rounded hover:bg-blue-500/30 transition-colors border border-blue-500/20"
+                                        title="Manual Edit"
+                                      >
+                                        <Pencil className="w-4 h-4" />
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          });
+                        })()}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {attendanceSubTab === 'matrix' && (
+              <div className="space-y-6">
+
+                <div className="bg-slate-900 rounded-xl border border-slate-700 shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
+                  <div className="overflow-auto relative">
+                    <table className="w-full text-slate-300 border-collapse table-fixed">
+
+                      {/* --- HEADER --- */}
+                      <thead className="sticky top-0 z-40 shadow-md">
+                        <tr className="bg-slate-950">
+                          <th className="p-3 text-center border-b border-r border-slate-800 sticky left-0 z-50 bg-slate-950 w-12">No.</th>
+                          <th className="p-3 text-left border-b border-r border-slate-800 sticky left-12 z-50 bg-slate-950 w-44">Agent Name</th>
+
+                          {/* Attendance Metrics */}
+                          <th className="p-2 text-center border-b border-slate-800 bg-green-900/20 text-green-400 text-[10px] font-bold w-10" title="Days Present">P</th>
+                          <th className="p-2 text-center border-b border-slate-800 bg-yellow-900/20 text-yellow-400 text-[10px] font-bold w-10" title="Days Late">L</th>
+                          <th className="p-2 text-center border-b border-r border-slate-800 bg-red-900/20 text-red-400 text-[10px] font-bold w-10" title="Days Absent">A</th>
+
+                          {/* Date Columns */}
+                          {getDaysArray(getPayrollRange(selectedMonth).start, getPayrollRange(selectedMonth).end).map(dateStr => {
+                            const d = new Date(dateStr);
+                            const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+                            return (
+                              <th key={dateStr} className={`p-2 text-center border-b border-slate-800 w-16 ${isWeekend ? 'bg-slate-800' : 'bg-slate-900'}`}>
+                                <div className="text-[10px] text-slate-500 uppercase">{d.toLocaleDateString('en-US', { weekday: 'narrow' })}</div>
+                                <div className={`text-xs font-bold ${isWeekend ? 'text-slate-500' : 'text-white'}`}>{d.getDate()}</div>
+                              </th>
+                            );
+                          })}
+
+                          {/* Summary Column */}
+                          <th className="p-3 text-center bg-slate-950 border-b border-l border-slate-800 font-bold text-yellow-400 sticky right-0 z-40 w-20 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
+                            LATE %
+                          </th>
+                        </tr>
+                      </thead>
+
+                      <tbody className="divide-y divide-slate-800">
+                        {(() => {
+                          const { start, end } = getPayrollRange(selectedMonth);
+                          const dateArray = getDaysArray(start, end);
+
+                          let filteredAgents = agents;
+                          if (userRole === 'Agent') {
+                            const loggedInCnic = currentUser?.cnic || JSON.parse(localStorage.getItem('ams_user'))?.cnic;
+                            filteredAgents = agents.filter(a => a.cnic === loggedInCnic);
+                          }
+
+
+                          // --- HELPER: Convert 24h to 12h (HH:MM PM) ---
+                          const formatTo12Hour = (timeStr) => {
+                            if (!timeStr) return '';
+
+                            // Split "18:34:00" into ["18", "34", "00"]
+                            const [h, m] = timeStr.toString().split(':');
+                            if (!h || !m) return timeStr; // Return original if invalid
+
+                            let hours = parseInt(h);
+                            const ampm = hours >= 12 ? 'PM' : 'AM';
+
+                            // Convert 24h to 12h
+                            hours = hours % 12;
+                            hours = hours ? hours : 12; // Handle midnight (0 -> 12)
+
+                            return `${hours}:${m} ${ampm}`;
+                          };
+
+                          // --- HELPER: Calculate Late Status (Based on 7:00 PM / 19:00 Start) ---
+                          const getLateStatus = (timeStr) => {
+                            if (!timeStr) return { isLate: false, color: 'text-green-400' };
+
+                            const [h, m] = timeStr.toString().split(':').map(Number);
+
+                            // 1. Convert Login Time to Minutes
+                            let loginMins = h * 60 + m;
+
+                            // 2. Handle Night Shift Crossing (e.g., 01:00 AM counts as 25:00)
+                            // If hour is 0-11 (AM), add 24 hours (1440 mins) to compare correctly against 19:00
+                            if (h < 12) loginMins += 1440;
+
+                            // 3. Define Shift Start (19:00 = 1140 mins)
+                            const shiftStartMins = 19 * 60;
+
+                            const diff = loginMins - shiftStartMins;
+
+                            // 4. Determine Color & Status
+                            if (diff <= 0) {
+                              return { isLate: false, color: 'text-green-400' }; // On Time
+                            } else if (diff <= 10) {
+                              return { isLate: true, color: 'text-yellow-400 font-bold' }; // Late <= 10 mins
+                            } else {
+                              return { isLate: true, color: 'text-red-500 font-bold' }; // Late > 10 mins
+                            }
+                          };
+
+                          // Get Unique Teams
+                          const uniqueTeams = [...new Set([...teams, ...filteredAgents.map(a => a.team)])].filter(Boolean).sort();
+
+                          return uniqueTeams.map(teamName => {
+                            // Filter Agents by Team (using filtered list)
+                            const teamAgents = filteredAgents
+                              .filter(a => a.team === teamName && a.status === 'Active')
+                              .sort((a, b) => a.name.localeCompare(b.name)); // <--- Added Sort Here
+                            if (teamAgents.length === 0) return null;
+
+                            // --- TEAM SUMMARY CALCULATIONS ---
+                            const teamTotalPresent = teamAgents.reduce((sum, agent) => {
+                              return sum + attendance.filter(a =>
+                                a.agentName?.toString().trim().toLowerCase() === agent.name?.toString().trim().toLowerCase() &&
+                                a.status === 'Present'
+                              ).length;
+                            }, 0);
+
+                            const teamTotalLate = teamAgents.reduce((sum, agent) => {
+                              return sum + attendance.filter(a =>
+                                a.agentName?.toString().trim().toLowerCase() === agent.name?.toString().trim().toLowerCase() &&
+                                getLateStatus(a.loginTime).isLate
+                              ).length;
+                            }, 0);
+
+                            return (
+                              <React.Fragment key={teamName}>
+                                {/* --- TEAM ROW (Hide for Agent users) --- */}
+                                {userRole !== 'Agent' && (
+                                  <tr className="bg-slate-800/80 sticky top-[53px] z-30">
+                                    <td colSpan={2} className="p-2 px-4 border-r border-slate-700 font-black text-blue-400 uppercase tracking-widest text-sm sticky left-0 z-30 bg-slate-800">
+                                      {teamName}
+                                    </td>
+                                    <td className="text-center font-bold text-green-500/50 bg-slate-800 text-[10px]">{teamTotalPresent}</td>
+                                    <td className="text-center font-bold text-yellow-500/50 bg-slate-800 text-[10px]">{teamTotalLate}</td>
+                                    <td className="text-center bg-slate-800 border-r border-slate-700"></td>
+
+                                    {/* Team Daily Breakdown (Count of people present that day) */}
+                                    {dateArray.map(d => {
+                                      const dailyPresentCount = attendance.filter(a =>
+                                        a.date === d &&
+                                        a.status === 'Present' &&
+                                        teamAgents.some(agent => agent.name === a.agentName)
+                                      ).length;
+
+                                      return (
+                                        <td key={d} className={`text-center text-[10px] border-b border-slate-700 font-bold ${dailyPresentCount > 0 ? 'text-blue-300 bg-blue-500/10' : 'text-slate-600 bg-slate-800/30'}`}>
+                                          {dailyPresentCount > 0 ? dailyPresentCount : '-'}
+                                        </td>
+                                      );
+                                    })}
+
+                                    <td className="text-center font-black text-slate-500 sticky right-0 z-30 bg-slate-800 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
+                                      -
+                                    </td>
+                                  </tr>
+                                )}
+
+                                {/* --- AGENT ROWS --- */}
+                                {teamAgents.map((agent, idx) => {
+                                  // Join Date Logic
+                                  const hrRec = hrRecords.find(h => h.cnic === agent.cnic) || {};
+                                  const joinDateStr = hrRec.joining_date || agent.activeDate;
+                                  const joinDate = joinDateStr ? new Date(joinDateStr) : null;
+                                  if (joinDate) joinDate.setHours(0, 0, 0, 0);
+
+                                  // Metrics Calculation
+                                  // --- AGENT METRICS ---
+                                  // The Fix: Normalize both names before matching
+                                  const agentRecs = attendance.filter(a =>
+                                    a.agentName?.toString().trim().toLowerCase() === agent.name?.toString().trim().toLowerCase()
+                                  );
+                                  const presentCount = agentRecs.filter(a => a.status === 'Present').length;
+                                  const lateCount = agentRecs.filter(a =>
+                                    a.status === 'Present' &&
+                                    getLateStatus(a.loginTime).isLate // <--- USES NEW HELPER
+                                  ).length;
+
+                                  // Absent Calc: Working days passed since join date where no attendance found
+                                  let absentCount = 0;
+                                  dateArray.forEach(dStr => {
+                                    const dObj = new Date(dStr);
+                                    dObj.setHours(0, 0, 0, 0);
+                                    // Skip weekends
+                                    if (dObj.getDay() === 0 || dObj.getDay() === 6) return;
+                                    // Skip future
+                                    if (dObj > new Date()) return;
+                                    // Skip before joined
+                                    if (joinDate && dObj < joinDate) return;
+
+                                    const hasRec = agentRecs.some(a => a.date === dStr);
+                                    if (!hasRec) absentCount++;
+                                    else if (agentRecs.find(a => a.date === dStr).status === 'Absent') absentCount++;
+                                  });
+
+                                  const latePercentage = presentCount > 0 ? Math.round((lateCount / presentCount) * 100) : 0;
+
+                                  return (
+                                    <tr key={agent.id} className="hover:bg-blue-900/10 transition-colors group">
+                                      <td className="p-2 text-center border-r border-slate-800 bg-slate-900 text-slate-600 font-mono text-[10px] sticky left-0 z-10 group-hover:text-white">{idx + 1}</td>
+
+                                      <td className="p-2 px-3 font-medium border-r border-slate-800 bg-slate-900 sticky left-12 z-10 truncate text-xs text-slate-200">
+                                        {agent.name}
+                                      </td>
+
+                                      <td className="p-1 text-center border-b border-slate-800 text-green-400 font-bold text-[10px]">{presentCount}</td>
+                                      <td className="p-1 text-center border-b border-slate-800 text-yellow-400 font-bold text-[10px]">{lateCount}</td>
+                                      <td className="p-1 text-center border-b border-r border-slate-800 text-red-400 font-bold text-[10px]">{absentCount}</td>
+
+                                      {/* Daily Cells */}
+                                      {dateArray.map(dateStr => {
+                                        const currentDate = new Date(dateStr);
+                                        currentDate.setHours(0, 0, 0, 0);
+                                        const isWeekend = currentDate.getDay() === 0 || currentDate.getDay() === 6;
+
+                                        // 1. Before Join?
+                                        const isBeforeJoining = joinDate && currentDate < joinDate;
+
+                                        // 2. Find Record
+                                        const record = agentRecs.find(a => a.date === dateStr);
+
+                                        let cellContent = '-';
+                                        let cellClass = 'text-slate-700';
+
+                                        if (isBeforeJoining) {
+                                          cellContent = '•';
+                                          cellClass = 'text-slate-800';
+                                        }
+                                        else if (record) {
+                                          if (record.status === 'Absent') {
+                                            cellContent = 'A';
+                                            cellClass = 'bg-red-500/10 text-red-500 font-bold';
+                                          } else {
+                                            // 1. Format Time to 12h
+                                            cellContent = formatTo12Hour(record.loginTime) || 'OK';
+
+                                            // 2. Calculate Color Dynamically
+                                            // We use the helper to decide Yellow vs Red vs Green
+                                            const status = getLateStatus(record.loginTime);
+
+                                            if (status.isLate) {
+                                              // Use the color returned by getLateStatus (Yellow or Red)
+                                              cellClass = `bg-slate-800/50 ${status.color} font-mono text-[10px]`;
+                                            } else {
+                                              // On Time (Green)
+                                              cellClass = 'text-green-400 font-mono text-[10px]';
+                                            }
+                                          }
+                                        } else {
+                                          // No Record
+                                          if (isWeekend) {
+                                            cellContent = '';
+                                            cellClass = 'bg-slate-800/30';
+                                          } else if (currentDate <= new Date()) {
+                                            cellContent = 'A'; // Marked absent if workday passed with no scan
+                                            cellClass = 'text-red-500/50 font-bold';
+                                          }
+                                        }
+
+                                        return (
+                                          <td key={dateStr} className={`p-1 text-center border-b border-slate-800 text-[11px] ${cellClass}`}>
+                                            {cellContent}
+                                          </td>
+                                        );
+                                      })}
+
+                                      {/* Row Summary */}
+                                      <td className={`p-2 text-center font-bold sticky right-0 z-10 bg-slate-900 shadow-[-4px_0_10px_rgba(0,0,0,0.5)] ${latePercentage > 20 ? 'text-red-400' : 'text-slate-400'}`}>
+                                        {latePercentage}%
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </React.Fragment>
+                            );
+                          });
+                        })()}
+                      </tbody>
+
+                      {/* --- FOOTER --- */}
+                      <tfoot className="sticky bottom-0 z-40 shadow-[0_-4px_10px_rgba(0,0,0,0.5)]">
+                        <tr className="bg-slate-950 border-t-2 border-purple-500 font-black text-white">
+                          <td colSpan={2} className="p-3 text-left sticky left-0 bg-slate-950 z-50 uppercase tracking-tighter">Grand Total</td>
+
+                          {/* Grand Metrics */}
+                          <td className="text-center text-green-400 bg-slate-950 text-[10px]">
+                            {attendance.filter(a => a.status === 'Present').length}
+                          </td>
+                          <td className="text-center text-yellow-400 bg-slate-950 text-[10px]">
+                            {attendance.filter(a => a.late === true).length}
+                          </td>
+                          <td className="text-center text-red-400 bg-slate-950 border-r border-slate-800 text-[10px]">
+                            -
+                          </td>
+
+                          {/* Daily Grand Totals */}
+                          {getDaysArray(getPayrollRange(selectedMonth).start, getPayrollRange(selectedMonth).end).map(d => {
+                            const dailyTotal = attendance.filter(a => a.date === d && a.status === 'Present').length;
+                            return (
+                              <td key={d} className="bg-slate-950 text-center text-[10px] font-bold text-slate-500">
+                                {dailyTotal > 0 ? dailyTotal : ''}
                               </td>
                             );
                           })}
 
-                          {/* Row Summary */}
-                          <td className={`p-2 text-center font-bold sticky right-0 z-10 bg-slate-900 shadow-[-4px_0_10px_rgba(0,0,0,0.5)] ${latePercentage > 20 ? 'text-red-400' : 'text-slate-400'}`}>
-                            {latePercentage}%
+                          <td className="p-3 text-center text-purple-400 text-lg sticky right-0 bg-slate-950 z-50 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
+                            -
                           </td>
                         </tr>
-                      );
-                    })}
-                  </React.Fragment>
-                );
-              });
-            })()}
-          </tbody>
-
-          {/* --- FOOTER --- */}
-          <tfoot className="sticky bottom-0 z-40 shadow-[0_-4px_10px_rgba(0,0,0,0.5)]">
-            <tr className="bg-slate-950 border-t-2 border-purple-500 font-black text-white">
-              <td colSpan={2} className="p-3 text-left sticky left-0 bg-slate-950 z-50 uppercase tracking-tighter">Grand Total</td>
-              
-              {/* Grand Metrics */}
-              <td className="text-center text-green-400 bg-slate-950 text-[10px]">
-                {attendance.filter(a => a.status === 'Present').length}
-              </td>
-              <td className="text-center text-yellow-400 bg-slate-950 text-[10px]">
-                {attendance.filter(a => a.late === true).length}
-              </td>
-              <td className="text-center text-red-400 bg-slate-950 border-r border-slate-800 text-[10px]">
-                 -
-              </td>
-
-              {/* Daily Grand Totals */}
-              {getDaysArray(getPayrollRange(selectedMonth).start, getPayrollRange(selectedMonth).end).map(d => {
-                const dailyTotal = attendance.filter(a => a.date === d && a.status === 'Present').length;
-                return (
-                  <td key={d} className="bg-slate-950 text-center text-[10px] font-bold text-slate-500">
-                    {dailyTotal > 0 ? dailyTotal : ''}
-                  </td>
-                );
-              })}
-
-              <td className="p-3 text-center text-purple-400 text-lg sticky right-0 bg-slate-950 z-50 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
-                -
-              </td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-    </div>
-  </div>
-)}
- </div>
-)}
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
 
 
@@ -4814,9 +5026,9 @@ const agentRecs = attendance.filter(a =>
           <div className="space-y-6">
             <div className="flex justify-between items-center">
               <h2 className="text-xl font-semibold text-white">Fines Management</h2>
-              
-                <button onClick={() => setShowAddFine(true)} className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"><Plus className="w-4 h-4" /> Add Fine</button>
-              
+
+              <button onClick={() => setShowAddFine(true)} className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"><Plus className="w-4 h-4" /> Add Fine</button>
+
             </div>
             {/* Search ... (Keep existing search div) */}
             <div className="bg-slate-800 rounded-xl shadow-sm border border-slate-600 p-4">
@@ -4843,14 +5055,14 @@ const agentRecs = attendance.filter(a =>
                       <td className="py-3 px-4 font-medium text-white">{fine.agentName}</td>
                       <td className="py-3 px-4 text-slate-300">{fine.reason}</td>
                       <td className="py-3 px-4 text-right font-semibold text-red-600">{fine.amount.toLocaleString()} PKR</td>
-                      
-                        <td className="py-3 px-4">
-                          <div className="flex items-center justify-center gap-2">
-                            <button onClick={() => { setEditingFine(fine); setShowAddFine(true); }} className="p-1.5 bg-blue-500/10 text-blue-400 rounded hover:bg-blue-500/20" title="Edit"><Pencil className="w-4 h-4" /></button>
-                            <button onClick={() => handleDeleteFine(fine.id)} className="p-1.5 bg-red-500/10 text-red-400 rounded hover:bg-red-500/20" title="Delete"><Trash2 className="w-4 h-4" /></button>
-                          </div>
-                        </td>
-                      
+
+                      <td className="py-3 px-4">
+                        <div className="flex items-center justify-center gap-2">
+                          <button onClick={() => { setEditingFine(fine); setShowAddFine(true); }} className="p-1.5 bg-blue-500/10 text-blue-400 rounded hover:bg-blue-500/20" title="Edit"><Pencil className="w-4 h-4" /></button>
+                          <button onClick={() => handleDeleteFine(fine.id)} className="p-1.5 bg-red-500/10 text-red-400 rounded hover:bg-red-500/20" title="Delete"><Trash2 className="w-4 h-4" /></button>
+                        </div>
+                      </td>
+
                     </tr>
                   ))}
                 </tbody>
@@ -4864,9 +5076,9 @@ const agentRecs = attendance.filter(a =>
           <div className="space-y-6">
             <div className="flex justify-between items-center">
               <h2 className="text-xl font-semibold text-white">Bonuses Management</h2>
-              
-                <button onClick={() => setShowAddBonus(true)} className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"><Plus className="w-4 h-4" /> Add Bonus</button>
-              
+
+              <button onClick={() => setShowAddBonus(true)} className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"><Plus className="w-4 h-4" /> Add Bonus</button>
+
             </div>
             {/* Search ... */}
             <div className="bg-slate-800 rounded-xl shadow-sm border border-slate-600 p-4">
@@ -4897,14 +5109,14 @@ const agentRecs = attendance.filter(a =>
                       <td className="py-3 px-4 text-right text-slate-100">{bonus.targetSales}</td>
                       <td className="py-3 px-4 text-right font-semibold text-green-400">{bonus.actualSales}</td>
                       <td className="py-3 px-4 text-right font-semibold text-green-400">{bonus.amount.toLocaleString()} PKR</td>
-                      
-                        <td className="py-3 px-4">
-                          <div className="flex items-center justify-center gap-2">
-                            <button onClick={() => { setEditingBonus(bonus); setShowAddBonus(true); }} className="p-1.5 bg-blue-500/10 text-blue-400 rounded hover:bg-blue-500/20" title="Edit"><Pencil className="w-4 h-4" /></button>
-                            <button onClick={() => handleDeleteBonus(bonus.id)} className="p-1.5 bg-red-500/10 text-red-400 rounded hover:bg-red-500/20" title="Delete"><Trash2 className="w-4 h-4" /></button>
-                          </div>
-                        </td>
-                      
+
+                      <td className="py-3 px-4">
+                        <div className="flex items-center justify-center gap-2">
+                          <button onClick={() => { setEditingBonus(bonus); setShowAddBonus(true); }} className="p-1.5 bg-blue-500/10 text-blue-400 rounded hover:bg-blue-500/20" title="Edit"><Pencil className="w-4 h-4" /></button>
+                          <button onClick={() => handleDeleteBonus(bonus.id)} className="p-1.5 bg-red-500/10 text-red-400 rounded hover:bg-red-500/20" title="Delete"><Trash2 className="w-4 h-4" /></button>
+                        </div>
+                      </td>
+
                     </tr>
                   ))}
                 </tbody>
@@ -5422,20 +5634,20 @@ const agentRecs = attendance.filter(a =>
                   <div>
                     <label className="block text-xs text-slate-400 mb-1 font-medium">Base Salary (PKR)</label>
                     <input
-  type="text" // Change to text prevents scroll wheel changes
-  inputMode="numeric" // Shows number pad on mobile
-  pattern="[0-9]*"
-  placeholder="Salary in PKR"
-  value={editingHR?.baseSalary || ''}
-  onChange={e => {
-    // Only allow numbers
-    const val = e.target.value;
-    if (/^\d*$/.test(val)) {
-      setEditingHR({ ...editingHR, baseSalary: val });
-    }
-  }}
-  className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white text-sm focus:ring-2 focus:ring-purple-500 outline-none"
-/>
+                      type="text" // Change to text prevents scroll wheel changes
+                      inputMode="numeric" // Shows number pad on mobile
+                      pattern="[0-9]*"
+                      placeholder="Salary in PKR"
+                      value={editingHR?.baseSalary || ''}
+                      onChange={e => {
+                        // Only allow numbers
+                        const val = e.target.value;
+                        if (/^\d*$/.test(val)) {
+                          setEditingHR({ ...editingHR, baseSalary: val });
+                        }
+                      }}
+                      className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white text-sm focus:ring-2 focus:ring-purple-500 outline-none"
+                    />
                   </div>
                 </div>
               </div>
@@ -5562,13 +5774,23 @@ const agentRecs = attendance.filter(a =>
                         <th className="px-4 py-3 text-right">Action</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-700 bg-slate-900">
-                      {adminList.map((admin) => (
+                  <tbody className="divide-y divide-slate-700 bg-slate-900">
+                      {adminList
+                        .filter(admin => {
+                          // [FIX] Hide SuperAdmin from everyone else
+                          if (admin.role === 'SuperAdmin' && userRole !== 'SuperAdmin') {
+                            return false;
+                          }
+                          return true;
+                        })
+                        .map((admin) => (
                         <tr key={admin.id} className="hover:bg-slate-800">
                           <td className="px-4 py-3 font-medium text-white">{admin.name}</td>
                           <td className="px-4 py-3">
-                            <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${admin.role === 'Admin' ? 'bg-purple-500/20 text-purple-400' :
-                              admin.role === 'HR' ? 'bg-orange-500/20 text-orange-400' :
+                            <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${admin.role === 'Admin' ?
+                              'bg-purple-500/20 text-purple-400' :
+                              admin.role === 'HR' ?
+                                'bg-orange-500/20 text-orange-400' :
                                 'bg-blue-500/20 text-blue-400'
                               }`}>
                               {admin.role}
@@ -5576,15 +5798,27 @@ const agentRecs = attendance.filter(a =>
                           </td>
                           <td className="px-4 py-3 text-slate-500 font-mono text-xs">{admin.password}</td>
                           <td className="px-4 py-3 text-right">
-                            {/* Prevent deleting yourself */}
-                            {admin.name !== 'Admin' && (
+                            <div className="flex items-center justify-end gap-2">
+                              {/* Edit Password Button */}
                               <button
-                                onClick={() => handleDeleteAdmin(admin.id)}
-                                className="text-red-400 hover:text-red-300 p-1 rounded hover:bg-red-500/10"
+                                onClick={() => handleUpdateAdminPassword(admin.id, admin.name)}
+                                className="text-blue-400 hover:text-blue-300 p-1 rounded hover:bg-blue-500/10 transition-colors"
+                                title="Change Password"
                               >
-                                <Trash2 className="w-4 h-4" />
+                                <Pencil className="w-4 h-4" />
                               </button>
-                            )}
+
+                              {/* Delete Button - Hidden for 'Admin' and 'SuperAdmin' */}
+                              {(admin.name !== 'Admin' && admin.role !== 'SuperAdmin') && (
+                                <button
+                                  onClick={() => handleDeleteAdmin(admin.id)}
+                                  className="text-red-400 hover:text-red-300 p-1 rounded hover:bg-red-500/10 transition-colors"
+                                  title="Revoke Access"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -5611,7 +5845,7 @@ const agentRecs = attendance.filter(a =>
               </h3>
               <button onClick={() => setShowMgmtFine(false)} className="text-slate-400 hover:text-white"><X className="w-5 h-5" /></button>
             </div>
-            
+
             <form onSubmit={handleSaveMgmtFine} className="p-6 space-y-4">
               <div>
                 <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Select Employee</label>
@@ -5652,7 +5886,7 @@ const agentRecs = attendance.filter(a =>
               </h3>
               <button onClick={() => setShowMgmtBonus(false)} className="text-slate-400 hover:text-white"><X className="w-5 h-5" /></button>
             </div>
-            
+
             <form onSubmit={handleSaveMgmtBonus} className="p-6 space-y-4">
               <div>
                 <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Select Employee</label>
@@ -5678,7 +5912,7 @@ const agentRecs = attendance.filter(a =>
         </div>
       )}
 
-   {/* =================================================================================
+      {/* =================================================================================
           ATTENDANCE EDIT MODAL (Manually Correct Time)
          ================================================================================= */}
       {showEditAttendanceModal && editingAttendance && (
@@ -5690,9 +5924,9 @@ const agentRecs = attendance.filter(a =>
               </h3>
               <button onClick={() => setShowEditAttendanceModal(false)} className="text-slate-400 hover:text-white"><X className="w-5 h-5" /></button>
             </div>
-            
+
             <form onSubmit={handleUpdateAttendance} className="p-6 space-y-4">
-              
+
               <div className="text-center mb-4 bg-slate-800/50 p-3 rounded-lg border border-slate-700">
                 <p className="text-xs text-slate-400 uppercase tracking-wider">Employee</p>
                 <p className="text-lg font-bold text-white">{editingAttendance.agentName}</p>
@@ -5701,19 +5935,19 @@ const agentRecs = attendance.filter(a =>
 
               <div>
                 <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Status</label>
-                <select 
-                  name="status" 
+                <select
+                  name="status"
                   defaultValue={editingAttendance.status}
                   className="w-full bg-slate-800 border border-slate-600 rounded-lg p-2.5 text-white text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                   onChange={(e) => {
-                      // Visual Helper: If they select Absent, clear the inputs locally
-                      if(e.target.value === 'Absent') {
-                          document.getElementsByName('loginTime')[0].value = '';
-                          document.getElementsByName('logoutTime')[0].value = '';
-                      } else if (e.target.value === 'Present' && !document.getElementsByName('loginTime')[0].value) {
-                          document.getElementsByName('loginTime')[0].value = '19:00';
-                          document.getElementsByName('logoutTime')[0].value = '05:00';
-                      }
+                    // Visual Helper: If they select Absent, clear the inputs locally
+                    if (e.target.value === 'Absent') {
+                      document.getElementsByName('loginTime')[0].value = '';
+                      document.getElementsByName('logoutTime')[0].value = '';
+                    } else if (e.target.value === 'Present' && !document.getElementsByName('loginTime')[0].value) {
+                      document.getElementsByName('loginTime')[0].value = '19:00';
+                      document.getElementsByName('logoutTime')[0].value = '05:00';
+                    }
                   }}
                 >
                   <option value="Present">Present</option>
@@ -5726,20 +5960,20 @@ const agentRecs = attendance.filter(a =>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Login Time</label>
-                  <input 
-                    name="loginTime" 
-                    type="time" 
-                    defaultValue={editingAttendance.loginTime} 
-                    className="w-full bg-slate-800 border border-slate-600 rounded-lg p-2.5 text-white text-sm focus:ring-2 focus:ring-blue-500 outline-none [color-scheme:dark]" 
+                  <input
+                    name="loginTime"
+                    type="time"
+                    defaultValue={editingAttendance.loginTime}
+                    className="w-full bg-slate-800 border border-slate-600 rounded-lg p-2.5 text-white text-sm focus:ring-2 focus:ring-blue-500 outline-none [color-scheme:dark]"
                   />
                 </div>
                 <div>
                   <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Logout Time</label>
-                  <input 
-                    name="logoutTime" 
-                    type="time" 
-                    defaultValue={editingAttendance.logoutTime} 
-                    className="w-full bg-slate-800 border border-slate-600 rounded-lg p-2.5 text-white text-sm focus:ring-2 focus:ring-blue-500 outline-none [color-scheme:dark]" 
+                  <input
+                    name="logoutTime"
+                    type="time"
+                    defaultValue={editingAttendance.logoutTime}
+                    className="w-full bg-slate-800 border border-slate-600 rounded-lg p-2.5 text-white text-sm focus:ring-2 focus:ring-blue-500 outline-none [color-scheme:dark]"
                   />
                 </div>
               </div>
@@ -5758,7 +5992,3 @@ const agentRecs = attendance.filter(a =>
 };
 
 export default AgentPayrollSystem;
-
-
-//UPDATED TILL NOW TODAY 8-JAN-2026 5:00 AM
-// Starting my work on 13th of JAN 2026 09:12 PM
