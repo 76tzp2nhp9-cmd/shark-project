@@ -583,61 +583,6 @@ const AgentPayrollSystem = () => {
     }
   };
 
-  // [FINAL SECURITY CHECK] Heartbeat: Checks Passwords, Status & Existence
-  useEffect(() => {
-    // 1. Only run if we are currently logged in
-    if (!isLoggedIn || !currentUser) return;
-
-    const verifySecurityStatus = async () => {
-      const tableName = userRole === 'Agent' ? 'agents' : 'admins';
-      
-      // Fetch fresh data from DB
-      const { data: freshUser, error } = await supabase
-        .from(tableName)
-        .select('id, password, status, role') 
-        .eq('id', currentUser.id)
-        .maybeSingle();
-
-      // [CHECK 1] Network Safety
-      // If internet fails, 'error' is true. We RETURN here to prevent accidental logout.
-      if (error) {
-        console.warn("Security Check Skipped: Network Error");
-        return; 
-      }
-
-      // [CHECK 2] Does Account Exist? (Admin & Agent)
-      // If data is null, the ID was deleted from the database.
-      if (!freshUser) {
-        alert("Session Terminated: Your account no longer exists.");
-        handleLogout();
-        return;
-      }
-
-      // [CHECK 3] Agent Status 'Left'?
-      // Only applies if the logged-in user is an Agent.
-      if (userRole === 'Agent' && freshUser.status === 'Left') {
-        alert("Access Revoked: Your account is marked as 'Left'.");
-        handleLogout();
-        return;
-      }
-
-      // [CHECK 4] Password Changed? (Admin & Agent)
-      // Compares the password currently in your browser vs the new one in the DB.
-      // We check 'currentUser.password' to make sure we have something to compare against.
-      if (currentUser.password && freshUser.password !== currentUser.password) {
-        alert("Security Alert: Your password has been changed. Please login again.");
-        handleLogout();
-        return;
-      }
-    };
-
-    // Run this check every 5 seconds
-    const intervalId = setInterval(verifySecurityStatus, 5000);
-
-    // Cleanup: Stop checking if user logs out or closes tab
-    return () => clearInterval(intervalId);
-  }, [isLoggedIn, currentUser, userRole]);
-
   const handleLogout = () => {
     setIsLoggedIn(false);
     setLoginData({ name: '', password: '' });
