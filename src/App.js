@@ -733,42 +733,43 @@ const AgentPayrollSystem = () => {
   }, [isLoggedIn, currentUser, userRole]);
 
   // --- MANAGEMENT PAYROLL STATS (Fixed Date Parsing + Visibility) ---
-  const managementPayrollStats = useMemo(() => {
+ const managementPayrollStats = useMemo(() => {
     // 1. ROBUST DATE PARSING
     let year, month;
 
-    // Check if format is "YYYY-MM" (e.g. "2026-01")
     if (selectedMonth.includes('-')) {
       const parts = selectedMonth.split('-');
       year = parseInt(parts[0]);
       month = parseInt(parts[1]);
     } else {
-      // Handle "January 2026" format
-      const dateObj = new Date(Date.parse(`1 ${selectedMonth}`)); // Add '1' to make it parseable
+      const dateObj = new Date(Date.parse(`1 ${selectedMonth}`)); 
       if (!isNaN(dateObj.getTime())) {
         year = dateObj.getFullYear();
-        month = dateObj.getMonth() + 1; // getMonth is 0-indexed
+        month = dateObj.getMonth() + 1; 
       } else {
-        // Fallback to current date
         const now = new Date();
         year = now.getFullYear();
         month = now.getMonth() + 1;
       }
     }
 
-    const currentMonthStr = `${year}-${String(month).padStart(2, '0')}`; // Standardize to YYYY-MM for matching
+    const currentMonthStr = `${year}-${String(month).padStart(2, '0')}`; 
 
     if (isNaN(year) || isNaN(month)) return { standard: [], agentCycle: [] };
 
-    // --- HELPER 1: Precise Working Days (Excludes Sat/Sun) ---
+    // --- HELPER 1: Precise Working Days (Monday - Saturday) ---
     const getSafeWorkingDays = (start, end) => {
       if (!start || !end || isNaN(start) || isNaN(end)) return 26;
 
       let count = 0;
       let curDate = new Date(start);
+      // Ensure we don't mutate the original start date object if passed elsewhere
+      curDate = new Date(curDate.getTime());
+      
       while (curDate <= end) {
         const dayOfWeek = curDate.getDay();
-        if (dayOfWeek !== 0 && dayOfWeek !== 6) { // 0=Sun, 6=Sat (Exclude Weekends)
+        // [FIX] Only exclude Sunday (0). Allow Saturday (6).
+        if (dayOfWeek !== 0) { 
           count++;
         }
         curDate.setDate(curDate.getDate() + 1);
@@ -776,7 +777,7 @@ const AgentPayrollSystem = () => {
       return count > 0 ? count : 26;
     };
 
-    // --- HELPER 2: Speed Optimization (Maps instead of Loops) ---
+    // --- HELPER 2: Speed Optimization ---
     const attendanceMap = new Map();
     attendance.forEach(att => {
       if (att.agentName) {
@@ -787,22 +788,18 @@ const AgentPayrollSystem = () => {
     });
 
     const bonusMap = new Map();
-    // [FIX] Filter bonuses by matching the month string correctly
-    bonuses.filter(b => {
-      // Handle both "January 2026" and "2026-01" in bonus records
-      return b.month === selectedMonth || b.month === currentMonthStr;
-    }).forEach(b => {
-      const key = (b.agentName || '').trim().toLowerCase();
-      bonusMap.set(key, (bonusMap.get(key) || 0) + (b.amount || 0));
-    });
+    bonuses.filter(b => b.month === selectedMonth || b.month === currentMonthStr)
+      .forEach(b => {
+        const key = (b.agentName || '').trim().toLowerCase();
+        bonusMap.set(key, (bonusMap.get(key) || 0) + (b.amount || 0));
+      });
 
     const fineMap = new Map();
-    fines.filter(f => {
-      return f.month === selectedMonth || f.month === currentMonthStr;
-    }).forEach(f => {
-      const key = (f.agentName || '').trim().toLowerCase();
-      fineMap.set(key, (fineMap.get(key) || 0) + (f.amount || 0));
-    });
+    fines.filter(f => f.month === selectedMonth || f.month === currentMonthStr)
+      .forEach(f => {
+        const key = (f.agentName || '').trim().toLowerCase();
+        fineMap.set(key, (fineMap.get(key) || 0) + (f.amount || 0));
+      });
 
     // 2. Process All HR Records
     const allStats = hrRecords.map(emp => {
@@ -812,29 +809,60 @@ const AgentPayrollSystem = () => {
 
       // A. Determine Cycle Dates
       let cycleStart, cycleEnd;
-      if (cycleType === 'agent cycle') {
-        // Agent Cycle: 21st Previous Month to 20th Current Month
+      if (cycleType.includes('agent')) { // Matches "agent cycle" or "Agent Cycle (21st-20th)"
         const prevMonth = month - 1 === 0 ? 12 : month - 1;
         const prevYear = month - 1 === 0 ? year - 1 : year;
         cycleStart = new Date(prevYear, prevMonth - 1, 21);
         cycleEnd = new Date(year, month - 1, 20);
-        cycleEnd.setHours(23, 59, 59, 999);
       } else {
         // Standard Cycle: 1st to End of Month
         cycleStart = new Date(year, month - 1, 1);
-        cycleEnd = new Date(year, month, 0);
-        cycleEnd.setHours(23, 59, 59, 999);
+        cycleEnd = new Date(year, month, 0); // Last day of month
       }
+      // Normalize Hours
+      cycleStart.setHours(0, 0, 0, 0);
+      cycleEnd.setHours(23, 59, 59, 999);
 
-      // B. Calculate Working Days
+      // B. Calculate Working Days (Now includes Saturdays)
       const totalWorkingDays = getSafeWorkingDays(cycleStart, cycleEnd);
 
-      // C. Get Attendance
+      // C. Get Attendance (Scans + Holidays)
       const empAttRecords = attendanceMap.get(empNameKey) || [];
-      const daysPresent = empAttRecords.filter(a => {
+      
+      // 1. Count Actual Scans
+      const scannedPresent = empAttRecords.filter(a => {
         const d = new Date(a.date);
+        d.setHours(0,0,0,0);
         return d >= cycleStart && d <= cycleEnd && (a.status === 'Present' || a.status === 'Late');
       }).length;
+
+      // 2. Count Payable Holidays
+      let paidHolidays = 0;
+      // joining date check
+      const joinDate = emp.joining_date ? new Date(emp.joining_date) : null;
+      if (joinDate) joinDate.setHours(0,0,0,0);
+
+      holidays.forEach(h => {
+        const hDate = new Date(h.date);
+        hDate.setHours(0,0,0,0);
+
+        // Must be in cycle
+        if (hDate < cycleStart || hDate > cycleEnd) return;
+        
+        // Must be after joining
+        if (joinDate && hDate < joinDate) return;
+
+        // Don't double count if they worked (scanned) on holiday
+        // Check strict string match or date object match
+        const workedOnHoliday = empAttRecords.some(a => a.date === h.date);
+        
+        if (!workedOnHoliday) {
+           paidHolidays++;
+        }
+      });
+
+      // Total Days = Scans + Holidays
+      const daysPresent = scannedPresent + paidHolidays;
 
       // D. Financials
       let rawSalary = emp.base_salary || emp.baseSalary || 0;
@@ -867,16 +895,18 @@ const AgentPayrollSystem = () => {
 
     // 3. Filter Lists
     // EXCLUDE Regular Agents (Only show management/HR/QA etc)
+    // Using includes() handles "senior agent", "agent", etc. differently if needed, 
+    // but based on your code 'agent' is the exact string to exclude.
     const managementStaff = allStats.filter(e => e.designationNormalized !== 'agent');
 
     return {
       // Table 1: Standard (Default)
-      standard: managementStaff.filter(e => e.cycleTypeNormalized !== 'agent cycle'),
+      standard: managementStaff.filter(e => !e.cycleTypeNormalized.includes('agent')),
 
-      // Table 2: Agent Cycle (Only if explicitly set)
-      agentCycle: managementStaff.filter(e => e.cycleTypeNormalized === 'agent cycle')
+      // Table 2: Agent Cycle
+      agentCycle: managementStaff.filter(e => e.cycleTypeNormalized.includes('agent'))
     };
-  }, [hrRecords, selectedMonth, attendance, bonuses, fines]);
+  }, [hrRecords, selectedMonth, attendance, bonuses, fines, holidays]); // Added 'holidays' dependency
 
   // --- HELPER: Get Management List (Designation != Agent) ---
   const managementEmployees = useMemo(() => {
@@ -921,10 +951,10 @@ const AgentPayrollSystem = () => {
   const dateRange = useMemo(() => getPayrollRange(selectedMonth), [selectedMonth]);
 
   // 2. Monthly Stats (Merged: Promoted Agents + Accurate Old Calc + Agent Restriction)
-const monthlyStats = useMemo(() => {
+  const monthlyStats = useMemo(() => {
     // 1. Get Range as STRINGS (YYYY-MM-DD) to fix Timezone/Skipping issues
     const range = getPayrollRange(selectedMonth);
-    
+
     // Convert to strict strings (YYYY-MM-DD)
     const startStr = new Date(range.start).toISOString().split('T')[0];
     const endStr = new Date(range.end).toISOString().split('T')[0];
@@ -937,11 +967,11 @@ const monthlyStats = useMemo(() => {
       d.setHours(0, 0, 0, 0);
       return d;
     };
-    
+
     // Cycle Start/End (Time-adjusted) for "Joining Date" & "Left Date" logic only
-    const cycleStart = new Date(startStr); cycleStart.setHours(0,0,0,0);
-    const cycleEnd = new Date(endStr); cycleEnd.setHours(23,59,59,999);
-    
+    const cycleStart = new Date(startStr); cycleStart.setHours(0, 0, 0, 0);
+    const cycleEnd = new Date(endStr); cycleEnd.setHours(23, 59, 59, 999);
+
     // Count Working Days using the strings
     const totalWorkingDays = countWorkingDays(startStr, endStr);
 
@@ -952,7 +982,7 @@ const monthlyStats = useMemo(() => {
 
     // [FIX] Filter by String Comparison
     const relevantSales = sales.filter(s => s.date >= startStr && s.date <= endStr);
-    
+
     const activeSalesMap = new Map();
     relevantSales.forEach(s => {
       if (!activeSalesMap.has(s.agentName)) {
@@ -1003,8 +1033,8 @@ const monthlyStats = useMemo(() => {
 
       // Left Date Check
       if (a.status !== 'Promoted') {
-       const isInactive = ['Left', 'Terminated', 'NCNS'].includes(a.status) ||
-                          ['Left', 'Terminated', 'NCNS'].includes(hrRec?.status);
+        const isInactive = ['Left', 'Terminated', 'NCNS'].includes(a.status) ||
+          ['Left', 'Terminated', 'NCNS'].includes(hrRec?.status);
 
         if (isInactive) {
           const dateValue = a.leftDate || a.left_date || hrRec?.leftDate || hrRec?.left_date;
@@ -1028,7 +1058,7 @@ const monthlyStats = useMemo(() => {
         const saleName = s.agentName?.toString().trim().toLowerCase();
         const nameMatch = saleName === targetName;
         const statusMatch = s.status === 'Sale' || ['HW- Xfer', 'HW-IBXfer', 'HW-Xfer-CDR'].includes(s.disposition);
-        
+
         // ROBUST CHECK: Compare Strings directly
         const dateMatch = s.date >= startStr && s.date <= endStr;
 
@@ -1068,7 +1098,7 @@ const monthlyStats = useMemo(() => {
 
         if (isPaidDay) {
           dialingDays++;
-          
+
           if (dailySalesCount > 0) {
             if (dailySalesCount === 1) daysOn1++;
             else if (dailySalesCount === 2) daysOn2++;
@@ -1079,7 +1109,7 @@ const monthlyStats = useMemo(() => {
             daysOn0++;
           }
         }
-        
+
         // Next Day
         loopDate.setDate(loopDate.getDate() + 1);
       }
@@ -3805,13 +3835,46 @@ const monthlyStats = useMemo(() => {
             {salesSubTab === 'matrix' && (
               <div className="space-y-6">
                 <div className="flex justify-between items-center">
+                  
+{/* [FIXED] Sales Matrix Header & Action Bar */}
+               {/* [FIXED] Sales Matrix Header - Added 'w-full' */}
+                <div className="w-full flex flex-col md:flex-row justify-between items-center gap-4 bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-sm mb-2">
+                  
+                  {/* LEFT SIDE: Title & Subtitle */}
                   <div>
-                    <h2 className="text-xl text-white font-bold">Team Performance Matrix ({selectedMonth})</h2>
-                    <p className="text-xs text-slate-400 mt-1 uppercase tracking-wider">Grouped by Team • Daily Breakdown</p>
+                    <h2 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
+                      Sales Performance Matrix
+                    </h2>
+                    <p className="text-slate-400 text-xs mt-0.5">
+                      Daily Breakdown for {selectedMonth}
+                    </p>
                   </div>
-                  <div className="text-sm text-slate-400 font-medium">
-                    Cycle: {getPayrollRange(selectedMonth).start.toDateString()} - {getPayrollRange(selectedMonth).end.toDateString()}
+
+                  {/* RIGHT SIDE: Cycle Dates & Buttons */}
+                  <div className="flex flex-col md:flex-row items-center gap-4">
+                    
+                    {/* Cycle Text */}
+                    <div className="text-xs text-slate-500 font-medium bg-slate-900/50 px-3 py-1.5 rounded border border-slate-700/50">
+                      Cycle: <span className="text-slate-300">{getPayrollRange(selectedMonth).start.toDateString()} - {getPayrollRange(selectedMonth).end.toDateString()}</span>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => setShowAddBonus(true)}
+                        className="flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-all shadow-lg shadow-green-900/20"
+                      >
+                        <Plus className="w-4 h-4" /> Add Bonus
+                      </button>
+                      <button
+                        onClick={() => setShowAddFine(true)}
+                        className="flex items-center gap-2 bg-red-600 hover:bg-red-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-all shadow-lg shadow-red-900/20"
+                      >
+                        <Plus className="w-4 h-4" /> Add Fine
+                      </button>
+                    </div>
                   </div>
+                </div>
                 </div>
 
                 {/* --- FILTERS --- */}
@@ -3995,25 +4058,38 @@ const monthlyStats = useMemo(() => {
                                           const currentDate = new Date(dateStr);
                                           currentDate.setHours(0, 0, 0, 0);
 
-                                          // 1. Is this date BEFORE they joined?
+                                          // 1. Check for Holiday
+                                          const isHoliday = holidays.some(h => h.date === dateStr);
+
+                                          // 2. Is this date BEFORE they joined?
                                           const isBeforeJoining = joinDate && currentDate < joinDate;
 
                                           const dailyCount = agentSales.filter(s => s.date === dateStr).length;
+                                          
+                                          // check attendance for '0' vs 'A' logic
                                           const hasAttendance = attendance.some(a =>
                                             a.date === dateStr &&
                                             a.agentName?.toString().trim().toLowerCase() === stat.name?.toString().trim().toLowerCase() &&
                                             (a.status === 'Present' || a.status === 'Late')
                                           );
 
+                                          // check if others worked (to decide if it was a working day)
                                           const isWorkingDay = sales.some(s => s.date === dateStr && (s.status === 'Sale' || ['HW- Xfer', 'HW-IBXfer'].includes(s.disposition)));
 
                                           let cellContent = '-';
                                           let cellClass = 'text-slate-700';
 
+                                          // PRIORITY 1: Sales (Green) - Work done overrides everything
                                           if (dailyCount > 0) {
                                             cellContent = dailyCount;
                                             cellClass = 'bg-green-500/10 text-green-400 font-bold';
                                           }
+                                          // PRIORITY 2: Holiday (Purple 'H') - Only if NO sales
+                                          else if (isHoliday) {
+                                            cellContent = 'H';
+                                            cellClass = 'text-purple-400 font-bold bg-purple-900/20';
+                                          }
+                                          // PRIORITY 3: Normal Status (0, A, or -)
                                           else if (!isBeforeJoining) {
                                             if (hasAttendance) {
                                               cellContent = '0';
@@ -4373,7 +4449,29 @@ const monthlyStats = useMemo(() => {
                                   if (joinDate) joinDate.setHours(0, 0, 0, 0);
 
                                   const empRecords = attendance.filter(a => a.agentName === emp.agent_name);
-                                  const presentCount = empRecords.filter(a => a.status === 'Present').length;
+                                  // 1. Calculate Scanned Presents
+                                  const scannedPresent = empRecords.filter(a => a.status === 'Present').length;
+
+                                  // 2. [NEW] Calculate Valid Holidays (Add to Present count)
+                                  let validHolidays = 0;
+                                  holidays.forEach(h => {
+                                      // Must be in current view
+                                      if (!dateArray.includes(h.date)) return;
+                                      
+                                      // Must be after joining
+                                      const hDate = new Date(h.date); hDate.setHours(0,0,0,0);
+                                      if (joinDate && hDate < joinDate) return;
+
+                                      // Don't double count if they actually worked on the holiday
+                                      const hasScan = empRecords.some(a => a.date === h.date && a.status === 'Present');
+                                      if (!hasScan) {
+                                          validHolidays++;
+                                      }
+                                  });
+
+                                  // [FINAL P COUNT] = Scans + Holidays
+                                  const presentCount = scannedPresent + validHolidays;
+
                                   const lateCount = empRecords.filter(a =>
                                     a.status === 'Present' && getLateStatus(a.loginTime).isLate
                                   ).length;
@@ -4386,9 +4484,17 @@ const monthlyStats = useMemo(() => {
                                     if (dObj > new Date()) return;
                                     if (joinDate && dObj < joinDate) return;
 
+                                    // [FIX] Check for Holiday to prevent false Absents
+                                    const isHoliday = holidays.some(h => h.date === dStr);
                                     const hasRec = empRecords.some(a => a.date === dStr);
-                                    if (!hasRec) absentCount++;
-                                    else if (empRecords.find(a => a.date === dStr).status === 'Absent') absentCount++;
+
+                                    if (!hasRec) {
+                                        // Only increment Absent if it is NOT a holiday
+                                        if (!isHoliday) absentCount++;
+                                    }
+                                    else if (empRecords.find(a => a.date === dStr).status === 'Absent') {
+                                        absentCount++;
+                                    }
                                   });
 
                                   const latePercentage = presentCount > 0 ? Math.round((lateCount / presentCount) * 100) : 0;
@@ -4418,6 +4524,10 @@ const monthlyStats = useMemo(() => {
                                         const isWeekend = currentDate.getDay() === 0 || currentDate.getDay() === 6;
                                         const isBeforeJoining = joinDate && currentDate < joinDate;
 
+                                        // 1. [NEW] Check for Holiday
+                                        const isHoliday = holidays.some(h => h.date === dateStr);
+
+                                        // Keep your existing record lookup
                                         const record = empRecords.find(a => a.date === dateStr);
 
                                         let cellContent = '-';
@@ -4427,11 +4537,8 @@ const monthlyStats = useMemo(() => {
                                           cellContent = '•';
                                           cellClass = 'text-slate-800';
                                         }
-                                        else if (record) {
-                                          if (record.status === 'Absent') {
-                                            cellContent = 'A';
-                                            cellClass = 'bg-red-500/10 text-red-500 font-bold';
-                                          } else {
+                                        // 2. If Present -> Show Time (Prioritize working over holiday)
+                                        else if (record && record.status === 'Present') {
                                             cellContent = formatTo12Hour(record.loginTime) || 'OK';
                                             const status = getLateStatus(record.loginTime);
                                             if (status.isLate) {
@@ -4439,12 +4546,24 @@ const monthlyStats = useMemo(() => {
                                             } else {
                                               cellClass = 'text-green-400 font-mono text-[10px]';
                                             }
-                                          }
-                                        } else {
+                                        } 
+                                        // 3. [NEW] If Holiday -> Show 'H' (Purple)
+                                        else if (isHoliday) {
+                                          cellContent = 'H';
+                                          cellClass = 'bg-purple-900/40 text-purple-400 font-bold';
+                                        }
+                                        // 4. If Explicit Absent
+                                        else if (record && record.status === 'Absent') {
+                                          cellContent = 'A';
+                                          cellClass = 'bg-red-500/10 text-red-500 font-bold';
+                                        } 
+                                        // 5. Default (Weekend or Implicit Absent)
+                                        else {
                                           if (isWeekend) {
                                             cellContent = '';
                                             cellClass = 'bg-slate-800/30';
                                           } else if (currentDate <= new Date()) {
+                                            // Only mark 'A' if it was NOT a holiday
                                             cellContent = 'A';
                                             cellClass = 'text-red-500/50 font-bold';
                                           }
@@ -4804,6 +4923,42 @@ const monthlyStats = useMemo(() => {
             {attendanceSubTab === 'matrix' && (
               <div className="space-y-6">
 
+{/* [FIXED] Attendance Matrix Header & Action Bar */}
+                <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-slate-800 p-6 rounded-2xl border border-slate-700 mb-6">
+                  <div>
+                    <h2 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+                      Attendance Matrix
+                    </h2>
+                    <p className="text-slate-400 text-sm mt-1">
+                      Presence & Late Status for {selectedMonth}
+                    </p>
+                  </div>
+
+                   {/* RIGHT SIDE: Cycle Dates & Buttons */}
+                  <div className="flex flex-col md:flex-row items-center gap-4">
+                    
+                    {/* Cycle Text */}
+                    <div className="text-xs text-slate-500 font-medium bg-slate-900/50 px-3 py-1.5 rounded border border-slate-700/50">
+                      Cycle: <span className="text-slate-300">{getPayrollRange(selectedMonth).start.toDateString()} - {getPayrollRange(selectedMonth).end.toDateString()}</span>
+                    </div>
+
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => setShowAddBonus(true)} // [FIXED] Matches your existing state
+                      className="flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-lg shadow-green-900/20"
+                    >
+                      <Plus className="w-4 h-4" /> Add Bonus
+                    </button>
+                    <button
+                      onClick={() => setShowAddFine(true)} // [FIXED] Matches your existing state
+                      className="flex items-center gap-2 bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-lg shadow-red-900/20"
+                    >
+                      <Plus className="w-4 h-4" /> Add Fine
+                    </button>
+                  </div>
+                  </div>
+                </div>
+
                 {/* 1. [NEW] SEARCH & FILTER BAR */}
                 <div className="bg-slate-800 rounded-xl shadow-sm border border-slate-600 p-4">
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -4862,31 +5017,60 @@ const monthlyStats = useMemo(() => {
 
                       <tbody className="divide-y divide-slate-800">
                         {(() => {
+                          // 1. Setup Dates for Logic
                           const { start, end } = getPayrollRange(selectedMonth);
                           const dateArray = getDaysArray(start, end);
 
+                          // Create Date Objects for Cycle Boundaries
+                          const cycleStart = new Date(start); cycleStart.setHours(0, 0, 0, 0);
+                          const cycleEnd = new Date(end); cycleEnd.setHours(23, 59, 59, 999); // [NEW] Needed for future check
+
                           // 2. [UPDATED] FILTERING LOGIC
                           let filteredAgents = agents.filter(a => {
-                            // Permission: If Agent, only show self
+                            // A. Permission: If Agent, only show self
                             if (userRole === 'Agent') {
                               const loggedInCnic = currentUser?.cnic || JSON.parse(localStorage.getItem('ams_user'))?.cnic;
                               if (a.cnic !== loggedInCnic) return false;
                             }
 
-                            // Search
+                            // B. Standard Filters
                             const matchesSearch = !searchQuery || (a.name && a.name.toLowerCase().includes(searchQuery.toLowerCase()));
-                            // Team
                             const matchesTeam = teamFilter === 'All' || a.team === teamFilter;
-                            // Center
                             const matchesCenter = centerFilter === 'All' || a.center === centerFilter;
-                            // Status (Active vs Inactive)
-                            const matchesStatus = agentStatusFilter === 'All' ||
-                              (agentStatusFilter === 'Active' ? a.status === 'Active' : a.status !== 'Active');
+
+                            // C. Status Filter
+                            const matchesStatus =
+                              agentStatusFilter === 'All' ? true :
+                                agentStatusFilter === 'Active' ? a.status === 'Active' :
+                                  a.status !== 'Active';
+
+                            // Find HR Record (Used for dates)
+                            const hrRec = hrRecords.find(h => h.cnic === a.cnic);
+
+                            // D. HIDE OLD INACTIVE AGENTS (Left BEFORE this month)
+                            if (['Left', 'Terminated', 'NCNS'].includes(a.status)) {
+                              const dateStr = a.leftDate || a.left_date || hrRec?.leftDate || hrRec?.left_date;
+                              if (dateStr) {
+                                const leaveDate = new Date(dateStr);
+                                leaveDate.setHours(0, 0, 0, 0);
+                                // If left strictly BEFORE cycle start -> Hide
+                                if (leaveDate.getTime() < cycleStart.getTime()) return false;
+                              }
+                            }
+
+                            // E. [NEW] HIDE FUTURE AGENTS (Joining AFTER this month)
+                            const joinStr = hrRec?.joining_date || a.activeDate || a.active_date;
+                            if (joinStr) {
+                              const joinDate = new Date(joinStr);
+                              joinDate.setHours(0, 0, 0, 0);
+                              // If joining strictly AFTER cycle end -> Hide
+                              if (joinDate.getTime() > cycleEnd.getTime()) return false;
+                            }
 
                             return matchesSearch && matchesTeam && matchesCenter && matchesStatus;
                           });
 
-                          // --- HELPERS ---
+                          // --- HELPERS (Keep as is) ---
                           const formatTo12Hour = (timeStr) => {
                             if (!timeStr) return '';
                             const [h, m] = timeStr.toString().split(':');
@@ -4920,11 +5104,35 @@ const monthlyStats = useMemo(() => {
                             if (teamAgents.length === 0) return null;
 
                             // --- TEAM SUMMARY ---
+                           // [UPDATED] Team Total Present (Records + Holidays)
                             const teamTotalPresent = teamAgents.reduce((sum, agent) => {
-                              return sum + attendance.filter(a =>
+                              // A. Count Database Presents
+                              const recordsCount = attendance.filter(a =>
                                 a.agentName?.toString().trim().toLowerCase() === agent.name?.toString().trim().toLowerCase() &&
                                 a.status === 'Present'
                               ).length;
+
+                              // B. Count Valid Holidays (that don't have a record)
+                              const hrRec = hrRecords.find(h => h.cnic === agent.cnic) || {};
+                              const joinDateStr = hrRec.joining_date || agent.activeDate;
+                              const jDate = joinDateStr ? new Date(joinDateStr) : null;
+                              if (jDate) jDate.setHours(0,0,0,0);
+
+                              let holidayCount = 0;
+                              holidays.forEach(h => {
+                                if (!dateArray.includes(h.date)) return; // Must be in view
+                                if (jDate && new Date(h.date) < jDate) return; // Must be after joining
+
+                                // Only count holiday if they weren't ALREADY marked Present that day
+                                const hasRecord = attendance.some(a => 
+                                  a.agentName?.toString().trim().toLowerCase() === agent.name?.toString().trim().toLowerCase() &&
+                                  a.date === h.date && 
+                                  a.status === 'Present'
+                                );
+                                if (!hasRecord) holidayCount++;
+                              });
+
+                              return sum + recordsCount + holidayCount;
                             }, 0);
 
                             const teamTotalLate = teamAgents.reduce((sum, agent) => {
@@ -4967,30 +5175,59 @@ const monthlyStats = useMemo(() => {
                                   const joinDate = joinDateStr ? new Date(joinDateStr) : null;
                                   if (joinDate) joinDate.setHours(0, 0, 0, 0);
 
+                                  // --- AGENT STATS CALCULATION ---
                                   const agentRecs = attendance.filter(a =>
                                     a.agentName?.toString().trim().toLowerCase() === agent.name?.toString().trim().toLowerCase()
                                   );
-                                  const presentCount = agentRecs.filter(a => a.status === 'Present').length;
+
+                                  // 1. Base Present Count (From Scans)
+                                  const scannedPresent = agentRecs.filter(a => a.status === 'Present').length;
+
+                                  // 2. Holiday Count (Add 'H' days to Present)
+                                  let validHolidays = 0;
+                                  holidays.forEach(h => {
+                                      // Ensure holiday is in current view
+                                      if (!dateArray.includes(h.date)) return;
+                                      
+                                      // Ensure holiday is NOT before joining
+                                      const hDate = new Date(h.date); hDate.setHours(0,0,0,0);
+                                      if (joinDate && hDate < joinDate) return;
+
+                                      // Ensure we don't double count if they worked on holiday
+                                      const hasScan = agentRecs.some(a => a.date === h.date && a.status === 'Present');
+                                      if (!hasScan) {
+                                          validHolidays++;
+                                      }
+                                  });
+
+                                  // [FINAL P COUNT] = Scans + Holidays
+                                  const presentCount = scannedPresent + validHolidays;
+
                                   const lateCount = agentRecs.filter(a =>
                                     a.status === 'Present' &&
                                     getLateStatus(a.loginTime).isLate
                                   ).length;
 
+                                  // Absent Calculation (Remains loop-based for accuracy)
                                   let absentCount = 0;
                                   dateArray.forEach(dStr => {
                                     const dObj = new Date(dStr);
                                     dObj.setHours(0, 0, 0, 0);
-                                    if (dObj.getDay() === 0 || dObj.getDay() === 6) return;
-                                    if (dObj > new Date()) return;
-                                    if (joinDate && dObj < joinDate) return;
+                                    if (dObj.getDay() === 0 || dObj.getDay() === 6) return; // Weekend
+                                    if (dObj > new Date()) return; // Future
+                                    if (joinDate && dObj < joinDate) return; // Before Join
 
+                                    // If no Present record AND no Holiday -> Absent
+                                    const isHoliday = holidays.some(h => h.date === dStr);
                                     const hasRec = agentRecs.some(a => a.date === dStr);
-                                    if (!hasRec) absentCount++;
-                                    else if (agentRecs.find(a => a.date === dStr).status === 'Absent') absentCount++;
+                                    
+                                    if (!isHoliday && !hasRec) absentCount++;
+                                    else if (agentRecs.find(a => a.date === dStr)?.status === 'Absent') absentCount++;
                                   });
+
                                   const latePercentage = presentCount > 0 ? Math.round((lateCount / presentCount) * 100) : 0;
 
-                                  // [NEW] Visual for Inactive (Left/Terminated)
+                                  // Visual for Inactive
                                   const isInactive = agent.status !== 'Active';
                                   const rowClass = isInactive ? 'bg-red-900/10 hover:bg-red-900/20' : 'hover:bg-blue-900/10';
                                   const nameClass = isInactive ? 'text-red-400' : 'text-slate-200';
@@ -5001,10 +5238,10 @@ const monthlyStats = useMemo(() => {
 
                                       <td className="p-2 px-3 font-medium border-r border-slate-800 bg-slate-900 sticky left-12 z-10 truncate text-xs">
                                         <div className={nameClass}>{agent.name}</div>
-                                        {/* [NEW] Status Label */}
+                                        {/* Status Label */}
                                         {isInactive && (
                                           <div className="text-[9px] text-red-500/80 font-mono mt-0.5 font-bold">
-                                            {agent.status.toUpperCase()}: {agent.leftDate || agent.left_date || 'N/A'}
+                                            {agent.status.toUpperCase()}: {agent.leftDate || agent.left_date || hrRec.left_date || 'N/A'}
                                           </div>
                                         )}
                                       </td>
@@ -5018,6 +5255,10 @@ const monthlyStats = useMemo(() => {
                                         currentDate.setHours(0, 0, 0, 0);
                                         const isWeekend = currentDate.getDay() === 0 || currentDate.getDay() === 6;
                                         const isBeforeJoining = joinDate && currentDate < joinDate;
+                                        
+                                        // 1. Check for Holiday
+                                        const isHoliday = holidays.some(h => h.date === dateStr);
+                                        
                                         const record = agentRecs.find(a => a.date === dateStr);
 
                                         let cellContent = '-';
@@ -5026,11 +5267,9 @@ const monthlyStats = useMemo(() => {
                                         if (isBeforeJoining) {
                                           cellContent = '•';
                                           cellClass = 'text-slate-800';
-                                        } else if (record) {
-                                          if (record.status === 'Absent') {
-                                            cellContent = 'A';
-                                            cellClass = 'bg-red-500/10 text-red-500 font-bold';
-                                          } else {
+                                        } 
+                                        // A. If Record Exists (Present/Late) -> Show Time (Prioritize working over holiday)
+                                        else if (record && record.status === 'Present') {
                                             cellContent = formatTo12Hour(record.loginTime) || 'OK';
                                             const status = getLateStatus(record.loginTime);
                                             if (status.isLate) {
@@ -5038,8 +5277,19 @@ const monthlyStats = useMemo(() => {
                                             } else {
                                               cellClass = 'text-green-400 font-mono text-[10px]';
                                             }
-                                          }
-                                        } else {
+                                        } 
+                                        // B. If Holiday -> Show 'H' (Overrides Absent/Weekend)
+                                        else if (isHoliday) {
+                                          cellContent = 'H';
+                                          cellClass = 'bg-purple-900/40 text-purple-400 font-bold';
+                                        }
+                                        // C. If Record is Explicit Absent
+                                        else if (record && record.status === 'Absent') {
+                                          cellContent = 'A';
+                                          cellClass = 'bg-red-500/10 text-red-500 font-bold';
+                                        } 
+                                        // D. No Record
+                                        else {
                                           if (isWeekend) {
                                             cellContent = '';
                                             cellClass = 'bg-slate-800/30';
@@ -5048,6 +5298,7 @@ const monthlyStats = useMemo(() => {
                                             cellClass = 'text-red-500/50 font-bold';
                                           }
                                         }
+                                        
                                         return (
                                           <td key={dateStr} className={`p-1 text-center border-b border-slate-800 text-[11px] ${cellClass}`}>
                                             {cellContent}
@@ -5205,17 +5456,52 @@ const monthlyStats = useMemo(() => {
 
         {activeTab === 'payroll' && (
           <div className="space-y-6">
-            <div className="flex justify-between items-center">
-              <h2 className="text-xl font-semibold text-white">Monthly Payroll - {selectedMonth}</h2>
-              <button
+
+{/* [FIXED] Payroll Header & Action Bar */}
+                <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-slate-800 p-6 rounded-2xl border border-slate-700 mb-6">
+                  <div>
+                    <h2 className="text-2xl font-bold bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">
+                      Agent Payroll
+                    </h2>
+                    <p className="text-slate-400 text-sm mt-1">
+                      Salary Breakdown for {selectedMonth}
+                    </p>
+                  </div>
+
+                   {/* RIGHT SIDE: Cycle Dates & Buttons */}
+                  <div className="flex flex-col md:flex-row items-center gap-4">
+                    
+                    {/* Cycle Text */}
+                    <div className="text-xs text-slate-500 font-medium bg-slate-900/50 px-3 py-1.5 rounded border border-slate-700/50">
+                      Cycle: <span className="text-slate-300">{getPayrollRange(selectedMonth).start.toDateString()} - {getPayrollRange(selectedMonth).end.toDateString()}</span>
+                    </div>
+
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => setShowAddBonus(true)} // [FIXED] Matches your existing state
+                      className="flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-lg shadow-green-900/20"
+                    >
+                      <Plus className="w-4 h-4" /> Add Bonus
+                    </button>
+                    <button
+                      onClick={() => setShowAddFine(true)} // [FIXED] Matches your existing state
+                      className="flex items-center gap-2 bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-lg shadow-red-900/20"
+                    >
+                      <Plus className="w-4 h-4" /> Add Fine
+                    </button>
+
+<button
                 onClick={exportToCSV}
-                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                className="flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-lg shadow-green-900/20"
               >
                 <Download className="w-4 h-4" />
                 Export to CSV
               </button>
-            </div>
 
+                  </div>
+                  </div>
+                </div>
+                
             {/* SEARCH & FILTER Bar */}
             <div className="bg-slate-800 rounded-xl shadow-sm border border-slate-600 p-4 mb-6">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -5290,8 +5576,8 @@ const monthlyStats = useMemo(() => {
                         <tr
                           key={agent.id}
                           className={`transition-colors border-b border-slate-800 ${['Left', 'Terminated', 'NCNS'].includes(agent.status)
-                              ? 'bg-red-900/10 hover:bg-red-900/20'
-                              : 'hover:bg-slate-800/50'
+                            ? 'bg-red-900/10 hover:bg-red-900/20'
+                            : 'hover:bg-slate-800/50'
                             }`}
                         >
                           <td className="py-3 px-4 text-slate-300">{idx + 1}</td>
@@ -5548,6 +5834,7 @@ const monthlyStats = useMemo(() => {
 
       {showAddSale && <SaleModal agents={agents} currentUser={currentUser} userRole={userRole} onClose={() => setShowAddSale(false)} onSubmit={handleAddSale} />}
       {editSale && <SaleModal agents={agents} currentUser={currentUser} userRole={userRole} onClose={() => setEditSale(null)} onSubmit={handleEditSale} sale={editSale} isEdit={true} />}
+      
       {showAddFine && (
         <FineModal
           agents={agents}
@@ -5557,6 +5844,7 @@ const monthlyStats = useMemo(() => {
           isEdit={!!editingFine}
         />
       )}
+
       {showAddBonus && (
         <BonusModal
           agents={agents}
@@ -5566,6 +5854,7 @@ const monthlyStats = useMemo(() => {
           isEdit={!!editingBonus}
         />
       )}
+
       {showImportModal && (
         <ImportModal
           importType={importType}
@@ -5573,6 +5862,7 @@ const monthlyStats = useMemo(() => {
           onImport={handleImport}
         />
       )}
+
       {/* --- INLINE HR MODAL (Corrected) --- */}
       {showAddEmployee && (
         <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4">
@@ -6141,12 +6431,22 @@ const monthlyStats = useMemo(() => {
               </div>
 
               {/* List of Existing Holidays */}
+              {/* List of Holidays (Filtered by Selected Month) */}
               <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
-                <h3 className="text-sm font-medium text-slate-300 uppercase tracking-wider mb-2">Upcoming Holidays</h3>
-                {holidays.length === 0 ? (
-                  <p className="text-slate-500 text-sm italic">No holidays added yet.</p>
-                ) : (
-                  holidays.map((h) => (
+                <h3 className="text-sm font-medium text-slate-300 uppercase tracking-wider mb-2">
+                  Holidays ({selectedMonth})
+                </h3>
+                
+                {(() => {
+                   // Filter logic
+                   const { start, end } = getPayrollRange(selectedMonth);
+                   const currentMonthHolidays = holidays.filter(h => h.date >= start && h.date <= end);
+
+                   if (currentMonthHolidays.length === 0) {
+                     return <p className="text-slate-500 text-sm italic">No holidays in this month.</p>;
+                   }
+
+                   return currentMonthHolidays.map((h) => (
                     <div key={h.id} className="flex justify-between items-center bg-slate-700/50 p-3 rounded border border-slate-700">
                       <div>
                         <div className="text-white font-medium">{h.name}</div>
@@ -6159,8 +6459,8 @@ const monthlyStats = useMemo(() => {
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
-                  ))
-                )}
+                  ));
+                })()}
               </div>
 
             </div>
@@ -6193,8 +6493,8 @@ const monthlyStats = useMemo(() => {
                       key={status}
                       onClick={() => setLeaveForm({ ...leaveForm, status })}
                       className={`px-3 py-2 rounded text-sm font-medium border transition-colors ${leaveForm.status === status
-                          ? 'bg-red-600 border-red-500 text-white'
-                          : 'bg-slate-700 border-slate-600 text-slate-300 hover:bg-slate-600'
+                        ? 'bg-red-600 border-red-500 text-white'
+                        : 'bg-slate-700 border-slate-600 text-slate-300 hover:bg-slate-600'
                         }`}
                     >
                       {status}
