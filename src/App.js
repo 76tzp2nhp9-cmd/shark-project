@@ -193,9 +193,11 @@ const AgentPayrollSystem = () => {
     if (['Admin', 'SuperAdmin'].includes(userRole)) {
       fetchAdmins();
     }
-  }, [userRole, showAdminModal]); // Refresh when modal opens/closes
+  }, [userRole, showAdminModal]);// Refresh when modal opens/closes
 
   // [NEW] Helper: Get the exact Start and End date based on selection
+
+
   const getActiveDateRange = useMemo(() => {
     const today = new Date(customStartDate); // Use customStartDate as the "anchor" date
     let start = new Date(today);
@@ -238,10 +240,10 @@ const AgentPayrollSystem = () => {
   const [lateTime, setLateTime] = useState(() => localStorage.getItem('ams_late_time') || '19:15');
   const [showLateTimeModal, setShowLateTimeModal] = useState(false);
 
-// --- [NEW] Update Admin Password ---
+  // --- [NEW] Update Admin Password ---
   const handleUpdateAdminPassword = async (id, currentName) => {
     const newPassword = prompt(`Enter new password for user "${currentName}":`);
-    
+
     if (newPassword !== null && newPassword.trim() !== "") {
       const { error } = await supabase
         .from('admins')
@@ -256,6 +258,67 @@ const AgentPayrollSystem = () => {
       }
     }
   };
+
+
+  // --- [NEW] LEAVE MANAGEMENT STATE ---
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const [leaveForm, setLeaveForm] = useState({
+    id: null,
+    name: '',
+    status: 'Left',
+    date: new Date().toISOString().split('T')[0] // Defaults to Today
+  });
+
+  // Open the modal
+  const handleOpenLeaveModal = (agent) => {
+    setLeaveForm({
+      id: agent.id,      // Keep just in case
+      cnic: agent.cnic,
+      name: agent.name,
+      status: 'Left', // Default selection
+      date: new Date().toISOString().split('T')[0]
+    });
+    setShowLeaveModal(true);
+  };
+
+  // Submit the change to Supabase
+  // Submit the change to Supabase
+  const confirmAgentLeave = async () => {
+    if (!leaveForm.date) return alert("Please select a date.");
+    if (!leaveForm.cnic) return alert("Error: Agent CNIC is missing.");
+
+    // 1. Update Agents Table
+    const { error: agentError } = await supabase
+      .from('agents')
+      .update({
+        status: leaveForm.status,
+        left_date: leaveForm.date
+      })
+      .eq('cnic', leaveForm.cnic); // [FIX] Use CNIC instead of ID
+
+    if (agentError) {
+      alert("Error updating Agent table: " + agentError.message);
+      return;
+    }
+
+    // 2. Update HR Records Table (Sync status)
+    const { error: hrError } = await supabase
+      .from('hr_records')
+      .update({
+        status: leaveForm.status,
+        left_date: leaveForm.date
+      })
+      .eq('cnic', leaveForm.cnic);
+
+    if (hrError) {
+      console.warn("HR Update failed (might not exist):", hrError.message);
+    }
+
+    alert(`Agent marked as ${leaveForm.status}`);
+    setShowLeaveModal(false);
+    fetchData(); // Refresh the list
+  };
+
 
   // Inside App.js
   const handleAddTeam = async (teamName) => {
@@ -388,6 +451,13 @@ const AgentPayrollSystem = () => {
       return allData;
     };
 
+    // 7. [NEW] Fetch Holidays
+    const { data: holidayData } = await supabase
+      .from('holidays')
+      .select('*')
+      .order('date', { ascending: true });
+    if (holidayData) setHolidays(holidayData);
+
     try {
       setLoading(true);
 
@@ -481,6 +551,10 @@ const AgentPayrollSystem = () => {
   const [centerFilter, setCenterFilter] = useState('All');
   const [evaluators, setEvaluators] = useState(['John Doe', 'Jane Smith']);
 
+  const [holidays, setHolidays] = useState([]);
+  const [showHolidayModal, setShowHolidayModal] = useState(false);
+  const [newHoliday, setNewHoliday] = useState({ date: '', name: '' });
+
   // [FIX] Lock Body Scroll when any Modal is Open
   useEffect(() => {
     // Check if ANY modal is currently true
@@ -547,7 +621,7 @@ const AgentPayrollSystem = () => {
         localStorage.setItem('ams_user', JSON.stringify(adminUser));
         localStorage.setItem('ams_role', adminUser.role);
         setLoading(false);
-        return; 
+        return;
       }
 
       // 2. If not found, check AGENTS Table
@@ -561,9 +635,9 @@ const AgentPayrollSystem = () => {
       if (agentUser) {
         // [CRITICAL FIX] Check if Agent is 'Left'
         if (agentUser.status === 'Left') {
-            setLoginError('Access Denied: Account is deactivated (Left).');
-            setLoading(false);
-            return;
+          setLoginError('Access Denied: Account is deactivated (Left).');
+          setLoading(false);
+          return;
         }
 
         setUserRole('Agent');
@@ -616,10 +690,10 @@ const AgentPayrollSystem = () => {
       .channel(`security_watchdog_${userId}`)
       .on(
         'postgres_changes',
-        { 
+        {
           event: '*', // Listen for UPDATE and DELETE
-          schema: 'public', 
-          table: tableName, 
+          schema: 'public',
+          table: tableName,
           filter: `id=eq.${userId}` // Only listen for THIS user's ID
         },
         (payload) => {
@@ -628,11 +702,11 @@ const AgentPayrollSystem = () => {
             alert("Security Alert: Your account has been removed. Logging out.");
             handleLogout();
           }
-          
+
           // 2. Handle Updates (Password or Status change)
           if (payload.eventType === 'UPDATE') {
             const newUser = payload.new;
-            
+
             // Check if Password Changed
             // (Compares DB password with the one stored in your browser session)
             if (newUser.password !== currentUser.password) {
@@ -847,15 +921,15 @@ const AgentPayrollSystem = () => {
   const dateRange = useMemo(() => getPayrollRange(selectedMonth), [selectedMonth]);
 
   // 2. Monthly Stats (Merged: Promoted Agents + Accurate Old Calc + Agent Restriction)
-  const monthlyStats = useMemo(() => {
-    // 1. Define Cycle Boundaries
-    const { start, end } = getPayrollRange(selectedMonth);
+const monthlyStats = useMemo(() => {
+    // 1. Get Range as STRINGS (YYYY-MM-DD) to fix Timezone/Skipping issues
+    const range = getPayrollRange(selectedMonth);
+    
+    // Convert to strict strings (YYYY-MM-DD)
+    const startStr = new Date(range.start).toISOString().split('T')[0];
+    const endStr = new Date(range.end).toISOString().split('T')[0];
 
-    // Normalize to Midnight
-    const cycleStart = new Date(start); cycleStart.setHours(0, 0, 0, 0);
-    const cycleEnd = new Date(end); cycleEnd.setHours(23, 59, 59, 999);
-    const totalWorkingDays = countWorkingDays(start, end);
-
+    // Helper: Parse Date for HR checks (remains strictly for Logic checks)
     const parseDate = (val) => {
       if (!val) return null;
       const d = new Date(val);
@@ -863,16 +937,23 @@ const AgentPayrollSystem = () => {
       d.setHours(0, 0, 0, 0);
       return d;
     };
+    
+    // Cycle Start/End (Time-adjusted) for "Joining Date" & "Left Date" logic only
+    const cycleStart = new Date(startStr); cycleStart.setHours(0,0,0,0);
+    const cycleEnd = new Date(endStr); cycleEnd.setHours(23,59,59,999);
+    
+    // Count Working Days using the strings
+    const totalWorkingDays = countWorkingDays(startStr, endStr);
 
     // ---------------------------------------------------------
     // STEP A: CREATE MERGED LIST (Enable Promoted Agents)
     // ---------------------------------------------------------
     let combinedList = [...agents];
 
-    // Find HR records who are NOT in agents list but HAVE sales this month
-    const relevantSales = sales.filter(s => new Date(s.date) >= start && new Date(s.date) <= end);
+    // [FIX] Filter by String Comparison
+    const relevantSales = sales.filter(s => s.date >= startStr && s.date <= endStr);
+    
     const activeSalesMap = new Map();
-
     relevantSales.forEach(s => {
       if (!activeSalesMap.has(s.agentName)) {
         activeSalesMap.set(s.agentName, { team: s.team || s.teamLead, center: s.center });
@@ -898,120 +979,114 @@ const AgentPayrollSystem = () => {
     });
 
     // ---------------------------------------------------------
-    // STEP B: FILTERING (With Agent Restriction)
+    // STEP B: FILTERING
     // ---------------------------------------------------------
     const filteredAgentsList = combinedList.filter(a => {
-
-      // [CRITICAL FIX] Use 'currentUser' to match your Login Logic
+      // Permission Check
       if (userRole === 'Agent') {
-        // Fallback to localStorage if state is unavailable on refresh
         const loggedInCnic = currentUser?.cnic || JSON.parse(localStorage.getItem('ams_user'))?.cnic;
-
-        // If we can't verify the user, hide the data
         if (!loggedInCnic || a.cnic !== loggedInCnic) return false;
       }
 
-      // 1. Team/Center Check (Skip for Agents so they don't filter themselves out)
+      // Team/Center Check
       if (userRole !== 'Agent') {
         const matchTeam = teamFilter === 'All' || teamFilter === 'All Teams' || a.team === teamFilter;
         const matchCenter = centerFilter === 'All' || centerFilter === 'All Centers' || a.center === centerFilter;
         if (!matchTeam || !matchCenter) return false;
       }
 
-      // 2. Joining Date Check (From Your Accurate Code)
+      // Joining Date Check
       const hrRec = hrRecords.find(h => h.cnic === a.cnic);
       const joinStr = hrRec?.joining_date || a.activeDate || a.active_date;
       const joinDate = parseDate(joinStr);
+      if (joinDate && joinDate.getTime() > cycleEnd.getTime()) return false;
 
-      if (joinDate && joinDate.getTime() > cycleEnd.getTime()) {
-        return false;
-      }
-
-      // 3. Left Date Check (From Your Accurate Code)
+      // Left Date Check
       if (a.status !== 'Promoted') {
-        const isLeft = a.status === 'Left' || hrRec?.status === 'Left';
+       const isInactive = ['Left', 'Terminated', 'NCNS'].includes(a.status) ||
+                          ['Left', 'Terminated', 'NCNS'].includes(hrRec?.status);
 
-        if (isLeft) {
+        if (isInactive) {
           const dateValue = a.leftDate || a.left_date || hrRec?.leftDate || hrRec?.left_date;
           const leaveDate = parseDate(dateValue);
-
-          if (leaveDate) {
-            // STRICT RULE: If they left strictly BEFORE the cycle started -> HIDE
-            if (leaveDate.getTime() < cycleStart.getTime()) {
-              return false;
-            }
-          } else {
-            // SAFETY: No date found -> Hide
-            return false;
-          }
+          // If they left strictly BEFORE the cycle started -> HIDE
+          if (leaveDate && leaveDate.getTime() < cycleStart.getTime()) return false;
+          if (!leaveDate) return false; // Safety
         }
       }
-
       return true;
     });
 
     // ---------------------------------------------------------
-    // STEP C: ACCURATE CALCULATIONS (Restored Loop Logic)
-    // ---------------------------------------------------------
-  // ---------------------------------------------------------
-    // STEP C: ACCURATE CALCULATIONS (Fixed Name Matching)
+    // STEP C: ACCURATE CALCULATIONS (Using Strings)
     // ---------------------------------------------------------
     const agentStats = filteredAgentsList.map(agent => {
-      // [FIX 1] Normalize Agent Name (Trim + Lowercase) for robust matching
-      // This ensures "Ali" matches "ali " or "ALI"
       const targetName = agent.name?.toString().trim().toLowerCase();
 
+      // [FIX] String Comparison for Sales
       const approvedSales = sales.filter(s => {
-        // [FIX 2] Normalize Sale Agent Name before comparing
         const saleName = s.agentName?.toString().trim().toLowerCase();
         const nameMatch = saleName === targetName;
+        const statusMatch = s.status === 'Sale' || ['HW- Xfer', 'HW-IBXfer', 'HW-Xfer-CDR'].includes(s.disposition);
         
-        // [FIX 3] Expanded Disposition Check (Added HW-Xfer-CDR just in case)
-        const statusMatch = s.status === 'Sale' || 
-                            ['HW- Xfer', 'HW-IBXfer', 'HW-Xfer-CDR'].includes(s.disposition);
-        
-        const dateMatch = new Date(s.date) >= start && new Date(s.date) <= end;
+        // ROBUST CHECK: Compare Strings directly
+        const dateMatch = s.date >= startStr && s.date <= endStr;
 
         return nameMatch && statusMatch && dateMatch;
       });
 
+      // [FIX] String Comparison for Attendance
       const agentAttendance = attendance.filter(att => {
-        // [FIX 4] Normalize Attendance Name too
         const attName = att.agentName?.toString().trim().toLowerCase();
-        const dateMatch = new Date(att.date) >= start && new Date(att.date) <= end;
+        // ROBUST CHECK: Compare Strings directly
+        const dateMatch = att.date >= startStr && att.date <= endStr;
         return attName === targetName && dateMatch;
       });
 
-      // Daily Breakdown (Restored Exact Loop from Your Code)
+      // Daily Breakdown Loop
       let dialingDays = 0;
       let daysOn0 = 0, daysOn1 = 0, daysOn2 = 0, daysOn3 = 0;
 
-      let loopDate = new Date(start);
-      while (loopDate <= end) {
+      let loopDate = new Date(startStr);
+      const loopEnd = new Date(endStr);
+
+      while (loopDate <= loopEnd) {
         const dateStr = loopDate.toISOString().split('T')[0];
 
-        // [RESTORED] Your exact calculation loop
+        // 1. Check Attendance (Exact String Match)
         const attRecord = agentAttendance.find(a => a.date === dateStr);
         const isMarkedPresent = attRecord && (attRecord.status === 'Present' || attRecord.status === 'Late');
+
+        // 2. Check Sales (Exact String Match)
         const dailySalesCount = approvedSales.filter(s => s.date === dateStr).length;
 
-        const isWorkingDay = isMarkedPresent || dailySalesCount > 0;
+        // 3. Check Holidays
+        const isHoliday = holidays.some(h => h.date === dateStr);
 
-        if (isWorkingDay) {
+        // A day is "Paid" if: Present OR Sales OR Holiday
+        const isPaidDay = isMarkedPresent || dailySalesCount > 0 || isHoliday;
+
+        if (isPaidDay) {
           dialingDays++;
-          if (dailySalesCount === 0) daysOn0++;
-          else if (dailySalesCount === 1) daysOn1++;
-          else if (dailySalesCount === 2) daysOn2++;
-          else if (dailySalesCount === 3) daysOn3++;
+          
+          if (dailySalesCount > 0) {
+            if (dailySalesCount === 1) daysOn1++;
+            else if (dailySalesCount === 2) daysOn2++;
+            else if (dailySalesCount >= 3) daysOn3++;
+          }
+          // Only count as "Zero Day" if it's NOT a holiday
+          else if (!isHoliday) {
+            daysOn0++;
+          }
         }
+        
+        // Next Day
         loopDate.setDate(loopDate.getDate() + 1);
       }
 
       // Financials
-      // [FIX 5] Fix Bonuses/Fines matching too
       const agentBonuses = bonuses.filter(b => b.agentName?.toString().trim().toLowerCase() === targetName && b.month === selectedMonth)
         .reduce((sum, b) => sum + (b.amount || 0), 0);
-        
       const agentFines = fines.filter(f => f.agentName?.toString().trim().toLowerCase() === targetName && f.month === selectedMonth)
         .reduce((sum, f) => sum + (f.amount || 0), 0);
 
@@ -1024,14 +1099,8 @@ const AgentPayrollSystem = () => {
         earnedBase = baseSalary;
       }
 
-      // [FIX 6] Fix HR Record matching
-      const hrRecord = hrRecords.find(h => 
-        (agent.cnic && h.cnic === agent.cnic) || 
-        (h.agent_name?.toString().trim().toLowerCase() === targetName)
-      );
-      
       const netSalary = earnedBase + agentBonuses - agentFines;
-
+      const hrRecord = hrRecords.find(h => (agent.cnic && h.cnic === agent.cnic) || (h.agent_name?.toString().trim().toLowerCase() === targetName));
       const finalLeftDate = agent.status === 'Promoted' ? null : (agent.leftDate || agent.left_date || hrRecord?.leftDate || null);
 
       return {
@@ -1041,8 +1110,7 @@ const AgentPayrollSystem = () => {
         designation: agent.designation || hrRecord?.designation || 'Agent',
         totalSales: approvedSales.length,
         lpd: dialingDays > 0 ? (approvedSales.length / dialingDays).toFixed(2) : "0.00",
-        dialingDays,
-        daysOn0, daysOn1, daysOn2, daysOn3,
+        dialingDays, daysOn0, daysOn1, daysOn2, daysOn3,
         totalFines: agentFines || 0,
         totalBonuses: agentBonuses || 0,
         daysPresent: dialingDays,
@@ -1053,9 +1121,9 @@ const AgentPayrollSystem = () => {
         accountNo: hrRecord?.account_number || '-'
       };
     });
-    // Sort Alphabetically (A-Z) by Name
+
     return agentStats.sort((a, b) => a.name.localeCompare(b.name));
-  }, [agents, sales, fines, bonuses, attendance, hrRecords, selectedMonth, teamFilter, centerFilter, userRole, currentUser]);
+  }, [agents, sales, fines, bonuses, attendance, hrRecords, selectedMonth, teamFilter, centerFilter, userRole, currentUser, holidays]);
 
   const managementStats = useMemo(() => {
     const agentRange = getPayrollRange(selectedMonth); // 21st - 20th
@@ -1101,32 +1169,39 @@ const AgentPayrollSystem = () => {
   }, [bonuses, searchQuery, selectedMonth, validAgentNames]);
 
   // 3. Dashboard Stats (Updated: Revenue -> Total Bonus)
+  // 3. Dashboard Stats (FIXED: Counts all sales & includes HW-Xfer-CDR)
   const dashboardStats = useMemo(() => {
     const { start, end } = getActiveDateRange;
 
-    // Only count agents matching the filter
-    const activeAgentCount = agents.filter(a => a.status === 'Active' && validAgentNames.has(a.name)).length;
+    // Filter sales by Date AND Team/Center (Ignore Agent Name to capture all revenue)
+    const relevantSales = sales.filter(s => {
+      // 1. Date Check
+      const dateMatch = s.date >= start && s.date <= end;
 
-    // Filter sales by Date
-    const relevantSales = sales.filter(s =>
-      validAgentNames.has(s.agentName) &&
-      (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer') &&
-      s.date >= start && s.date <= end
-    );
+      // 2. Team/Center Check (Use sale's own data to include HR/Managers)
+      const teamMatch = teamFilter === 'All' || teamFilter === 'All Teams' || s.team === teamFilter;
+      const centerMatch = centerFilter === 'All' || centerFilter === 'All Centers' || s.center === centerFilter;
+
+      // 3. Disposition Check (FIXED: Added HW-Xfer-CDR)
+      const isSale = s.status === 'Sale' ||
+        ['HW- Xfer', 'HW-IBXfer', 'HW-Xfer-CDR'].includes(s.disposition);
+
+      return dateMatch && teamMatch && centerMatch && isSale;
+    });
 
     const totalSalesCount = relevantSales.length;
 
-    // [CHANGED] Calculate Total Bonus (instead of Revenue)
-    // We use filteredBonuses which already respects the Team & Month filters
-
+    // Calculate Total Bonus
     const totalBonusPayout = filteredBonuses.reduce((sum, b) => sum + (b.amount || 0), 0);
 
-    // Payroll Calculation (Sum of Net Salaries)
-
+    // Payroll Calculation
     const totalPayroll = monthlyStats.reduce((sum, a) => sum + a.netSalary, 0);
 
+    // Active Agent Count
+    const activeAgentCount = agents.filter(a => a.status === 'Active').length;
+
     return { totalAgents: activeAgentCount, totalSalesCount, totalBonusPayout, totalPayroll };
-  }, [agents, sales, filteredBonuses, monthlyStats, getActiveDateRange, validAgentNames]);
+  }, [agents, sales, filteredBonuses, monthlyStats, getActiveDateRange, teamFilter, centerFilter, holidays]);
 
 
   // 4. Top Performers (Updated: Shows Real Bonus & Net Salary)
@@ -1156,7 +1231,7 @@ const AgentPayrollSystem = () => {
     });
 
     return stats.sort((a, b) => b.totalSales - a.totalSales);
-  }, [agents, sales, monthlyStats, getActiveDateRange, validAgentNames]);
+  }, [agents, sales, monthlyStats, getActiveDateRange, validAgentNames, holidays]);
 
   // 5. Sales Table (Smart Filter: Agents + HR Only)
   const filteredSales = useMemo(() => {
@@ -1213,24 +1288,48 @@ const AgentPayrollSystem = () => {
   }, [sales, searchQuery, getActiveDateRange, salesStatusFilter, teamFilter, centerFilter, userRole, currentUser, agents, hrRecords]);
 
   // MOVE THIS TO THE TOP LEVEL OF YOUR COMPONENT
+  // [FIXED] Sales Stats: Calculates from RAW Data (ignores search/status filters)
   const salesStats = useMemo(() => {
+    const { start, end } = getActiveDateRange;
     const stats = { unsuccessful: 0, dncDnq: 0, sales: 0, pending: 0 };
 
-    filteredSales.forEach(sale => {
+    sales.forEach(sale => {
+      // 1. Date Check
+      if (sale.date < start || sale.date > end) return;
+
+      // 2. Team & Center Check (Apply Global Filters)
+      if (teamFilter !== 'All' && teamFilter !== 'All Teams' && sale.team !== teamFilter) return;
+      if (centerFilter !== 'All' && centerFilter !== 'All Centers' && sale.center !== centerFilter) return;
+
+      // 3. Permission Check (If Agent, only show own sales)
+      if (userRole === 'Agent') {
+        const currentName = currentUser?.name || JSON.parse(localStorage.getItem('ams_user'))?.name;
+        if (sale.agentName !== currentName) return;
+      }
+
+      // 4. Calculate Stats (Includes ALL records, even if Agent is deleted)
       const disp = sale.disposition;
+
+      // Sales
       if (['HW- Xfer', 'HW-IBXfer', 'HW-Xfer-CDR'].includes(disp)) {
         stats.sales++;
-      } else if (['DNC', 'DNQ', 'DNQ-Webform'].includes(disp)) {
+      }
+      // DNC / DNQ
+      else if (['DNC', 'DNQ', 'DNQ-Dup', 'DNQ-Webform'].includes(disp)) {
         stats.dncDnq++;
-      } else if (['Review Pending', 'Pending Review'].includes(disp)) {
+      }
+      // Pending
+      else if (['Review Pending', 'Pending Review'].includes(disp)) {
         stats.pending++;
-      } else if (disp === 'Unsuccessful') {
+      }
+      // Unsuccessful
+      else if (disp === 'Unsuccessful' || disp === 'HUWT') {
         stats.unsuccessful++;
       }
     });
 
     return stats;
-  }, [filteredSales]);
+  }, [sales, getActiveDateRange, teamFilter, centerFilter, userRole, currentUser]);
 
   // 6. Attendance Table (Respects Team/Center)
   const filteredAttendance = useMemo(() => {
@@ -1305,6 +1404,45 @@ const AgentPayrollSystem = () => {
       return matchesSearch && matchesTeamCenter && matchesStatus && matchesDesignation;
     });
   }, [hrRecords, searchQuery, validAgentNames, teamFilter, centerFilter, agentStatusFilter, designationFilter]);
+
+  // --- HOLIDAY MANAGEMENT ---
+  const fetchHolidays = async () => {
+    const { data, error } = await supabase
+      .from('holidays')
+      .select('*')
+      .order('date', { ascending: true });
+    if (!error) setHolidays(data || []);
+  };
+
+  const handleAddHoliday = async () => {
+    if (!newHoliday.date || !newHoliday.name) return alert("Please fill in both date and name");
+
+    const { error } = await supabase
+      .from('holidays')
+      .insert([newHoliday]);
+
+    if (error) {
+      alert("Error adding holiday: " + error.message);
+    } else {
+      setNewHoliday({ date: '', name: '' }); // Reset form
+      fetchHolidays(); // Refresh list
+    }
+  };
+
+  const handleDeleteHoliday = async (id) => {
+    if (!window.confirm("Are you sure you want to remove this holiday?")) return;
+
+    const { error } = await supabase
+      .from('holidays')
+      .delete()
+      .eq('id', id);
+
+    if (!error) fetchHolidays();
+  };
+
+  // Add fetchHolidays to your initial useEffect so it loads on startup
+  // Look for: useEffect(() => { fetchAgents(); ... }, []);
+  // Add: fetchHolidays(); inside that list.
 
   const handleSaveAgent = async (e) => {
     e.preventDefault();
@@ -2601,8 +2739,8 @@ const AgentPayrollSystem = () => {
               key={tab.id}
               onClick={() => setActiveSubTab(tab.id)}
               className={`px-4 py-2 text-sm font-medium transition-colors ${activeSubTab === tab.id
-                  ? 'border-b-2 border-green-400 text-green-400'
-                  : 'text-slate-400 hover:text-white'
+                ? 'border-b-2 border-green-400 text-green-400'
+                : 'text-slate-400 hover:text-white'
                 }`}
             >
               {tab.label}
@@ -2634,16 +2772,15 @@ const AgentPayrollSystem = () => {
               <div>
                 <h1 className="text-xl font-bold text-white">Shark Management System</h1>
                 <div className="flex items-center gap-2 text-xs text-slate-400 mt-0.5">
-                  <span className={`px-2 py-0.5 rounded-full font-medium ${
-  userRole === 'SuperAdmin' ? 'bg-red-100 text-red-700 border border-red-200' : // Red for Super
-  userRole === 'Admin' ? 'bg-purple-100 text-purple-700' :                       // Purple for Admin
-  userRole === 'IT' ? 'bg-indigo-100 text-indigo-700' :                          // Indigo for IT
-  userRole === 'TL' ? 'bg-yellow-100 text-yellow-800' :                          // Yellow for Team Lead
-  userRole === 'QA' ? 'bg-orange-100 text-orange-700' :                          // Orange for QA
-  'bg-green-100 text-green-700'                                                  // Green for Agents
-}`}>
-  {userRole}
-</span>
+                  <span className={`px-2 py-0.5 rounded-full font-medium ${userRole === 'SuperAdmin' ? 'bg-red-100 text-red-700 border border-red-200' : // Red for Super
+                    userRole === 'Admin' ? 'bg-purple-100 text-purple-700' :                       // Purple for Admin
+                      userRole === 'IT' ? 'bg-indigo-100 text-indigo-700' :                          // Indigo for IT
+                        userRole === 'TL' ? 'bg-yellow-100 text-yellow-800' :                          // Yellow for Team Lead
+                          userRole === 'QA' ? 'bg-orange-100 text-orange-700' :                          // Orange for QA
+                            'bg-green-100 text-green-700'                                                  // Green for Agents
+                    }`}>
+                    {userRole}
+                  </span>
                   <span>• {currentUser?.name}</span>
                 </div>
               </div>
@@ -2661,16 +2798,16 @@ const AgentPayrollSystem = () => {
                 />
               </div>
 
-{/* Allow Admin, SuperAdmin, AND IT to manage access */}
-{['Admin', 'SuperAdmin'].includes(userRole) && (
-  <button
-    onClick={() => setShowAdminModal(true)}
-    className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm border border-slate-500 transition-colors mr-2"
-  >
-    <Shield className="w-4 h-4" />
-    Manage Access
-  </button>
-)}
+              {/* Allow Admin, SuperAdmin, AND IT to manage access */}
+              {['Admin', 'SuperAdmin'].includes(userRole) && (
+                <button
+                  onClick={() => setShowAdminModal(true)}
+                  className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm border border-slate-500 transition-colors mr-2"
+                >
+                  <Shield className="w-4 h-4" />
+                  Manage Access
+                </button>
+              )}
 
               <button
                 onClick={handleLogout}
@@ -2685,7 +2822,7 @@ const AgentPayrollSystem = () => {
       </div>
 
 
-{/* Navigation Tabs - Main Header Buttons */}
+      {/* Navigation Tabs - Main Header Buttons */}
       <div className="bg-slate-800 border-b border-slate-700">
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex gap-1 overflow-x-auto pb-2 scrollbar-hide">
@@ -2726,7 +2863,7 @@ const AgentPayrollSystem = () => {
               // 5. ADMIN / HR / QA: Existing Logic
               else {
                 if (tab === 'super_controls') return null; // Only SuperAdmin sees this
-                
+
                 // QA restrictions
                 if (userRole === 'QA' && ['payroll', 'employees', 'management'].includes(tab)) return null;
               }
@@ -2735,20 +2872,19 @@ const AgentPayrollSystem = () => {
                 <button
                   key={tab}
                   onClick={() => handleTabChange(tab)}
-                  className={`px-6 py-3 text-sm font-medium capitalize transition-colors whitespace-nowrap ${
-                    activeTab === tab
-                      ? tab === 'super_controls'
-                        ? 'border-b-2 border-purple-500 text-purple-400' // Special color for Super Tab
-                        : 'border-b-2 border-blue-400 text-blue-400'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
+                  className={`px-6 py-3 text-sm font-medium capitalize transition-colors whitespace-nowrap ${activeTab === tab
+                    ? tab === 'super_controls'
+                      ? 'border-b-2 border-purple-500 text-purple-400' // Special color for Super Tab
+                      : 'border-b-2 border-blue-400 text-blue-400'
+                    : 'text-slate-400 hover:text-white'
+                    }`}
                 >
                   {/* Display Name Logic */}
                   {tab === 'super_controls' ? 'Super Controls' : tab}
                 </button>
               );
             })}
-            
+
             {/* --- MANUAL BUTTONS REMOVED --- */}
             {/* The manual blocks for Employees, Bonuses, Fines, Management are deleted */}
             {/* because the loop above now creates them for you. */}
@@ -2776,15 +2912,15 @@ const AgentPayrollSystem = () => {
 
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-             {/* [UPDATED] Visible to all Management/Ops Roles */}
-{['Admin', 'SuperAdmin', 'HR', 'TL', 'IT'].includes(userRole) && (
-  <StatCard
-    icon={<Users className="w-6 h-6" />}
-    label="Active Agents"
-    value={dashboardStats.totalAgents}
-    color="blue"
-  />
-)}
+              {/* [UPDATED] Visible to all Management/Ops Roles */}
+              {['Admin', 'SuperAdmin', 'HR', 'TL', 'IT'].includes(userRole) && (
+                <StatCard
+                  icon={<Users className="w-6 h-6" />}
+                  label="Active Agents"
+                  value={dashboardStats.totalAgents}
+                  color="blue"
+                />
+              )}
 
               <StatCard
                 icon={<TrendingUp className="w-6 h-6" />}
@@ -2802,14 +2938,14 @@ const AgentPayrollSystem = () => {
               />
 
               {/* [UPDATED] Financials - Only for Admin, SuperAdmin, HR */}
-{['Admin', 'SuperAdmin', 'HR'].includes(userRole) && (
-  <StatCard
-    icon={<Calendar className="w-6 h-6" />}
-    label="Total Payroll"
-    value={`${(dashboardStats.totalPayroll / 1000).toFixed(0)}K PKR`}
-    color="orange"
-  />
-)}
+              {['Admin', 'SuperAdmin', 'HR'].includes(userRole) && (
+                <StatCard
+                  icon={<Calendar className="w-6 h-6" />}
+                  label="Total Payroll"
+                  value={`${(dashboardStats.totalPayroll / 1000).toFixed(0)}K PKR`}
+                  color="orange"
+                />
+              )}
             </div>
 
             {/* Top Performers Table */}
@@ -2893,7 +3029,7 @@ const AgentPayrollSystem = () => {
                 <div className="flex justify-between items-center">
                   <h2 className="text-xl font-semibold text-white">Agent Management</h2>
                   <div className="flex gap-3">
-                    {['Admin', 'SuperAdmin'].includes(userRole)&& (
+                    {['Admin', 'SuperAdmin'].includes(userRole) && (
                       <>
                         <button onClick={() => setShowAddCenterModal(true)} className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium">
                           <Plus className="w-4 h-4" /> Add Center
@@ -2953,7 +3089,7 @@ const AgentPayrollSystem = () => {
                         {/* [CHANGED] Renamed from "Active Date" to "Joining Date" */}
                         <th className="py-3 px-4 text-sm font-medium text-slate-200 text-center min-w-[120px]">Joining Date</th>
 
-                       {['Admin', 'SuperAdmin'].includes(userRole) && <th className="py-3 px-4 text-sm font-medium text-slate-200 text-center min-w-[140px]">Actions</th>}
+                        {['Admin', 'SuperAdmin'].includes(userRole) && <th className="py-3 px-4 text-sm font-medium text-slate-200 text-center min-w-[140px]">Actions</th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -3015,10 +3151,12 @@ const AgentPayrollSystem = () => {
                                   }} className="p-1.5 bg-blue-500/10 text-blue-400 rounded hover:bg-blue-500/20 transition-colors" title="Edit">
                                     <Pencil className="w-4 h-4" />
                                   </button>
-
-                                  <button onClick={() => agent.status === 'Active' ? handleMarkAsLeft(agent.cnic) : handleReactivateAgent(agent.cnic)}
-                                    className={`p-1.5 rounded transition-colors ${agent.status === 'Active' ? 'bg-orange-500/10 text-orange-400 hover:bg-orange-500/20' : 'bg-green-500/10 text-green-400 hover:bg-green-500/20'}`}>
-                                    {agent.status === 'Active' ? <UserX className="w-4 h-4" /> : <RotateCcw className="w-4 h-4" />}
+                                  <button
+                                    onClick={() => handleOpenLeaveModal(agent)}
+                                    className="text-red-400 hover:text-red-300 p-1 hover:bg-red-500/10 rounded transition-colors"
+                                    title="Mark as Left / Terminated"
+                                  >
+                                    <UserX className="w-5 h-5" />
                                   </button>
 
                                   <button onClick={() => handleDeleteAgent(agent.cnic)} className="p-1.5 bg-red-500/10 text-red-400 rounded hover:bg-red-500/20 transition-colors" title="Delete">
@@ -3383,7 +3521,7 @@ const AgentPayrollSystem = () => {
                         <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Dock Details</th>
                         <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Dock Reason</th> {/* NEW HEADER */}
                         <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Evaluator</th>
-                        {(userRole === 'Admin' || userRole === 'QA'|| userRole === 'SuperAdmin') && <th className="text-center py-4 px-3 text-xs font-bold text-slate-400 uppercase">Actions</th>}
+                        {(userRole === 'Admin' || userRole === 'QA' || userRole === 'SuperAdmin') && <th className="text-center py-4 px-3 text-xs font-bold text-slate-400 uppercase">Actions</th>}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-700">
@@ -3562,7 +3700,7 @@ const AgentPayrollSystem = () => {
                                 defaultValue={sale.dockDetails || ''}
 
                                 // --- 1. RESTRICTION: Disable if not Admin/QA ---
-                               disabled={!['Admin', 'QA', 'SuperAdmin'].includes(userRole)}
+                                disabled={!['Admin', 'QA', 'SuperAdmin'].includes(userRole)}
 
                                 onInput={(e) => {
                                   e.target.value = e.target.value.replace(/\D/g, '');
@@ -3822,9 +3960,10 @@ const AgentPayrollSystem = () => {
                                     const joinDate = joinDateStr ? new Date(joinDateStr) : null;
                                     if (joinDate) joinDate.setHours(0, 0, 0, 0);
 
-                                    const isLeft = stat.status === 'Left';
-                                    const rowClass = isLeft ? 'bg-red-900/10 hover:bg-red-900/20' : 'hover:bg-blue-900/10';
-                                    const nameClass = isLeft ? 'text-red-400' : 'text-slate-200';
+                                    // [NEW CODE] - Checks for ANY inactive status (Left, Terminated, NCNS)
+                                    const isInactive = stat.status !== 'Active' && stat.status !== 'Promoted';
+                                    const rowClass = isInactive ? 'bg-red-900/10 hover:bg-red-900/20' : 'hover:bg-blue-900/10';
+                                    const nameClass = isInactive ? 'text-red-400' : 'text-slate-200';
 
                                     return (
                                       <tr key={stat.id} className={`${rowClass} transition-colors group`}>
@@ -3837,9 +3976,9 @@ const AgentPayrollSystem = () => {
                                               PROMOTED TO {stat.designation.toUpperCase()}
                                             </div>
                                           ) : (
-                                            isLeft && (
-                                              <div className="text-[9px] text-red-500/80 font-mono mt-0.5">
-                                                LEFT: {stat.leftDate || 'N/A'}
+                                            isInactive && (
+                                              <div className="text-[9px] text-red-500/80 font-mono mt-0.5 font-bold">
+                                                {stat.status.toUpperCase()}: {stat.leftDate || 'N/A'}
                                               </div>
                                             )
                                           )}
@@ -4439,12 +4578,23 @@ const AgentPayrollSystem = () => {
                       className="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
                     />
 
+
+
                     {['Admin', 'SuperAdmin'].includes(userRole) && (
                       <button
                         onClick={() => { setImportType('attendance'); setShowImportModal(true); }}
                         className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors text-sm font-medium shadow-lg shadow-blue-900/20"
                       >
                         <Upload className="w-4 h-4" /> Import CSV
+                      </button>
+                    )}
+                    {['Admin', 'HR', 'SuperAdmin'].includes(userRole) && (
+                      <button
+                        onClick={() => { setShowHolidayModal(true); fetchHolidays(); }}
+                        className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition-colors"
+                      >
+                        <Calendar className="w-4 h-4" />
+                        Holidays
                       </button>
                     )}
                   </div>
@@ -4654,6 +4804,32 @@ const AgentPayrollSystem = () => {
             {attendanceSubTab === 'matrix' && (
               <div className="space-y-6">
 
+                {/* 1. [NEW] SEARCH & FILTER BAR */}
+                <div className="bg-slate-800 rounded-xl shadow-sm border border-slate-600 p-4">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <input
+                      type="text"
+                      placeholder="Search agent name..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <select value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
+                      <option value="All">All Teams</option>
+                      {teams.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                    <select value={centerFilter} onChange={(e) => setCenterFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
+                      <option value="All">All Centers</option>
+                      {centers.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    <select value={agentStatusFilter} onChange={(e) => setAgentStatusFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
+                      <option value="All">All Status</option>
+                      <option value="Active">Active</option>
+                      <option value="Left">Left / Terminated / Inactive</option>
+                    </select>
+                  </div>
+                </div>
+
                 <div className="bg-slate-900 rounded-xl border border-slate-700 shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
                   <div className="overflow-auto relative">
                     <table className="w-full text-slate-300 border-collapse table-fixed">
@@ -4663,8 +4839,6 @@ const AgentPayrollSystem = () => {
                         <tr className="bg-slate-950">
                           <th className="p-3 text-center border-b border-r border-slate-800 sticky left-0 z-50 bg-slate-950 w-12">No.</th>
                           <th className="p-3 text-left border-b border-r border-slate-800 sticky left-12 z-50 bg-slate-950 w-44">Agent Name</th>
-
-                          {/* Attendance Metrics */}
                           <th className="p-2 text-center border-b border-slate-800 bg-green-900/20 text-green-400 text-[10px] font-bold w-10" title="Days Present">P</th>
                           <th className="p-2 text-center border-b border-slate-800 bg-yellow-900/20 text-yellow-400 text-[10px] font-bold w-10" title="Days Late">L</th>
                           <th className="p-2 text-center border-b border-r border-slate-800 bg-red-900/20 text-red-400 text-[10px] font-bold w-10" title="Days Absent">A</th>
@@ -4680,8 +4854,6 @@ const AgentPayrollSystem = () => {
                               </th>
                             );
                           })}
-
-                          {/* Summary Column */}
                           <th className="p-3 text-center bg-slate-950 border-b border-l border-slate-800 font-bold text-yellow-400 sticky right-0 z-40 w-20 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
                             LATE %
                           </th>
@@ -4693,70 +4865,61 @@ const AgentPayrollSystem = () => {
                           const { start, end } = getPayrollRange(selectedMonth);
                           const dateArray = getDaysArray(start, end);
 
-                          let filteredAgents = agents;
-                          if (userRole === 'Agent') {
-                            const loggedInCnic = currentUser?.cnic || JSON.parse(localStorage.getItem('ams_user'))?.cnic;
-                            filteredAgents = agents.filter(a => a.cnic === loggedInCnic);
-                          }
+                          // 2. [UPDATED] FILTERING LOGIC
+                          let filteredAgents = agents.filter(a => {
+                            // Permission: If Agent, only show self
+                            if (userRole === 'Agent') {
+                              const loggedInCnic = currentUser?.cnic || JSON.parse(localStorage.getItem('ams_user'))?.cnic;
+                              if (a.cnic !== loggedInCnic) return false;
+                            }
 
+                            // Search
+                            const matchesSearch = !searchQuery || (a.name && a.name.toLowerCase().includes(searchQuery.toLowerCase()));
+                            // Team
+                            const matchesTeam = teamFilter === 'All' || a.team === teamFilter;
+                            // Center
+                            const matchesCenter = centerFilter === 'All' || a.center === centerFilter;
+                            // Status (Active vs Inactive)
+                            const matchesStatus = agentStatusFilter === 'All' ||
+                              (agentStatusFilter === 'Active' ? a.status === 'Active' : a.status !== 'Active');
 
-                          // --- HELPER: Convert 24h to 12h (HH:MM PM) ---
+                            return matchesSearch && matchesTeam && matchesCenter && matchesStatus;
+                          });
+
+                          // --- HELPERS ---
                           const formatTo12Hour = (timeStr) => {
                             if (!timeStr) return '';
-
-                            // Split "18:34:00" into ["18", "34", "00"]
                             const [h, m] = timeStr.toString().split(':');
-                            if (!h || !m) return timeStr; // Return original if invalid
-
+                            if (!h || !m) return timeStr;
                             let hours = parseInt(h);
                             const ampm = hours >= 12 ? 'PM' : 'AM';
-
-                            // Convert 24h to 12h
                             hours = hours % 12;
-                            hours = hours ? hours : 12; // Handle midnight (0 -> 12)
-
+                            hours = hours ? hours : 12;
                             return `${hours}:${m} ${ampm}`;
                           };
 
-                          // --- HELPER: Calculate Late Status (Based on 7:00 PM / 19:00 Start) ---
                           const getLateStatus = (timeStr) => {
                             if (!timeStr) return { isLate: false, color: 'text-green-400' };
-
                             const [h, m] = timeStr.toString().split(':').map(Number);
-
-                            // 1. Convert Login Time to Minutes
                             let loginMins = h * 60 + m;
-
-                            // 2. Handle Night Shift Crossing (e.g., 01:00 AM counts as 25:00)
-                            // If hour is 0-11 (AM), add 24 hours (1440 mins) to compare correctly against 19:00
                             if (h < 12) loginMins += 1440;
-
-                            // 3. Define Shift Start (19:00 = 1140 mins)
                             const shiftStartMins = 19 * 60;
-
                             const diff = loginMins - shiftStartMins;
-
-                            // 4. Determine Color & Status
-                            if (diff <= 0) {
-                              return { isLate: false, color: 'text-green-400' }; // On Time
-                            } else if (diff <= 10) {
-                              return { isLate: true, color: 'text-yellow-400 font-bold' }; // Late <= 10 mins
-                            } else {
-                              return { isLate: true, color: 'text-red-500 font-bold' }; // Late > 10 mins
-                            }
+                            if (diff <= 0) return { isLate: false, color: 'text-green-400' };
+                            else if (diff <= 10) return { isLate: true, color: 'text-yellow-400 font-bold' };
+                            else return { isLate: true, color: 'text-red-500 font-bold' };
                           };
 
-                          // Get Unique Teams
                           const uniqueTeams = [...new Set([...teams, ...filteredAgents.map(a => a.team)])].filter(Boolean).sort();
 
                           return uniqueTeams.map(teamName => {
-                            // Filter Agents by Team (using filtered list)
                             const teamAgents = filteredAgents
-                              .filter(a => a.team === teamName && a.status === 'Active')
-                              .sort((a, b) => a.name.localeCompare(b.name)); // <--- Added Sort Here
+                              .filter(a => a.team === teamName)
+                              .sort((a, b) => a.name.localeCompare(b.name));
+
                             if (teamAgents.length === 0) return null;
 
-                            // --- TEAM SUMMARY CALCULATIONS ---
+                            // --- TEAM SUMMARY ---
                             const teamTotalPresent = teamAgents.reduce((sum, agent) => {
                               return sum + attendance.filter(a =>
                                 a.agentName?.toString().trim().toLowerCase() === agent.name?.toString().trim().toLowerCase() &&
@@ -4773,7 +4936,6 @@ const AgentPayrollSystem = () => {
 
                             return (
                               <React.Fragment key={teamName}>
-                                {/* --- TEAM ROW (Hide for Agent users) --- */}
                                 {userRole !== 'Agent' && (
                                   <tr className="bg-slate-800/80 sticky top-[53px] z-30">
                                     <td colSpan={2} className="p-2 px-4 border-r border-slate-700 font-black text-blue-400 uppercase tracking-widest text-sm sticky left-0 z-30 bg-slate-800">
@@ -4782,89 +4944,80 @@ const AgentPayrollSystem = () => {
                                     <td className="text-center font-bold text-green-500/50 bg-slate-800 text-[10px]">{teamTotalPresent}</td>
                                     <td className="text-center font-bold text-yellow-500/50 bg-slate-800 text-[10px]">{teamTotalLate}</td>
                                     <td className="text-center bg-slate-800 border-r border-slate-700"></td>
-
-                                    {/* Team Daily Breakdown (Count of people present that day) */}
                                     {dateArray.map(d => {
                                       const dailyPresentCount = attendance.filter(a =>
                                         a.date === d &&
                                         a.status === 'Present' &&
                                         teamAgents.some(agent => agent.name === a.agentName)
                                       ).length;
-
                                       return (
                                         <td key={d} className={`text-center text-[10px] border-b border-slate-700 font-bold ${dailyPresentCount > 0 ? 'text-blue-300 bg-blue-500/10' : 'text-slate-600 bg-slate-800/30'}`}>
                                           {dailyPresentCount > 0 ? dailyPresentCount : '-'}
                                         </td>
                                       );
                                     })}
-
-                                    <td className="text-center font-black text-slate-500 sticky right-0 z-30 bg-slate-800 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
-                                      -
-                                    </td>
+                                    <td className="text-center font-black text-slate-500 sticky right-0 z-30 bg-slate-800 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">-</td>
                                   </tr>
                                 )}
 
                                 {/* --- AGENT ROWS --- */}
                                 {teamAgents.map((agent, idx) => {
-                                  // Join Date Logic
                                   const hrRec = hrRecords.find(h => h.cnic === agent.cnic) || {};
                                   const joinDateStr = hrRec.joining_date || agent.activeDate;
                                   const joinDate = joinDateStr ? new Date(joinDateStr) : null;
                                   if (joinDate) joinDate.setHours(0, 0, 0, 0);
 
-                                  // Metrics Calculation
-                                  // --- AGENT METRICS ---
-                                  // The Fix: Normalize both names before matching
                                   const agentRecs = attendance.filter(a =>
                                     a.agentName?.toString().trim().toLowerCase() === agent.name?.toString().trim().toLowerCase()
                                   );
                                   const presentCount = agentRecs.filter(a => a.status === 'Present').length;
                                   const lateCount = agentRecs.filter(a =>
                                     a.status === 'Present' &&
-                                    getLateStatus(a.loginTime).isLate // <--- USES NEW HELPER
+                                    getLateStatus(a.loginTime).isLate
                                   ).length;
 
-                                  // Absent Calc: Working days passed since join date where no attendance found
                                   let absentCount = 0;
                                   dateArray.forEach(dStr => {
                                     const dObj = new Date(dStr);
                                     dObj.setHours(0, 0, 0, 0);
-                                    // Skip weekends
                                     if (dObj.getDay() === 0 || dObj.getDay() === 6) return;
-                                    // Skip future
                                     if (dObj > new Date()) return;
-                                    // Skip before joined
                                     if (joinDate && dObj < joinDate) return;
 
                                     const hasRec = agentRecs.some(a => a.date === dStr);
                                     if (!hasRec) absentCount++;
                                     else if (agentRecs.find(a => a.date === dStr).status === 'Absent') absentCount++;
                                   });
-
                                   const latePercentage = presentCount > 0 ? Math.round((lateCount / presentCount) * 100) : 0;
 
+                                  // [NEW] Visual for Inactive (Left/Terminated)
+                                  const isInactive = agent.status !== 'Active';
+                                  const rowClass = isInactive ? 'bg-red-900/10 hover:bg-red-900/20' : 'hover:bg-blue-900/10';
+                                  const nameClass = isInactive ? 'text-red-400' : 'text-slate-200';
+
                                   return (
-                                    <tr key={agent.id} className="hover:bg-blue-900/10 transition-colors group">
+                                    <tr key={agent.id} className={`${rowClass} transition-colors group`}>
                                       <td className="p-2 text-center border-r border-slate-800 bg-slate-900 text-slate-600 font-mono text-[10px] sticky left-0 z-10 group-hover:text-white">{idx + 1}</td>
 
-                                      <td className="p-2 px-3 font-medium border-r border-slate-800 bg-slate-900 sticky left-12 z-10 truncate text-xs text-slate-200">
-                                        {agent.name}
+                                      <td className="p-2 px-3 font-medium border-r border-slate-800 bg-slate-900 sticky left-12 z-10 truncate text-xs">
+                                        <div className={nameClass}>{agent.name}</div>
+                                        {/* [NEW] Status Label */}
+                                        {isInactive && (
+                                          <div className="text-[9px] text-red-500/80 font-mono mt-0.5 font-bold">
+                                            {agent.status.toUpperCase()}: {agent.leftDate || agent.left_date || 'N/A'}
+                                          </div>
+                                        )}
                                       </td>
 
                                       <td className="p-1 text-center border-b border-slate-800 text-green-400 font-bold text-[10px]">{presentCount}</td>
                                       <td className="p-1 text-center border-b border-slate-800 text-yellow-400 font-bold text-[10px]">{lateCount}</td>
                                       <td className="p-1 text-center border-b border-r border-slate-800 text-red-400 font-bold text-[10px]">{absentCount}</td>
 
-                                      {/* Daily Cells */}
                                       {dateArray.map(dateStr => {
                                         const currentDate = new Date(dateStr);
                                         currentDate.setHours(0, 0, 0, 0);
                                         const isWeekend = currentDate.getDay() === 0 || currentDate.getDay() === 6;
-
-                                        // 1. Before Join?
                                         const isBeforeJoining = joinDate && currentDate < joinDate;
-
-                                        // 2. Find Record
                                         const record = agentRecs.find(a => a.date === dateStr);
 
                                         let cellContent = '-';
@@ -4873,46 +5026,34 @@ const AgentPayrollSystem = () => {
                                         if (isBeforeJoining) {
                                           cellContent = '•';
                                           cellClass = 'text-slate-800';
-                                        }
-                                        else if (record) {
+                                        } else if (record) {
                                           if (record.status === 'Absent') {
                                             cellContent = 'A';
                                             cellClass = 'bg-red-500/10 text-red-500 font-bold';
                                           } else {
-                                            // 1. Format Time to 12h
                                             cellContent = formatTo12Hour(record.loginTime) || 'OK';
-
-                                            // 2. Calculate Color Dynamically
-                                            // We use the helper to decide Yellow vs Red vs Green
                                             const status = getLateStatus(record.loginTime);
-
                                             if (status.isLate) {
-                                              // Use the color returned by getLateStatus (Yellow or Red)
                                               cellClass = `bg-slate-800/50 ${status.color} font-mono text-[10px]`;
                                             } else {
-                                              // On Time (Green)
                                               cellClass = 'text-green-400 font-mono text-[10px]';
                                             }
                                           }
                                         } else {
-                                          // No Record
                                           if (isWeekend) {
                                             cellContent = '';
                                             cellClass = 'bg-slate-800/30';
                                           } else if (currentDate <= new Date()) {
-                                            cellContent = 'A'; // Marked absent if workday passed with no scan
+                                            cellContent = 'A';
                                             cellClass = 'text-red-500/50 font-bold';
                                           }
                                         }
-
                                         return (
                                           <td key={dateStr} className={`p-1 text-center border-b border-slate-800 text-[11px] ${cellClass}`}>
                                             {cellContent}
                                           </td>
                                         );
                                       })}
-
-                                      {/* Row Summary */}
                                       <td className={`p-2 text-center font-bold sticky right-0 z-10 bg-slate-900 shadow-[-4px_0_10px_rgba(0,0,0,0.5)] ${latePercentage > 20 ? 'text-red-400' : 'text-slate-400'}`}>
                                         {latePercentage}%
                                       </td>
@@ -4925,23 +5066,16 @@ const AgentPayrollSystem = () => {
                         })()}
                       </tbody>
 
-                      {/* --- FOOTER --- */}
                       <tfoot className="sticky bottom-0 z-40 shadow-[0_-4px_10px_rgba(0,0,0,0.5)]">
                         <tr className="bg-slate-950 border-t-2 border-purple-500 font-black text-white">
                           <td colSpan={2} className="p-3 text-left sticky left-0 bg-slate-950 z-50 uppercase tracking-tighter">Grand Total</td>
-
-                          {/* Grand Metrics */}
                           <td className="text-center text-green-400 bg-slate-950 text-[10px]">
                             {attendance.filter(a => a.status === 'Present').length}
                           </td>
                           <td className="text-center text-yellow-400 bg-slate-950 text-[10px]">
                             {attendance.filter(a => a.late === true).length}
                           </td>
-                          <td className="text-center text-red-400 bg-slate-950 border-r border-slate-800 text-[10px]">
-                            -
-                          </td>
-
-                          {/* Daily Grand Totals */}
+                          <td className="text-center text-red-400 bg-slate-950 border-r border-slate-800 text-[10px]">-</td>
                           {getDaysArray(getPayrollRange(selectedMonth).start, getPayrollRange(selectedMonth).end).map(d => {
                             const dailyTotal = attendance.filter(a => a.date === d && a.status === 'Present').length;
                             return (
@@ -4950,10 +5084,7 @@ const AgentPayrollSystem = () => {
                               </td>
                             );
                           })}
-
-                          <td className="p-3 text-center text-purple-400 text-lg sticky right-0 bg-slate-950 z-50 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
-                            -
-                          </td>
+                          <td className="p-3 text-center text-purple-400 text-lg sticky right-0 bg-slate-950 z-50 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">-</td>
                         </tr>
                       </tfoot>
                     </table>
@@ -5156,12 +5287,38 @@ const AgentPayrollSystem = () => {
                     </thead>
                     <tbody>
                       {displayedPayroll.map((agent, idx) => (
-                        <tr key={agent.id} className="border-b border-slate-700 hover:bg-slate-700">
+                        <tr
+                          key={agent.id}
+                          className={`transition-colors border-b border-slate-800 ${['Left', 'Terminated', 'NCNS'].includes(agent.status)
+                              ? 'bg-red-900/10 hover:bg-red-900/20'
+                              : 'hover:bg-slate-800/50'
+                            }`}
+                        >
                           <td className="py-3 px-4 text-slate-300">{idx + 1}</td>
                           <td className="py-3 px-4 font-medium text-white">
                             {agent.name}
-                            <div className={`text-[10px] mt-0.5 ${agent.status === 'Active' ? 'text-green-400' : 'text-red-400'}`}>
-                              {agent.status}</div>
+
+                            {/* [UPDATED] Dynamic Status Label (Matches Matrix Style) */}
+                            {(() => {
+                              // Check if agent is inactive
+                              const isInactive = ['Left', 'Terminated', 'NCNS'].includes(agent.status);
+
+                              if (isInactive) {
+                                // Show RED label with Date for inactive agents
+                                return (
+                                  <div className="text-[9px] text-red-500 font-mono mt-0.5 font-bold uppercase">
+                                    {agent.status}: {agent.leftDate || agent.left_date || 'N/A'}
+                                  </div>
+                                );
+                              }
+
+                              // Show simple GREEN label for active agents
+                              return (
+                                <div className="text-[10px] text-green-400/60 mt-0.5">
+                                  Active
+                                </div>
+                              );
+                            })()}
                           </td>
 
                           {/* Bank Details Cell */}
@@ -5719,7 +5876,7 @@ const AgentPayrollSystem = () => {
                         <th className="px-4 py-3 text-right">Action</th>
                       </tr>
                     </thead>
-                  <tbody className="divide-y divide-slate-700 bg-slate-900">
+                    <tbody className="divide-y divide-slate-700 bg-slate-900">
                       {adminList
                         .filter(admin => {
                           // [FIX] Hide SuperAdmin from everyone else
@@ -5729,44 +5886,44 @@ const AgentPayrollSystem = () => {
                           return true;
                         })
                         .map((admin) => (
-                        <tr key={admin.id} className="hover:bg-slate-800">
-                          <td className="px-4 py-3 font-medium text-white">{admin.name}</td>
-                          <td className="px-4 py-3">
-                            <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${admin.role === 'Admin' ?
-                              'bg-purple-500/20 text-purple-400' :
-                              admin.role === 'HR' ?
-                                'bg-orange-500/20 text-orange-400' :
-                                'bg-blue-500/20 text-blue-400'
-                              }`}>
-                              {admin.role}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-slate-500 font-mono text-xs">{admin.password}</td>
-                          <td className="px-4 py-3 text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              {/* Edit Password Button */}
-                              <button
-                                onClick={() => handleUpdateAdminPassword(admin.id, admin.name)}
-                                className="text-blue-400 hover:text-blue-300 p-1 rounded hover:bg-blue-500/10 transition-colors"
-                                title="Change Password"
-                              >
-                                <Pencil className="w-4 h-4" />
-                              </button>
-
-                              {/* Delete Button - Hidden for 'Admin' and 'SuperAdmin' */}
-                              {(admin.name !== 'Admin' && admin.role !== 'SuperAdmin') && (
+                          <tr key={admin.id} className="hover:bg-slate-800">
+                            <td className="px-4 py-3 font-medium text-white">{admin.name}</td>
+                            <td className="px-4 py-3">
+                              <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${admin.role === 'Admin' ?
+                                'bg-purple-500/20 text-purple-400' :
+                                admin.role === 'HR' ?
+                                  'bg-orange-500/20 text-orange-400' :
+                                  'bg-blue-500/20 text-blue-400'
+                                }`}>
+                                {admin.role}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-slate-500 font-mono text-xs">{admin.password}</td>
+                            <td className="px-4 py-3 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                {/* Edit Password Button */}
                                 <button
-                                  onClick={() => handleDeleteAdmin(admin.id)}
-                                  className="text-red-400 hover:text-red-300 p-1 rounded hover:bg-red-500/10 transition-colors"
-                                  title="Revoke Access"
+                                  onClick={() => handleUpdateAdminPassword(admin.id, admin.name)}
+                                  className="text-blue-400 hover:text-blue-300 p-1 rounded hover:bg-blue-500/10 transition-colors"
+                                  title="Change Password"
                                 >
-                                  <Trash2 className="w-4 h-4" />
+                                  <Pencil className="w-4 h-4" />
                                 </button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
+
+                                {/* Delete Button - Hidden for 'Admin' and 'SuperAdmin' */}
+                                {(admin.name !== 'Admin' && admin.role !== 'SuperAdmin') && (
+                                  <button
+                                    onClick={() => handleDeleteAdmin(admin.id)}
+                                    className="text-red-400 hover:text-red-300 p-1 rounded hover:bg-red-500/10 transition-colors"
+                                    title="Revoke Access"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
                     </tbody>
                   </table>
                 </div>
@@ -5932,8 +6089,160 @@ const AgentPayrollSystem = () => {
         </div>
       )}
 
+      {/* --- HOLIDAY MANAGEMENT MODAL --- */}
+      {showHolidayModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-slate-800 rounded-xl max-w-lg w-full border border-slate-700 shadow-2xl">
+
+            {/* Header */}
+            <div className="p-6 border-b border-slate-700 flex justify-between items-center">
+              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-purple-400" />
+                Manage Holidays
+              </h2>
+              <button onClick={() => setShowHolidayModal(false)} className="text-slate-400 hover:text-white">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-6">
+
+              {/* Add New Form */}
+              <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700 space-y-4">
+                <h3 className="text-sm font-medium text-slate-300 uppercase tracking-wider">Add New Holiday</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">Date</label>
+                    <input
+                      type="date"
+                      value={newHoliday.date}
+                      onChange={(e) => setNewHoliday({ ...newHoliday, date: e.target.value })}
+                      className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:border-purple-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">Holiday Name</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Eid-ul-Fitr"
+                      value={newHoliday.name}
+                      onChange={(e) => setNewHoliday({ ...newHoliday, name: e.target.value })}
+                      className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:border-purple-500"
+                    />
+                  </div>
+                </div>
+                <button
+                  onClick={handleAddHoliday}
+                  className="w-full py-2 bg-purple-600 hover:bg-purple-500 text-white rounded font-medium transition-colors"
+                >
+                  Add Holiday
+                </button>
+              </div>
+
+              {/* List of Existing Holidays */}
+              <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
+                <h3 className="text-sm font-medium text-slate-300 uppercase tracking-wider mb-2">Upcoming Holidays</h3>
+                {holidays.length === 0 ? (
+                  <p className="text-slate-500 text-sm italic">No holidays added yet.</p>
+                ) : (
+                  holidays.map((h) => (
+                    <div key={h.id} className="flex justify-between items-center bg-slate-700/50 p-3 rounded border border-slate-700">
+                      <div>
+                        <div className="text-white font-medium">{h.name}</div>
+                        <div className="text-xs text-slate-400">{new Date(h.date).toLocaleDateString()}</div>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteHoliday(h.id)}
+                        className="text-red-400 hover:text-red-300 p-2 hover:bg-red-500/10 rounded"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- [NEW] LEAVE / TERMINATION MODAL --- */}
+      {showLeaveModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
+          <div className="bg-slate-800 rounded-xl max-w-md w-full border border-slate-700 shadow-2xl p-6">
+
+            <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+              <UserX className="text-red-400" />
+              Mark Employee as Left
+            </h3>
+
+            <p className="text-slate-400 mb-6">
+              Update status for <span className="text-white font-bold">{leaveForm.name}</span>.
+            </p>
+
+            <div className="space-y-4">
+
+              {/* 1. Select Status */}
+              <div>
+                <label className="block text-xs text-slate-500 uppercase font-bold mb-2">Select Status</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {['Left', 'Terminated', 'NCNS'].map((status) => (
+                    <button
+                      key={status}
+                      onClick={() => setLeaveForm({ ...leaveForm, status })}
+                      className={`px-3 py-2 rounded text-sm font-medium border transition-colors ${leaveForm.status === status
+                          ? 'bg-red-600 border-red-500 text-white'
+                          : 'bg-slate-700 border-slate-600 text-slate-300 hover:bg-slate-600'
+                        }`}
+                    >
+                      {status}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 2. Select Date */}
+              <div>
+                <label className="block text-xs text-slate-500 uppercase font-bold mb-2">Exit Date</label>
+                <input
+                  type="date"
+                  value={leaveForm.date}
+                  onChange={(e) => setLeaveForm({ ...leaveForm, date: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-red-500"
+                />
+                <p className="text-xs text-slate-500 mt-1">
+                  * You can select a past date.
+                </p>
+              </div>
+
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3 mt-8">
+              <button
+                onClick={() => setShowLeaveModal(false)}
+                className="flex-1 py-2 text-slate-400 hover:text-white transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmAgentLeave}
+                className="flex-1 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-medium shadow-lg shadow-red-900/20"
+              >
+                Confirm Update
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
     </div> // <--- THIS must be the very last line before );
   );
 };
 
 export default AgentPayrollSystem;
+
+// Editing Payroll tab Status
