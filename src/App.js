@@ -20,7 +20,7 @@ import * as XLSX from 'xlsx';
 import {
   Users, Edit, DollarSign, Calendar, AlertCircle, TrendingUp, Download,
   Plus, X, Upload, LogOut, Lock, Clock,
-  Pencil, Trash2, UserX, Shield, RotateCcw,
+  Pencil, Trash2, UserX, Shield, RotateCcw, Settings,
   CheckCircle, XCircle, ThumbsDown, AlertTriangle// <--- ENSURE THESE ARE HERE
 } from 'lucide-react';
 
@@ -164,6 +164,16 @@ const AgentPayrollSystem = () => {
   const [showAddTeamModal, setShowAddTeamModal] = useState(false);
   const [showAddCenterModal, setShowAddCenterModal] = useState(false);
 
+  // --- GOAL SETTINGS STATE ---
+  const [showGoalModal, setShowGoalModal] = useState(false);
+  const [goalRules, setGoalRules] = useState([
+    { id: 1, min: 0, max: 39999, goal: 3 },
+    { id: 2, min: 40000, max: 59999, goal: 4 },
+    { id: 3, min: 60000, max: 79999, goal: 6 },
+    { id: 4, min: 80000, max: 99999, goal: 8 },
+    { id: 5, min: 100000, max: 999999999, goal: 10 }
+  ]);
+
   // [SMART DATE STATE] Automatically detects Jan 2026 cycle if today > Dec 20
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const today = new Date();
@@ -281,7 +291,6 @@ const AgentPayrollSystem = () => {
     setShowLeaveModal(true);
   };
 
-  // Submit the change to Supabase
   // Submit the change to Supabase
   const confirmAgentLeave = async () => {
     if (!leaveForm.date) return alert("Please select a date.");
@@ -733,7 +742,7 @@ const AgentPayrollSystem = () => {
   }, [isLoggedIn, currentUser, userRole]);
 
   // --- MANAGEMENT PAYROLL STATS (Fixed Date Parsing + Visibility) ---
- const managementPayrollStats = useMemo(() => {
+  const managementPayrollStats = useMemo(() => {
     // 1. ROBUST DATE PARSING
     let year, month;
 
@@ -742,10 +751,10 @@ const AgentPayrollSystem = () => {
       year = parseInt(parts[0]);
       month = parseInt(parts[1]);
     } else {
-      const dateObj = new Date(Date.parse(`1 ${selectedMonth}`)); 
+      const dateObj = new Date(Date.parse(`1 ${selectedMonth}`));
       if (!isNaN(dateObj.getTime())) {
         year = dateObj.getFullYear();
-        month = dateObj.getMonth() + 1; 
+        month = dateObj.getMonth() + 1;
       } else {
         const now = new Date();
         year = now.getFullYear();
@@ -753,7 +762,7 @@ const AgentPayrollSystem = () => {
       }
     }
 
-    const currentMonthStr = `${year}-${String(month).padStart(2, '0')}`; 
+    const currentMonthStr = `${year}-${String(month).padStart(2, '0')}`;
 
     if (isNaN(year) || isNaN(month)) return { standard: [], agentCycle: [] };
 
@@ -765,11 +774,11 @@ const AgentPayrollSystem = () => {
       let curDate = new Date(start);
       // Ensure we don't mutate the original start date object if passed elsewhere
       curDate = new Date(curDate.getTime());
-      
+
       while (curDate <= end) {
         const dayOfWeek = curDate.getDay();
         // [FIX] Only exclude Sunday (0). Allow Saturday (6).
-        if (dayOfWeek !== 0) { 
+        if (dayOfWeek !== 0) {
           count++;
         }
         curDate.setDate(curDate.getDate() + 1);
@@ -828,11 +837,11 @@ const AgentPayrollSystem = () => {
 
       // C. Get Attendance (Scans + Holidays)
       const empAttRecords = attendanceMap.get(empNameKey) || [];
-      
+
       // 1. Count Actual Scans
       const scannedPresent = empAttRecords.filter(a => {
         const d = new Date(a.date);
-        d.setHours(0,0,0,0);
+        d.setHours(0, 0, 0, 0);
         return d >= cycleStart && d <= cycleEnd && (a.status === 'Present' || a.status === 'Late');
       }).length;
 
@@ -840,24 +849,24 @@ const AgentPayrollSystem = () => {
       let paidHolidays = 0;
       // joining date check
       const joinDate = emp.joining_date ? new Date(emp.joining_date) : null;
-      if (joinDate) joinDate.setHours(0,0,0,0);
+      if (joinDate) joinDate.setHours(0, 0, 0, 0);
 
       holidays.forEach(h => {
         const hDate = new Date(h.date);
-        hDate.setHours(0,0,0,0);
+        hDate.setHours(0, 0, 0, 0);
 
         // Must be in cycle
         if (hDate < cycleStart || hDate > cycleEnd) return;
-        
+
         // Must be after joining
         if (joinDate && hDate < joinDate) return;
 
         // Don't double count if they worked (scanned) on holiday
         // Check strict string match or date object match
         const workedOnHoliday = empAttRecords.some(a => a.date === h.date);
-        
+
         if (!workedOnHoliday) {
-           paidHolidays++;
+          paidHolidays++;
         }
       });
 
@@ -952,14 +961,12 @@ const AgentPayrollSystem = () => {
 
   // 2. Monthly Stats (Merged: Promoted Agents + Accurate Old Calc + Agent Restriction)
   const monthlyStats = useMemo(() => {
-    // 1. Get Range as STRINGS (YYYY-MM-DD) to fix Timezone/Skipping issues
+    // 1. Get Range as STRINGS (YYYY-MM-DD)
     const range = getPayrollRange(selectedMonth);
-
-    // Convert to strict strings (YYYY-MM-DD)
     const startStr = new Date(range.start).toISOString().split('T')[0];
     const endStr = new Date(range.end).toISOString().split('T')[0];
 
-    // Helper: Parse Date for HR checks (remains strictly for Logic checks)
+    // Helper: Parse Date
     const parseDate = (val) => {
       if (!val) return null;
       const d = new Date(val);
@@ -968,21 +975,15 @@ const AgentPayrollSystem = () => {
       return d;
     };
 
-    // Cycle Start/End (Time-adjusted) for "Joining Date" & "Left Date" logic only
     const cycleStart = new Date(startStr); cycleStart.setHours(0, 0, 0, 0);
     const cycleEnd = new Date(endStr); cycleEnd.setHours(23, 59, 59, 999);
-
-    // Count Working Days using the strings
     const totalWorkingDays = countWorkingDays(startStr, endStr);
 
     // ---------------------------------------------------------
-    // STEP A: CREATE MERGED LIST (Enable Promoted Agents)
+    // STEP A: CREATE MERGED LIST
     // ---------------------------------------------------------
     let combinedList = [...agents];
-
-    // [FIX] Filter by String Comparison
     const relevantSales = sales.filter(s => s.date >= startStr && s.date <= endStr);
-
     const activeSalesMap = new Map();
     relevantSales.forEach(s => {
       if (!activeSalesMap.has(s.agentName)) {
@@ -993,148 +994,137 @@ const AgentPayrollSystem = () => {
     hrRecords.forEach(hr => {
       const isAgent = agents.some(a => a.cnic === hr.cnic);
       const salesInfo = activeSalesMap.get(hr.agent_name);
-
       if (!isAgent && salesInfo) {
         combinedList.push({
-          name: hr.agent_name,
-          cnic: hr.cnic,
+          name: hr.agent_name, cnic: hr.cnic,
           team: salesInfo.team || hr.team || 'Unassigned',
           center: salesInfo.center || hr.center || 'Phase 7',
-          activeDate: hr.joining_date,
-          status: 'Promoted', // Internal flag
-          designation: hr.designation,
-          baseSalary: 0
+          activeDate: hr.joining_date, status: 'Promoted', designation: hr.designation, baseSalary: 0
         });
       }
     });
 
     // ---------------------------------------------------------
-    // STEP B: FILTERING
+    // STEP B: VALIDITY FILTER (Removed Team/Center Filters)
     // ---------------------------------------------------------
     const filteredAgentsList = combinedList.filter(a => {
-      // Permission Check
+      // 1. Permission Check (Agent Role)
       if (userRole === 'Agent') {
         const loggedInCnic = currentUser?.cnic || JSON.parse(localStorage.getItem('ams_user'))?.cnic;
         if (!loggedInCnic || a.cnic !== loggedInCnic) return false;
       }
 
-      // Team/Center Check
-      if (userRole !== 'Agent') {
-        const matchTeam = teamFilter === 'All' || teamFilter === 'All Teams' || a.team === teamFilter;
-        const matchCenter = centerFilter === 'All' || centerFilter === 'All Centers' || a.center === centerFilter;
-        if (!matchTeam || !matchCenter) return false;
-      }
-
-      // Joining Date Check
+      // 2. Joining Date Check
       const hrRec = hrRecords.find(h => h.cnic === a.cnic);
       const joinStr = hrRec?.joining_date || a.activeDate || a.active_date;
       const joinDate = parseDate(joinStr);
       if (joinDate && joinDate.getTime() > cycleEnd.getTime()) return false;
 
-      // Left Date Check
+      // 3. Left Date Check
       if (a.status !== 'Promoted') {
         const isInactive = ['Left', 'Terminated', 'NCNS'].includes(a.status) ||
-          ['Left', 'Terminated', 'NCNS'].includes(hrRec?.status);
-
+                           ['Left', 'Terminated', 'NCNS'].includes(hrRec?.status);
         if (isInactive) {
           const dateValue = a.leftDate || a.left_date || hrRec?.leftDate || hrRec?.left_date;
           const leaveDate = parseDate(dateValue);
-          // If they left strictly BEFORE the cycle started -> HIDE
+          // Hide if they left strictly BEFORE this cycle started
           if (leaveDate && leaveDate.getTime() < cycleStart.getTime()) return false;
-          if (!leaveDate) return false; // Safety
         }
       }
-      return true;
+      return true; // Return ALL teams/centers to allow UI filtering
     });
 
     // ---------------------------------------------------------
-    // STEP C: ACCURATE CALCULATIONS (Using Strings)
+    // STEP C: CALCULATIONS & DATA ENRICHMENT
     // ---------------------------------------------------------
     const agentStats = filteredAgentsList.map(agent => {
       const targetName = agent.name?.toString().trim().toLowerCase();
+      
+      // [NEW] Get HR Record Early for Phone/Salary
+      const hrRecord = hrRecords.find(h => (agent.cnic && h.cnic === agent.cnic) || (h.agent_name?.toString().trim().toLowerCase() === targetName));
+      
+      // 1. Phone Number (For Search)
+      const rawPhone = agent.phone || hrRecord?.phone || hrRecord?.phone_number || hrRecord?.mobile || hrRecord?.contact || '';
+      const finalPhone = rawPhone ? rawPhone.toString().trim() : '';
 
-      // [FIX] String Comparison for Sales
+      // 2. Base Salary
+      let salary = agent.baseSalary || hrRecord?.base_salary || hrRecord?.baseSalary || 0;
+      if (typeof salary === 'string') salary = parseInt(salary.replace(/,/g, '')) || 0;
+
+      // 3. [UPDATED] Dynamic Goal Logic (Uses State)
+      let autoGoal = 3; // Default fallback
+      
+      // Find the rule that matches the current salary
+      const matchingRule = goalRules.find(rule => salary >= rule.min && salary <= rule.max);
+      
+      if (matchingRule) {
+        autoGoal = matchingRule.goal;
+      }
+
+      // --- SALES CALCULATION ---
       const approvedSales = sales.filter(s => {
         const saleName = s.agentName?.toString().trim().toLowerCase();
-        const nameMatch = saleName === targetName;
-        const statusMatch = s.status === 'Sale' || ['HW- Xfer', 'HW-IBXfer', 'HW-Xfer-CDR'].includes(s.disposition);
-
-        // ROBUST CHECK: Compare Strings directly
-        const dateMatch = s.date >= startStr && s.date <= endStr;
-
-        return nameMatch && statusMatch && dateMatch;
+        return saleName === targetName && 
+               (s.status === 'Sale' || ['HW- Xfer', 'HW-IBXfer', 'HW-Xfer-CDR'].includes(s.disposition)) &&
+               (s.date >= startStr && s.date <= endStr);
       });
 
-      // [FIX] String Comparison for Attendance
-      const agentAttendance = attendance.filter(att => {
-        const attName = att.agentName?.toString().trim().toLowerCase();
-        // ROBUST CHECK: Compare Strings directly
-        const dateMatch = att.date >= startStr && att.date <= endStr;
-        return attName === targetName && dateMatch;
-      });
+      // --- ATTENDANCE CALCULATION ---
+      const agentAttendance = attendance.filter(att => 
+        att.agentName?.toString().trim().toLowerCase() === targetName && 
+        att.date >= startStr && att.date <= endStr
+      );
 
-      // Daily Breakdown Loop
+      // --- DAILY BREAKDOWN LOOP ---
       let dialingDays = 0;
       let daysOn0 = 0, daysOn1 = 0, daysOn2 = 0, daysOn3 = 0;
-
       let loopDate = new Date(startStr);
       const loopEnd = new Date(endStr);
 
       while (loopDate <= loopEnd) {
         const dateStr = loopDate.toISOString().split('T')[0];
-
-        // 1. Check Attendance (Exact String Match)
         const attRecord = agentAttendance.find(a => a.date === dateStr);
         const isMarkedPresent = attRecord && (attRecord.status === 'Present' || attRecord.status === 'Late');
-
-        // 2. Check Sales (Exact String Match)
         const dailySalesCount = approvedSales.filter(s => s.date === dateStr).length;
-
-        // 3. Check Holidays
         const isHoliday = holidays.some(h => h.date === dateStr);
 
-        // A day is "Paid" if: Present OR Sales OR Holiday
-        const isPaidDay = isMarkedPresent || dailySalesCount > 0 || isHoliday;
-
-        if (isPaidDay) {
+        // PAID DAY: Present OR Sales OR Holiday
+        if (isMarkedPresent || dailySalesCount > 0 || isHoliday) {
           dialingDays++;
-
           if (dailySalesCount > 0) {
             if (dailySalesCount === 1) daysOn1++;
             else if (dailySalesCount === 2) daysOn2++;
             else if (dailySalesCount >= 3) daysOn3++;
-          }
-          // Only count as "Zero Day" if it's NOT a holiday
-          else if (!isHoliday) {
-            daysOn0++;
+          } else if (!isHoliday) {
+            daysOn0++; // Only count '0' if it wasn't a holiday
           }
         }
-
-        // Next Day
         loopDate.setDate(loopDate.getDate() + 1);
       }
 
-      // Financials
+      // --- FINANCIALS ---
       const agentBonuses = bonuses.filter(b => b.agentName?.toString().trim().toLowerCase() === targetName && b.month === selectedMonth)
         .reduce((sum, b) => sum + (b.amount || 0), 0);
       const agentFines = fines.filter(f => f.agentName?.toString().trim().toLowerCase() === targetName && f.month === selectedMonth)
         .reduce((sum, f) => sum + (f.amount || 0), 0);
 
-      const baseSalary = agent.baseSalary || 0;
       let earnedBase = 0;
       if (totalWorkingDays > 0) {
-        const dailyRate = baseSalary / totalWorkingDays;
+        const dailyRate = salary / totalWorkingDays;
         earnedBase = Math.round(dailyRate * dialingDays);
       } else {
-        earnedBase = baseSalary;
+        earnedBase = salary;
       }
-
       const netSalary = earnedBase + agentBonuses - agentFines;
-      const hrRecord = hrRecords.find(h => (agent.cnic && h.cnic === agent.cnic) || (h.agent_name?.toString().trim().toLowerCase() === targetName));
+
+      // Final Left Date
       const finalLeftDate = agent.status === 'Promoted' ? null : (agent.leftDate || agent.left_date || hrRecord?.leftDate || null);
 
       return {
         ...agent,
+        phone: finalPhone,      // [NEW] Added Phone
+        target: autoGoal,       // [NEW] Added Auto Goal
+        baseSalary: salary,     // [NEW] Normalized Salary
         leftDate: finalLeftDate,
         isPromoted: agent.status === 'Promoted',
         designation: agent.designation || hrRecord?.designation || 'Agent',
@@ -1153,7 +1143,7 @@ const AgentPayrollSystem = () => {
     });
 
     return agentStats.sort((a, b) => a.name.localeCompare(b.name));
-  }, [agents, sales, fines, bonuses, attendance, hrRecords, selectedMonth, teamFilter, centerFilter, userRole, currentUser, holidays]);
+  }, [agents, sales, fines, bonuses, attendance, hrRecords, selectedMonth, userRole, currentUser, holidays]); // Removed teamFilter/centerFilter
 
   const managementStats = useMemo(() => {
     const agentRange = getPayrollRange(selectedMonth); // 21st - 20th
@@ -2875,13 +2865,13 @@ const AgentPayrollSystem = () => {
 
               // 2. AGENT: Restricted View
               else if (userRole === 'Agent') {
-                if (['payroll', 'employees', 'management', 'super_controls'].includes(tab)) return null;
+                if (['payroll', 'employees', 'management', 'super_controls', 'bonuses', 'fines'].includes(tab)) return null;
               }
 
               // 3. TL (Team Lead): Operational View
               else if (userRole === 'TL') {
                 // TLs don't see Payroll, HR Records, Management, or Super Controls
-                if (['payroll', 'employees', 'super_controls', 'management'].includes(tab)) return null;
+                if (['payroll', 'employees', 'super_controls', 'management', 'bonuses', 'fines'].includes(tab)) return null;
               }
 
               // 4. IT Support: System View
@@ -3154,12 +3144,14 @@ const AgentPayrollSystem = () => {
                             <td className="py-3 px-4 text-slate-300 text-xs">{agent.center || '-'}</td>
                             <td className="py-3 px-4 text-right text-slate-100 font-mono">{agent.baseSalary ? agent.baseSalary.toLocaleString() : 0}</td>
 
-                            {/* [CHANGED] Joining Date + Left Date (if applicable) */}
+                            {/* [FIXED] Joining Date & Left Date Display */}
                             <td className="py-3 px-4 text-center">
                               <div className="text-slate-300 text-xs">{linkedHR.joining_date || '-'}</div>
-                              {agent.status === 'Left' && agent.leftDate && (
-                                <div className="text-[10px] text-red-400 font-medium mt-0.5">
-                                  Left: {agent.leftDate}
+
+                              {/* Only show Left Date if Status is NOT Active */}
+                              {agent.status !== 'Active' && (
+                                <div className="text-[8.5px] text-red-400 font-bold mt-1 bg-red-500/10 px-1 rounded inline-block">
+                                  Left: {agent.leftDate || agent.left_date || 'N/A'}
                                 </div>
                               )}
                             </td>
@@ -3167,6 +3159,8 @@ const AgentPayrollSystem = () => {
                             {['Admin', 'SuperAdmin'].includes(userRole) && (
                               <td className="py-3 px-4">
                                 <div className="flex items-center justify-center gap-2">
+
+                                  {/* 1. Edit Button (Always Visible) */}
                                   <button onClick={() => {
                                     const hrInfo = hrRecords.find(h => h.cnic === agent.cnic) || {};
                                     setEditingAgent({
@@ -3181,15 +3175,30 @@ const AgentPayrollSystem = () => {
                                   }} className="p-1.5 bg-blue-500/10 text-blue-400 rounded hover:bg-blue-500/20 transition-colors" title="Edit">
                                     <Pencil className="w-4 h-4" />
                                   </button>
-                                  <button
-                                    onClick={() => handleOpenLeaveModal(agent)}
-                                    className="text-red-400 hover:text-red-300 p-1 hover:bg-red-500/10 rounded transition-colors"
-                                    title="Mark as Left / Terminated"
-                                  >
-                                    <UserX className="w-5 h-5" />
-                                  </button>
 
-                                  <button onClick={() => handleDeleteAgent(agent.cnic)} className="p-1.5 bg-red-500/10 text-red-400 rounded hover:bg-red-500/20 transition-colors" title="Delete">
+                                  {/* 2. CONDITIONAL: Terminate vs Reactivate */}
+                                  {agent.status === 'Active' ? (
+                                    // IF ACTIVE: Show "Mark as Left" Button
+                                    <button
+                                      onClick={() => handleOpenLeaveModal(agent)}
+                                      className="text-red-400 hover:text-red-300 p-1.5 bg-red-500/10 hover:bg-red-500/20 rounded transition-colors"
+                                      title="Mark as Left / Terminated"
+                                    >
+                                      <UserX className="w-4 h-4" />
+                                    </button>
+                                  ) : (
+                                    // IF INACTIVE: Show "Reactivate" Button
+                                    <button
+                                      onClick={() => handleReactivateAgent(agent.cnic)}
+                                      className="text-green-400 hover:text-green-300 p-1.5 bg-green-500/10 hover:bg-green-500/20 rounded transition-colors"
+                                      title="Reactivate Agent"
+                                    >
+                                      <RotateCcw className="w-4 h-4" />
+                                    </button>
+                                  )}
+
+                                  {/* 3. Delete Button (Always Visible) */}
+                                  <button onClick={() => handleDeleteAgent(agent.cnic)} className="p-1.5 bg-red-500/10 text-red-400 rounded hover:bg-red-500/20 transition-colors" title="Delete Permanently">
                                     <Trash2 className="w-4 h-4" />
                                   </button>
                                 </div>
@@ -3353,7 +3362,8 @@ const AgentPayrollSystem = () => {
 
                             <td className="py-3 px-4">
                               <div className="flex items-center justify-center gap-2">
-                                {/* Edit Button */}
+
+                                {/* 1. Edit Button */}
                                 <button onClick={() => {
                                   const linkedAgent = agents.find(a => (a.cnic && a.cnic === rec.cnic) || (a.name === rec.agent_name)) || {};
                                   setEditingHR({
@@ -3378,16 +3388,38 @@ const AgentPayrollSystem = () => {
                                   <Pencil className="w-4 h-4" />
                                 </button>
 
-                                {/* Toggle Status Button */}
-                                <button
-                                  onClick={() => handleToggleHRStatus(rec.id, rec.status || 'Active', rec.cnic, rec.agent_name)}
-                                  className="p-1.5 bg-orange-500/10 text-orange-400 rounded hover:bg-orange-500/20 transition-colors"
-                                  title={rec.status === 'Active' ? "Mark as Left" : "Reactivate"}
-                                >
-                                  {rec.status === 'Active' ? <UserX className="w-4 h-4" /> : <RotateCcw className="w-4 h-4" />}
-                                </button>
+                                {/* 2. CONDITIONAL: Terminate vs Reactivate */}
+                                {/* 2. CONDITIONAL: Terminate vs Reactivate */}
+                                {rec.status === 'Active' ? (
+                                  // IF ACTIVE: Open the Leave Modal (to choose Status)
+                                  <button
+                                    onClick={() => {
+                                      // Create a unified object so the modal can read the name/id correctly
+                                      const agentObj = {
+                                        ...rec,
+                                        name: rec.agent_name, // Map agent_name to name for the modal
+                                        id: rec.id,
+                                        cnic: rec.cnic
+                                      };
+                                      handleOpenLeaveModal(agentObj);
+                                    }}
+                                    className="p-1.5 bg-red-500/10 text-red-400 rounded hover:bg-red-500/20 transition-colors"
+                                    title="Mark as Left / Terminate"
+                                  >
+                                    <UserX className="w-4 h-4" />
+                                  </button>
+                                ) : (
+                                  // IF INACTIVE: Show "Reactivate"
+                                  <button
+                                    onClick={() => handleReactivateAgent(rec.cnic)}
+                                    className="p-1.5 bg-green-500/10 text-green-400 rounded hover:bg-green-500/20 transition-colors"
+                                    title="Reactivate Employee"
+                                  >
+                                    <RotateCcw className="w-4 h-4" />
+                                  </button>
+                                )}
 
-                                {/* Delete Button */}
+                                {/* 3. Delete Button */}
                                 <button
                                   onClick={() => handleDeleteHR(rec.id, rec.cnic, rec.agent_name)}
                                   className="p-1.5 bg-red-500/10 text-red-400 rounded hover:bg-red-500/20 transition-colors"
@@ -3488,6 +3520,7 @@ const AgentPayrollSystem = () => {
                 />
 
                 {/* Filters Section */}
+                {userRole !== 'Agent' && (
                 <div className="bg-slate-800 rounded-xl shadow-sm border border-slate-600 p-4">
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <input
@@ -3522,6 +3555,7 @@ const AgentPayrollSystem = () => {
                     </select>
                   </div>
                 </div>
+                )}
 
                 {/* DATA TABLE (FULL COLUMNS & EDITABLE) */}
                 <div className="bg-slate-800/80 rounded-xl border border-slate-600 overflow-auto max-h-[70vh]">
@@ -3532,7 +3566,12 @@ const AgentPayrollSystem = () => {
                         <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Timestamp</th>
                         <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase sticky left-0 bg-slate-900">Agent Name</th>
                         <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Customer Name</th>
-                        <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Phone Number</th>
+
+                        {/* [FIX] Show Phone Header ONLY for Admin/SuperAdmin/QA */}
+                        {['Admin', 'SuperAdmin', 'QA'].includes(userRole) && (
+                          <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Phone Number</th>
+                        )}
+
                         <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">State</th>
                         <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Zip</th>
                         <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Address</th>
@@ -3569,7 +3608,9 @@ const AgentPayrollSystem = () => {
                             <td className="py-3 px-3 text-xs text-slate-300 whitespace-nowrap">{sale.timestamp || sale.date}</td>
                             <td className="py-3 px-3 text-xs font-bold text-white sticky left-0 bg-inherit">{sale.agentName}</td>
                             <td className="py-3 px-3 text-xs text-slate-300">{sale.customerName || '-'}</td>
+                            {['Admin', 'SuperAdmin', 'QA'].includes(userRole) && (
                             <td className="py-3 px-3 text-xs text-slate-300 font-mono">{sale.phoneNumber || '-'}</td>
+                            )}
                             <td className="py-3 px-3 text-xs text-slate-400">{sale.state || '-'}</td>
                             <td className="py-3 px-3 text-xs text-slate-400">{sale.zip || '-'}</td>
                             <td className="py-3 px-3 text-xs text-slate-400">{sale.address || '-'}</td>
@@ -3832,52 +3873,74 @@ const AgentPayrollSystem = () => {
                 </div>
               </div>
             )}
+
+            {/* Sales matrix */}
+
             {salesSubTab === 'matrix' && (
               <div className="space-y-6">
                 <div className="flex justify-between items-center">
-                  
-{/* [FIXED] Sales Matrix Header & Action Bar */}
-               {/* [FIXED] Sales Matrix Header - Added 'w-full' */}
-                <div className="w-full flex flex-col md:flex-row justify-between items-center gap-4 bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-sm mb-2">
-                  
-                  {/* LEFT SIDE: Title & Subtitle */}
-                  <div>
-                    <h2 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
-                      Sales Performance Matrix
-                    </h2>
-                    <p className="text-slate-400 text-xs mt-0.5">
-                      Daily Breakdown for {selectedMonth}
-                    </p>
-                  </div>
 
-                  {/* RIGHT SIDE: Cycle Dates & Buttons */}
-                  <div className="flex flex-col md:flex-row items-center gap-4">
-                    
-                    {/* Cycle Text */}
-                    <div className="text-xs text-slate-500 font-medium bg-slate-900/50 px-3 py-1.5 rounded border border-slate-700/50">
-                      Cycle: <span className="text-slate-300">{getPayrollRange(selectedMonth).start.toDateString()} - {getPayrollRange(selectedMonth).end.toDateString()}</span>
+                  {/* [FIXED] Sales Matrix Header - Added 'w-full' */}
+                  <div className="w-full flex flex-col md:flex-row justify-between items-center gap-4 bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-sm mb-2">
+
+                    {/* LEFT SIDE: Title & Subtitle */}
+                    <div>
+                      <h2 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
+                        Sales Performance Matrix
+                      </h2>
+                      <p className="text-slate-400 text-xs mt-0.5">
+                        Daily Breakdown for {selectedMonth}
+                      </p>
                     </div>
 
-                    {/* Action Buttons */}
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={() => setShowAddBonus(true)}
-                        className="flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-all shadow-lg shadow-green-900/20"
-                      >
-                        <Plus className="w-4 h-4" /> Add Bonus
-                      </button>
-                      <button
-                        onClick={() => setShowAddFine(true)}
-                        className="flex items-center gap-2 bg-red-600 hover:bg-red-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-all shadow-lg shadow-red-900/20"
-                      >
-                        <Plus className="w-4 h-4" /> Add Fine
-                      </button>
+                    {/* RIGHT SIDE: Cycle Dates & Buttons */}
+                    <div className="flex flex-col md:flex-row items-center gap-4">
+
+                      {/* Cycle Text */}
+                      <div className="text-xs text-slate-500 font-medium bg-slate-900/50 px-3 py-1.5 rounded border border-slate-700/50">
+                        Cycle: <span className="text-slate-300">{getPayrollRange(selectedMonth).start.toDateString()} - {getPayrollRange(selectedMonth).end.toDateString()}</span>
+                      </div>
+
+                      {/* Action Buttons */}
+                      {['Admin', 'SuperAdmin', 'QA', 'HR'].includes(userRole) && (
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => setShowAddBonus(true)}
+                            className="flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-all shadow-lg shadow-green-900/20"
+                          >
+                            <Plus className="w-4 h-4" /> Add Bonus
+                          </button>
+                          <button
+                            onClick={() => setShowAddFine(true)}
+                            className="flex items-center gap-2 bg-red-600 hover:bg-red-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-all shadow-lg shadow-red-900/20"
+                          >
+                            <Plus className="w-4 h-4" /> Add Fine
+                          </button>
+
+                          </div>
+                      )}
+
+                      {['Admin', 'SuperAdmin'].includes(userRole) && (
+                      <div className="flex items-center gap-3">
+
+{/* [NEW] Goal Settings Button */}
+                        <button
+                          onClick={() => setShowGoalModal(true)}
+                          className="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-all border border-slate-600 shadow-sm"
+                          title="Configure Goal Rules"
+                        >
+                          <Settings className="w-4 h-4" />
+                        </button>
+
+                        </div>
+)}
+                      
                     </div>
                   </div>
-                </div>
                 </div>
 
                 {/* --- FILTERS --- */}
+                {userRole !== 'Agent' && (
                 <div className="bg-slate-800 rounded-xl shadow-sm border border-slate-600 p-4">
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <input
@@ -3902,6 +3965,7 @@ const AgentPayrollSystem = () => {
                     </select>
                   </div>
                 </div>
+                )}
 
                 {/* --- MATRIX LOGIC STARTS HERE --- */}
                 {(() => {
@@ -3913,7 +3977,11 @@ const AgentPayrollSystem = () => {
                   // This list will be used by BOTH the Rows (Body) and the Grand Total (Footer)
                   const displayedStats = monthlyStats.filter(stat => {
                     // Search Filter
-                    const matchesSearch = !searchQuery || (stat.name && stat.name.toLowerCase().includes(searchQuery.toLowerCase()));
+                    const query = searchQuery.toLowerCase();
+                    const nameMatch = stat.name && stat.name.toLowerCase().includes(query);
+                    const phoneMatch = stat.phone && stat.phone.toString().includes(query); // [FIX] Checks phone
+                    const matchesSearch = !searchQuery || nameMatch || phoneMatch;
+
 
                     // Status Filter (Active/Left)
                     const matchesStatus = agentStatusFilter === 'All' || stat.status === agentStatusFilter;
@@ -3940,6 +4008,10 @@ const AgentPayrollSystem = () => {
                             <tr className="bg-slate-950">
                               <th className="p-3 text-center border-b border-r border-slate-800 sticky left-0 z-50 bg-slate-950 w-12">No.</th>
                               <th className="p-3 text-left border-b border-r border-slate-800 sticky left-12 z-50 bg-slate-950 w-44">Agent Name</th>
+
+                              {/* [NEW] Goal & Salary Columns */}
+                              <th className="p-2 text-center border-b border-r border-slate-800 bg-slate-900 text-slate-300 text-[10px] font-bold w-20">SALARY</th>
+                              <th className="p-2 text-center border-b border-r border-slate-800 bg-slate-900 text-slate-300 text-[10px] font-bold w-16">GOAL</th>
 
                               {/* Metric Headers */}
                               <th className="p-2 text-center border-b border-r border-slate-800 bg-blue-900/40 text-blue-400 text-[10px] font-bold w-14">LPD</th>
@@ -3992,6 +4064,13 @@ const AgentPayrollSystem = () => {
                                     <td colSpan={2} className="p-2 px-4 border-r border-slate-700 font-black text-blue-400 uppercase tracking-widest text-sm sticky left-0 z-30 bg-slate-800">
                                       {teamName}
                                     </td>
+<td className="p-1 text-center border-r border-slate-800 text-slate-300 font-mono text-[10px]">
+                                          {agents.baseSalary ? parseInt(agents.baseSalary).toLocaleString() : '-'}
+                                        </td>
+                                        <td className="p-1 text-center border-r border-slate-800 text-slate-300 font-mono text-[10px]">
+                                          {agents.target || '-'}
+                                        </td>
+
                                     <td className="text-center font-bold text-blue-300 border-r border-slate-700 bg-slate-800">{teamAvgLPD}</td>
                                     <td className="text-center text-slate-400 border-r border-slate-700 bg-slate-800">{teamTotalDays}</td>
                                     <td colSpan={4} className="bg-slate-800 border-r border-slate-700"></td>
@@ -4047,6 +4126,13 @@ const AgentPayrollSystem = () => {
                                           )}
                                         </td>
 
+                                        <td className="p-1 text-center border-r border-slate-800 text-slate-300 font-mono text-[10px]">
+                                          {stat.baseSalary ? parseInt(stat.baseSalary).toLocaleString() : '0'}
+                                        </td>
+                                        <td className="p-1 text-center border-r border-slate-800 text-slate-300 font-mono text-[10px]">
+                                          {stat.target || '-'}
+                                        </td>
+
                                         <td className="p-1 text-center border-r border-slate-800 bg-blue-500/5 font-bold text-blue-400 text-xs">{stat.lpd}</td>
                                         <td className="p-1 text-center border-r border-slate-800 text-slate-400 text-[10px]">{stat.dialingDays}</td>
                                         <td className="p-1 text-center text-red-400 text-[10px]">{stat.daysOn0}</td>
@@ -4065,7 +4151,7 @@ const AgentPayrollSystem = () => {
                                           const isBeforeJoining = joinDate && currentDate < joinDate;
 
                                           const dailyCount = agentSales.filter(s => s.date === dateStr).length;
-                                          
+
                                           // check attendance for '0' vs 'A' logic
                                           const hasAttendance = attendance.some(a =>
                                             a.date === dateStr &&
@@ -4123,6 +4209,14 @@ const AgentPayrollSystem = () => {
                           <tfoot className="sticky bottom-0 z-40 shadow-[0_-4px_10px_rgba(0,0,0,0.5)]">
                             <tr className="bg-slate-950 border-t-2 border-blue-500 font-black text-white">
                               <td colSpan={2} className="p-3 text-left sticky left-0 bg-slate-950 z-50 uppercase tracking-tighter">Grand Total</td>
+
+<td className="p-1 text-center border-r border-slate-800 text-slate-300 font-mono text-[10px]">
+                                          {agents.baseSalary ? parseInt(agents.baseSalary).toLocaleString() : '-'}
+                                        </td>
+                                        <td className="p-1 text-center border-r border-slate-800 text-slate-300 font-mono text-[10px]">
+                                          {agents.target || '-'}
+                                        </td>
+
                               <td className="text-center text-blue-400 bg-slate-950">
                                 {/* Calculate Average LPD for VISIBLE agents only */}
                                 {(displayedStats.reduce((s, a) => s + a.totalSales, 0) / (displayedStats.reduce((s, a) => s + a.dialingDays, 0) || 1)).toFixed(2)}
@@ -4163,7 +4257,7 @@ const AgentPayrollSystem = () => {
 
           </div>
         )}
-        ```
+        
 
         {/* =====================================================================================
             TAB: MANAGEMENT PAYROLL (Buttons Added + Data Fixed)
@@ -4455,18 +4549,18 @@ const AgentPayrollSystem = () => {
                                   // 2. [NEW] Calculate Valid Holidays (Add to Present count)
                                   let validHolidays = 0;
                                   holidays.forEach(h => {
-                                      // Must be in current view
-                                      if (!dateArray.includes(h.date)) return;
-                                      
-                                      // Must be after joining
-                                      const hDate = new Date(h.date); hDate.setHours(0,0,0,0);
-                                      if (joinDate && hDate < joinDate) return;
+                                    // Must be in current view
+                                    if (!dateArray.includes(h.date)) return;
 
-                                      // Don't double count if they actually worked on the holiday
-                                      const hasScan = empRecords.some(a => a.date === h.date && a.status === 'Present');
-                                      if (!hasScan) {
-                                          validHolidays++;
-                                      }
+                                    // Must be after joining
+                                    const hDate = new Date(h.date); hDate.setHours(0, 0, 0, 0);
+                                    if (joinDate && hDate < joinDate) return;
+
+                                    // Don't double count if they actually worked on the holiday
+                                    const hasScan = empRecords.some(a => a.date === h.date && a.status === 'Present');
+                                    if (!hasScan) {
+                                      validHolidays++;
+                                    }
                                   });
 
                                   // [FINAL P COUNT] = Scans + Holidays
@@ -4489,11 +4583,11 @@ const AgentPayrollSystem = () => {
                                     const hasRec = empRecords.some(a => a.date === dStr);
 
                                     if (!hasRec) {
-                                        // Only increment Absent if it is NOT a holiday
-                                        if (!isHoliday) absentCount++;
+                                      // Only increment Absent if it is NOT a holiday
+                                      if (!isHoliday) absentCount++;
                                     }
                                     else if (empRecords.find(a => a.date === dStr).status === 'Absent') {
-                                        absentCount++;
+                                      absentCount++;
                                     }
                                   });
 
@@ -4539,14 +4633,14 @@ const AgentPayrollSystem = () => {
                                         }
                                         // 2. If Present -> Show Time (Prioritize working over holiday)
                                         else if (record && record.status === 'Present') {
-                                            cellContent = formatTo12Hour(record.loginTime) || 'OK';
-                                            const status = getLateStatus(record.loginTime);
-                                            if (status.isLate) {
-                                              cellClass = `bg-slate-800/50 ${status.color} font-mono text-[10px]`;
-                                            } else {
-                                              cellClass = 'text-green-400 font-mono text-[10px]';
-                                            }
-                                        } 
+                                          cellContent = formatTo12Hour(record.loginTime) || 'OK';
+                                          const status = getLateStatus(record.loginTime);
+                                          if (status.isLate) {
+                                            cellClass = `bg-slate-800/50 ${status.color} font-mono text-[10px]`;
+                                          } else {
+                                            cellClass = 'text-green-400 font-mono text-[10px]';
+                                          }
+                                        }
                                         // 3. [NEW] If Holiday -> Show 'H' (Purple)
                                         else if (isHoliday) {
                                           cellContent = 'H';
@@ -4556,7 +4650,7 @@ const AgentPayrollSystem = () => {
                                         else if (record && record.status === 'Absent') {
                                           cellContent = 'A';
                                           cellClass = 'bg-red-500/10 text-red-500 font-bold';
-                                        } 
+                                        }
                                         // 5. Default (Weekend or Implicit Absent)
                                         else {
                                           if (isWeekend) {
@@ -4730,7 +4824,9 @@ const AgentPayrollSystem = () => {
                           <th className="p-4 font-medium border-b border-slate-700 text-center">Login / Logout</th>
                           <th className="p-4 font-medium border-b border-slate-700 text-center">Late Status</th>
                           <th className="p-4 font-medium border-b border-slate-700 text-center">Status</th>
+                          {['Admin', 'SuperAdmin', 'IT','HR'].includes(userRole) && (
                           <th className="p-4 font-medium border-b border-slate-700 text-center">Actions</th>
+                          )}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-700">
@@ -4875,6 +4971,7 @@ const AgentPayrollSystem = () => {
                                 <td className="p-4 text-center">{statusBadge}</td>
 
                                 {/* ACTION BUTTONS */}
+                                {['Admin', 'SuperAdmin', 'IT','HR'].includes(userRole) && (
                                 <td className="p-4">
                                   <div className="flex items-center justify-center gap-2">
 
@@ -4909,6 +5006,7 @@ const AgentPayrollSystem = () => {
                                     )}
                                   </div>
                                 </td>
+                                )}
                               </tr>
                             );
                           });
@@ -4923,7 +5021,7 @@ const AgentPayrollSystem = () => {
             {attendanceSubTab === 'matrix' && (
               <div className="space-y-6">
 
-{/* [FIXED] Attendance Matrix Header & Action Bar */}
+                {/* [FIXED] Attendance Matrix Header & Action Bar */}
                 <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-slate-800 p-6 rounded-2xl border border-slate-700 mb-6">
                   <div>
                     <h2 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
@@ -4934,32 +5032,35 @@ const AgentPayrollSystem = () => {
                     </p>
                   </div>
 
-                   {/* RIGHT SIDE: Cycle Dates & Buttons */}
+                  {/* RIGHT SIDE: Cycle Dates & Buttons */}
                   <div className="flex flex-col md:flex-row items-center gap-4">
-                    
+
                     {/* Cycle Text */}
                     <div className="text-xs text-slate-500 font-medium bg-slate-900/50 px-3 py-1.5 rounded border border-slate-700/50">
                       Cycle: <span className="text-slate-300">{getPayrollRange(selectedMonth).start.toDateString()} - {getPayrollRange(selectedMonth).end.toDateString()}</span>
                     </div>
 
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={() => setShowAddBonus(true)} // [FIXED] Matches your existing state
-                      className="flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-lg shadow-green-900/20"
-                    >
-                      <Plus className="w-4 h-4" /> Add Bonus
-                    </button>
-                    <button
-                      onClick={() => setShowAddFine(true)} // [FIXED] Matches your existing state
-                      className="flex items-center gap-2 bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-lg shadow-red-900/20"
-                    >
-                      <Plus className="w-4 h-4" /> Add Fine
-                    </button>
-                  </div>
+                    {['Admin', 'SuperAdmin', 'QA', 'HR'].includes(userRole) && (
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => setShowAddBonus(true)} // [FIXED] Matches your existing state
+                          className="flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-lg shadow-green-900/20"
+                        >
+                          <Plus className="w-4 h-4" /> Add Bonus
+                        </button>
+                        <button
+                          onClick={() => setShowAddFine(true)} // [FIXED] Matches your existing state
+                          className="flex items-center gap-2 bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-lg shadow-red-900/20"
+                        >
+                          <Plus className="w-4 h-4" /> Add Fine
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 {/* 1. [NEW] SEARCH & FILTER BAR */}
+                {userRole !== 'Agent' && (
                 <div className="bg-slate-800 rounded-xl shadow-sm border border-slate-600 p-4">
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <input
@@ -4984,6 +5085,7 @@ const AgentPayrollSystem = () => {
                     </select>
                   </div>
                 </div>
+                )}
 
                 <div className="bg-slate-900 rounded-xl border border-slate-700 shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
                   <div className="overflow-auto relative">
@@ -4994,6 +5096,9 @@ const AgentPayrollSystem = () => {
                         <tr className="bg-slate-950">
                           <th className="p-3 text-center border-b border-r border-slate-800 sticky left-0 z-50 bg-slate-950 w-12">No.</th>
                           <th className="p-3 text-left border-b border-r border-slate-800 sticky left-12 z-50 bg-slate-950 w-44">Agent Name</th>
+
+<th className="p-2 text-center border-b border-r border-slate-800 bg-slate-900 text-slate-300 text-[10px] font-bold w-20">SALARY</th>
+
                           <th className="p-2 text-center border-b border-slate-800 bg-green-900/20 text-green-400 text-[10px] font-bold w-10" title="Days Present">P</th>
                           <th className="p-2 text-center border-b border-slate-800 bg-yellow-900/20 text-yellow-400 text-[10px] font-bold w-10" title="Days Late">L</th>
                           <th className="p-2 text-center border-b border-r border-slate-800 bg-red-900/20 text-red-400 text-[10px] font-bold w-10" title="Days Absent">A</th>
@@ -5104,7 +5209,7 @@ const AgentPayrollSystem = () => {
                             if (teamAgents.length === 0) return null;
 
                             // --- TEAM SUMMARY ---
-                           // [UPDATED] Team Total Present (Records + Holidays)
+                            // [UPDATED] Team Total Present (Records + Holidays)
                             const teamTotalPresent = teamAgents.reduce((sum, agent) => {
                               // A. Count Database Presents
                               const recordsCount = attendance.filter(a =>
@@ -5116,7 +5221,7 @@ const AgentPayrollSystem = () => {
                               const hrRec = hrRecords.find(h => h.cnic === agent.cnic) || {};
                               const joinDateStr = hrRec.joining_date || agent.activeDate;
                               const jDate = joinDateStr ? new Date(joinDateStr) : null;
-                              if (jDate) jDate.setHours(0,0,0,0);
+                              if (jDate) jDate.setHours(0, 0, 0, 0);
 
                               let holidayCount = 0;
                               holidays.forEach(h => {
@@ -5124,9 +5229,9 @@ const AgentPayrollSystem = () => {
                                 if (jDate && new Date(h.date) < jDate) return; // Must be after joining
 
                                 // Only count holiday if they weren't ALREADY marked Present that day
-                                const hasRecord = attendance.some(a => 
+                                const hasRecord = attendance.some(a =>
                                   a.agentName?.toString().trim().toLowerCase() === agent.name?.toString().trim().toLowerCase() &&
-                                  a.date === h.date && 
+                                  a.date === h.date &&
                                   a.status === 'Present'
                                 );
                                 if (!hasRecord) holidayCount++;
@@ -5149,6 +5254,9 @@ const AgentPayrollSystem = () => {
                                     <td colSpan={2} className="p-2 px-4 border-r border-slate-700 font-black text-blue-400 uppercase tracking-widest text-sm sticky left-0 z-30 bg-slate-800">
                                       {teamName}
                                     </td>
+                                    <td className="p-1 text-center border-r border-slate-800 text-slate-300 font-mono text-[10px]">
+                                          {'-'}
+                                        </td>
                                     <td className="text-center font-bold text-green-500/50 bg-slate-800 text-[10px]">{teamTotalPresent}</td>
                                     <td className="text-center font-bold text-yellow-500/50 bg-slate-800 text-[10px]">{teamTotalLate}</td>
                                     <td className="text-center bg-slate-800 border-r border-slate-700"></td>
@@ -5186,18 +5294,18 @@ const AgentPayrollSystem = () => {
                                   // 2. Holiday Count (Add 'H' days to Present)
                                   let validHolidays = 0;
                                   holidays.forEach(h => {
-                                      // Ensure holiday is in current view
-                                      if (!dateArray.includes(h.date)) return;
-                                      
-                                      // Ensure holiday is NOT before joining
-                                      const hDate = new Date(h.date); hDate.setHours(0,0,0,0);
-                                      if (joinDate && hDate < joinDate) return;
+                                    // Ensure holiday is in current view
+                                    if (!dateArray.includes(h.date)) return;
 
-                                      // Ensure we don't double count if they worked on holiday
-                                      const hasScan = agentRecs.some(a => a.date === h.date && a.status === 'Present');
-                                      if (!hasScan) {
-                                          validHolidays++;
-                                      }
+                                    // Ensure holiday is NOT before joining
+                                    const hDate = new Date(h.date); hDate.setHours(0, 0, 0, 0);
+                                    if (joinDate && hDate < joinDate) return;
+
+                                    // Ensure we don't double count if they worked on holiday
+                                    const hasScan = agentRecs.some(a => a.date === h.date && a.status === 'Present');
+                                    if (!hasScan) {
+                                      validHolidays++;
+                                    }
                                   });
 
                                   // [FINAL P COUNT] = Scans + Holidays
@@ -5220,7 +5328,7 @@ const AgentPayrollSystem = () => {
                                     // If no Present record AND no Holiday -> Absent
                                     const isHoliday = holidays.some(h => h.date === dStr);
                                     const hasRec = agentRecs.some(a => a.date === dStr);
-                                    
+
                                     if (!isHoliday && !hasRec) absentCount++;
                                     else if (agentRecs.find(a => a.date === dStr)?.status === 'Absent') absentCount++;
                                   });
@@ -5246,6 +5354,10 @@ const AgentPayrollSystem = () => {
                                         )}
                                       </td>
 
+<td className="p-1 text-center border-r border-slate-800 text-slate-300 font-mono text-[10px]">
+                                          {agent.baseSalary ? parseInt(agent.baseSalary).toLocaleString() : '0'}
+                                        </td>
+
                                       <td className="p-1 text-center border-b border-slate-800 text-green-400 font-bold text-[10px]">{presentCount}</td>
                                       <td className="p-1 text-center border-b border-slate-800 text-yellow-400 font-bold text-[10px]">{lateCount}</td>
                                       <td className="p-1 text-center border-b border-r border-slate-800 text-red-400 font-bold text-[10px]">{absentCount}</td>
@@ -5255,10 +5367,10 @@ const AgentPayrollSystem = () => {
                                         currentDate.setHours(0, 0, 0, 0);
                                         const isWeekend = currentDate.getDay() === 0 || currentDate.getDay() === 6;
                                         const isBeforeJoining = joinDate && currentDate < joinDate;
-                                        
+
                                         // 1. Check for Holiday
                                         const isHoliday = holidays.some(h => h.date === dateStr);
-                                        
+
                                         const record = agentRecs.find(a => a.date === dateStr);
 
                                         let cellContent = '-';
@@ -5267,17 +5379,17 @@ const AgentPayrollSystem = () => {
                                         if (isBeforeJoining) {
                                           cellContent = '•';
                                           cellClass = 'text-slate-800';
-                                        } 
+                                        }
                                         // A. If Record Exists (Present/Late) -> Show Time (Prioritize working over holiday)
                                         else if (record && record.status === 'Present') {
-                                            cellContent = formatTo12Hour(record.loginTime) || 'OK';
-                                            const status = getLateStatus(record.loginTime);
-                                            if (status.isLate) {
-                                              cellClass = `bg-slate-800/50 ${status.color} font-mono text-[10px]`;
-                                            } else {
-                                              cellClass = 'text-green-400 font-mono text-[10px]';
-                                            }
-                                        } 
+                                          cellContent = formatTo12Hour(record.loginTime) || 'OK';
+                                          const status = getLateStatus(record.loginTime);
+                                          if (status.isLate) {
+                                            cellClass = `bg-slate-800/50 ${status.color} font-mono text-[10px]`;
+                                          } else {
+                                            cellClass = 'text-green-400 font-mono text-[10px]';
+                                          }
+                                        }
                                         // B. If Holiday -> Show 'H' (Overrides Absent/Weekend)
                                         else if (isHoliday) {
                                           cellContent = 'H';
@@ -5287,7 +5399,7 @@ const AgentPayrollSystem = () => {
                                         else if (record && record.status === 'Absent') {
                                           cellContent = 'A';
                                           cellClass = 'bg-red-500/10 text-red-500 font-bold';
-                                        } 
+                                        }
                                         // D. No Record
                                         else {
                                           if (isWeekend) {
@@ -5298,7 +5410,7 @@ const AgentPayrollSystem = () => {
                                             cellClass = 'text-red-500/50 font-bold';
                                           }
                                         }
-                                        
+
                                         return (
                                           <td key={dateStr} className={`p-1 text-center border-b border-slate-800 text-[11px] ${cellClass}`}>
                                             {cellContent}
@@ -5320,6 +5432,11 @@ const AgentPayrollSystem = () => {
                       <tfoot className="sticky bottom-0 z-40 shadow-[0_-4px_10px_rgba(0,0,0,0.5)]">
                         <tr className="bg-slate-950 border-t-2 border-purple-500 font-black text-white">
                           <td colSpan={2} className="p-3 text-left sticky left-0 bg-slate-950 z-50 uppercase tracking-tighter">Grand Total</td>
+
+<td className="p-1 text-center border-r border-slate-800 text-slate-300 font-mono text-[10px]">
+                                          {'-'}
+                                        </td>
+
                           <td className="text-center text-green-400 bg-slate-950 text-[10px]">
                             {attendance.filter(a => a.status === 'Present').length}
                           </td>
@@ -5457,25 +5574,26 @@ const AgentPayrollSystem = () => {
         {activeTab === 'payroll' && (
           <div className="space-y-6">
 
-{/* [FIXED] Payroll Header & Action Bar */}
-                <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-slate-800 p-6 rounded-2xl border border-slate-700 mb-6">
-                  <div>
-                    <h2 className="text-2xl font-bold bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">
-                      Agent Payroll
-                    </h2>
-                    <p className="text-slate-400 text-sm mt-1">
-                      Salary Breakdown for {selectedMonth}
-                    </p>
-                  </div>
+            {/* [FIXED] Payroll Header & Action Bar */}
+            <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-slate-800 p-6 rounded-2xl border border-slate-700 mb-6">
+              <div>
+                <h2 className="text-2xl font-bold bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">
+                  Agent Payroll
+                </h2>
+                <p className="text-slate-400 text-sm mt-1">
+                  Salary Breakdown for {selectedMonth}
+                </p>
+              </div>
 
-                   {/* RIGHT SIDE: Cycle Dates & Buttons */}
-                  <div className="flex flex-col md:flex-row items-center gap-4">
-                    
-                    {/* Cycle Text */}
-                    <div className="text-xs text-slate-500 font-medium bg-slate-900/50 px-3 py-1.5 rounded border border-slate-700/50">
-                      Cycle: <span className="text-slate-300">{getPayrollRange(selectedMonth).start.toDateString()} - {getPayrollRange(selectedMonth).end.toDateString()}</span>
-                    </div>
+              {/* RIGHT SIDE: Cycle Dates & Buttons */}
+              <div className="flex flex-col md:flex-row items-center gap-4">
 
+                {/* Cycle Text */}
+                <div className="text-xs text-slate-500 font-medium bg-slate-900/50 px-3 py-1.5 rounded border border-slate-700/50">
+                  Cycle: <span className="text-slate-300">{getPayrollRange(selectedMonth).start.toDateString()} - {getPayrollRange(selectedMonth).end.toDateString()}</span>
+                </div>
+
+                {['Admin', 'SuperAdmin', 'QA', 'HR'].includes(userRole) && (
                   <div className="flex items-center gap-3">
                     <button
                       onClick={() => setShowAddBonus(true)} // [FIXED] Matches your existing state
@@ -5490,18 +5608,19 @@ const AgentPayrollSystem = () => {
                       <Plus className="w-4 h-4" /> Add Fine
                     </button>
 
-<button
-                onClick={exportToCSV}
-                className="flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-lg shadow-green-900/20"
-              >
-                <Download className="w-4 h-4" />
-                Export to CSV
-              </button>
+                    <button
+                      onClick={exportToCSV}
+                      className="flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-lg shadow-green-900/20"
+                    >
+                      <Download className="w-4 h-4" />
+                      Export to CSV
+                    </button>
 
                   </div>
-                  </div>
-                </div>
-                
+                )}
+              </div>
+            </div>
+
             {/* SEARCH & FILTER Bar */}
             <div className="bg-slate-800 rounded-xl shadow-sm border border-slate-600 p-4 mb-6">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -5834,7 +5953,7 @@ const AgentPayrollSystem = () => {
 
       {showAddSale && <SaleModal agents={agents} currentUser={currentUser} userRole={userRole} onClose={() => setShowAddSale(false)} onSubmit={handleAddSale} />}
       {editSale && <SaleModal agents={agents} currentUser={currentUser} userRole={userRole} onClose={() => setEditSale(null)} onSubmit={handleEditSale} sale={editSale} isEdit={true} />}
-      
+
       {showAddFine && (
         <FineModal
           agents={agents}
@@ -6436,17 +6555,17 @@ const AgentPayrollSystem = () => {
                 <h3 className="text-sm font-medium text-slate-300 uppercase tracking-wider mb-2">
                   Holidays ({selectedMonth})
                 </h3>
-                
+
                 {(() => {
-                   // Filter logic
-                   const { start, end } = getPayrollRange(selectedMonth);
-                   const currentMonthHolidays = holidays.filter(h => h.date >= start && h.date <= end);
+                  // Filter logic
+                  const { start, end } = getPayrollRange(selectedMonth);
+                  const currentMonthHolidays = holidays.filter(h => h.date >= start && h.date <= end);
 
-                   if (currentMonthHolidays.length === 0) {
-                     return <p className="text-slate-500 text-sm italic">No holidays in this month.</p>;
-                   }
+                  if (currentMonthHolidays.length === 0) {
+                    return <p className="text-slate-500 text-sm italic">No holidays in this month.</p>;
+                  }
 
-                   return currentMonthHolidays.map((h) => (
+                  return currentMonthHolidays.map((h) => (
                     <div key={h.id} className="flex justify-between items-center bg-slate-700/50 p-3 rounded border border-slate-700">
                       <div>
                         <div className="text-white font-medium">{h.name}</div>
@@ -6539,10 +6658,117 @@ const AgentPayrollSystem = () => {
         </div>
       )}
 
+      {/* --- GOAL SETTINGS MODAL --- */}
+      {showGoalModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-slate-900 rounded-2xl border border-slate-700 shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200">
+            
+            {/* Header */}
+            <div className="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-950">
+              <div>
+                <h3 className="text-xl font-bold text-white">Goal Settings</h3>
+                <p className="text-slate-400 text-sm">Define automated goals based on salary ranges.</p>
+              </div>
+              <button onClick={() => setShowGoalModal(false)} className="text-slate-400 hover:text-white transition-colors">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-12 gap-2 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                <div className="col-span-4">Min Salary</div>
+                <div className="col-span-4">Max Salary</div>
+                <div className="col-span-3 text-center">Goal</div>
+              </div>
+
+              <div className="space-y-3">
+                {goalRules.map((rule, index) => (
+                  <div key={rule.id} className="grid grid-cols-12 gap-2 items-center">
+                    {/* Min Input */}
+                    <div className="col-span-4 relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs">PKR</span>
+                      <input
+                        type="number"
+                        value={rule.min}
+                        onChange={(e) => {
+                          const newRules = [...goalRules];
+                          newRules[index].min = parseInt(e.target.value) || 0;
+                          setGoalRules(newRules);
+                        }}
+                        className="w-full pl-10 pr-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                      />
+                    </div>
+
+                    {/* Max Input */}
+                    <div className="col-span-4 relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs">PKR</span>
+                      <input
+                        type="number"
+                        value={rule.max}
+                        onChange={(e) => {
+                          const newRules = [...goalRules];
+                          newRules[index].max = parseInt(e.target.value) || 0;
+                          setGoalRules(newRules);
+                        }}
+                        className="w-full pl-10 pr-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                      />
+                    </div>
+
+                    {/* Goal Input */}
+                    <div className="col-span-3">
+                      <input
+                        type="number"
+                        value={rule.goal}
+                        onChange={(e) => {
+                          const newRules = [...goalRules];
+                          newRules[index].goal = parseInt(e.target.value) || 0;
+                          setGoalRules(newRules);
+                        }}
+                        className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-center text-blue-400 font-bold focus:ring-2 focus:ring-blue-500 outline-none"
+                      />
+                    </div>
+                    
+                    {/* Remove Button (Optional) */}
+                    <div className="col-span-1 flex justify-center">
+                       {/* You can add a delete button here if needed */}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Add Rule Button */}
+              <button 
+                onClick={() => setGoalRules([...goalRules, { id: Date.now(), min: 0, max: 0, goal: 0 }])}
+                className="w-full py-2 mt-2 border border-dashed border-slate-600 rounded-lg text-slate-400 text-sm hover:bg-slate-800 hover:text-white transition-all flex items-center justify-center gap-2"
+              >
+                <Plus className="w-4 h-4" /> Add New Range
+              </button>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 bg-slate-950 border-t border-slate-800 flex justify-end gap-3">
+              <button 
+                onClick={() => setShowGoalModal(false)}
+                className="px-4 py-2 text-slate-400 hover:text-white text-sm font-medium transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={() => setShowGoalModal(false)} // Changes are live via state, just close
+                className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-all shadow-lg shadow-blue-900/20"
+              >
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div> // <--- THIS must be the very last line before );
   );
 };
 
 export default AgentPayrollSystem;
 
-// Editing Payroll tab Status
+// Satrted working on Sales filteration
