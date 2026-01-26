@@ -10,6 +10,7 @@ import FineModal from './components/modals/FineModal';
 import BonusModal from './components/modals/BonusModal';
 import ImportModal from './components/modals/ImportModal';
 import LateTimeModal from './components/modals/LateTimeModal';
+import GoalSettingModal from './components/modals/GoalSettingModal';
 
 import SimpleAddModal from './components/modals/SimpleAddModal';
 
@@ -21,7 +22,7 @@ import {
   Users, Edit, DollarSign, Calendar, AlertCircle, TrendingUp, Download,
   Plus, X, Upload, LogOut, Lock, Clock,
   Pencil, Trash2, UserX, Shield, RotateCcw, Settings,
-  CheckCircle, XCircle, ThumbsDown, AlertTriangle// <--- ENSURE THESE ARE HERE
+  CheckCircle, XCircle, AlertTriangle// <--- ENSURE THESE ARE HERE
 } from 'lucide-react';
 
 
@@ -130,15 +131,10 @@ const AgentPayrollSystem = () => {
   const [showMgmtBonus, setShowMgmtBonus] = useState(false);
   const [showMgmtFine, setShowMgmtFine] = useState(false);
 
-  // 2. Add State inside your component
-  const [showTransactionModal, setShowTransactionModal] = useState(false);
-  const [transactionType, setTransactionType] = useState('bonus'); // 'bonus' or 'fine'
-
   // Login States
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [designationFilter, setDesignationFilter] = useState('All');
   // Add this near your other state variables
-  const [user, setUser] = useState(JSON.parse(localStorage.getItem('currentUser')) || null);
   const [userRole, setUserRole] = useState('');
   const [currentUser, setCurrentUser] = useState(null);
   const [loginData, setLoginData] = useState({ name: '', password: '' });
@@ -554,7 +550,7 @@ const AgentPayrollSystem = () => {
 
   const [agentStatusFilter, setAgentStatusFilter] = useState('All');
   const [salesStatusFilter, setSalesStatusFilter] = useState('All');
-  const [attendanceStatusFilter, setAttendanceStatusFilter] = useState('All');
+  
 
   // [FIX] Replaced Shift with Center
   const [centerFilter, setCenterFilter] = useState('All');
@@ -679,7 +675,6 @@ const AgentPayrollSystem = () => {
     // [FIX] Reset the three new independent status filters
     setAgentStatusFilter('All');
     setSalesStatusFilter('All');
-    setAttendanceStatusFilter('All');
 
     localStorage.removeItem('ams_user');
     localStorage.removeItem('ams_role');
@@ -915,7 +910,7 @@ const AgentPayrollSystem = () => {
       // Table 2: Agent Cycle
       agentCycle: managementStaff.filter(e => e.cycleTypeNormalized.includes('agent'))
     };
-  }, [hrRecords, selectedMonth, attendance, bonuses, fines, holidays]); // Added 'holidays' dependency
+  }, [hrRecords, selectedMonth, attendance, bonuses, fines]); // Added 'holidays' dependency
 
   // --- HELPER: Get Management List (Designation != Agent) ---
   const managementEmployees = useMemo(() => {
@@ -928,20 +923,6 @@ const AgentPayrollSystem = () => {
       .map(emp => emp.agent_name) // Just get the names as simple strings
       .sort();
   }, [hrRecords]);
-
-  // --- FILTERING LOGIC ---
-
-  // Add this helper inside the component (e.g. near other useMemos)
-  const allPossibleSellers = useMemo(() => {
-    // 1. Get all Active Agents
-    const agentNames = agents.map(a => a.name);
-
-    // 2. Get all HR/Management Names
-    const hrNames = hrRecords.map(h => h.agent_name);
-
-    // 3. Merge and Remove Duplicates
-    return [...new Set([...agentNames, ...hrNames])].filter(Boolean).sort();
-  }, [agents, hrRecords]);
 
   // 1. Helper: validAgents Set (Optimized for performance)
   // This creates a Set of names of agents who match the selected Team/Center
@@ -956,8 +937,6 @@ const AgentPayrollSystem = () => {
       return matchTeam && matchCenter;
     }).map(a => a.name));
   }, [agents, teamFilter, centerFilter, userRole, currentUser]);
-
-  const dateRange = useMemo(() => getPayrollRange(selectedMonth), [selectedMonth]);
 
   // 2. Monthly Stats (Merged: Promoted Agents + Accurate Old Calc + Agent Restriction)
   const monthlyStats = useMemo(() => {
@@ -1037,12 +1016,20 @@ const AgentPayrollSystem = () => {
     // ---------------------------------------------------------
     // STEP C: CALCULATIONS & DATA ENRICHMENT
     // ---------------------------------------------------------
+    
     const agentStats = filteredAgentsList.map(agent => {
       const targetName = agent.name?.toString().trim().toLowerCase();
       
       // [NEW] Get HR Record Early for Phone/Salary
       const hrRecord = hrRecords.find(h => (agent.cnic && h.cnic === agent.cnic) || (h.agent_name?.toString().trim().toLowerCase() === targetName));
       
+      // --- [FIX PART 1] Parse Joining Date for Daily Logic ---
+      // We parse this early so we can use it inside the loop later
+      const joinStr = hrRecord?.joining_date || agent.activeDate || agent.active_date;
+      const joinDate = joinStr ? new Date(joinStr) : null;
+      // Important: Normalize to midnight to avoid timezone bugs
+      if (joinDate) joinDate.setHours(0, 0, 0, 0); 
+
       // 1. Phone Number (For Search)
       const rawPhone = agent.phone || hrRecord?.phone || hrRecord?.phone_number || hrRecord?.mobile || hrRecord?.contact || '';
       const finalPhone = rawPhone ? rawPhone.toString().trim() : '';
@@ -1081,7 +1068,17 @@ const AgentPayrollSystem = () => {
       let loopDate = new Date(startStr);
       const loopEnd = new Date(endStr);
 
+      // (Note: We do NOT use setHours on loopDate here to avoid the "missing day" bug you faced)
+
       while (loopDate <= loopEnd) {
+        // --- [FIX PART 2] SKIP DAYS BEFORE JOINING ---
+        // If this specific day in the loop is BEFORE the agent joined, skip it.
+        // This prevents holidays (or any stats) from counting before they were hired.
+        if (joinDate && loopDate < joinDate) {
+           loopDate.setDate(loopDate.getDate() + 1);
+           continue; 
+        }
+
         const dateStr = loopDate.toISOString().split('T')[0];
         const attRecord = agentAttendance.find(a => a.date === dateStr);
         const isMarkedPresent = attRecord && (attRecord.status === 'Present' || attRecord.status === 'Late');
@@ -1143,41 +1140,8 @@ const AgentPayrollSystem = () => {
     });
 
     return agentStats.sort((a, b) => a.name.localeCompare(b.name));
-  }, [agents, sales, fines, bonuses, attendance, hrRecords, selectedMonth, userRole, currentUser, holidays]); // Removed teamFilter/centerFilter
+  }, [agents, sales, fines, bonuses, attendance, hrRecords, selectedMonth, userRole, currentUser, holidays, goalRules]); // Removed teamFilter/centerFilter
 
-  const managementStats = useMemo(() => {
-    const agentRange = getPayrollRange(selectedMonth); // 21st - 20th
-    const standardRange = getStandardMonthRange(selectedMonth); // 1st - 31st
-
-    // This filters HR records for anyone whose designation is NOT 'Agent'
-    const managers = hrRecords.filter(rec => rec.designation !== 'Agent');
-
-    return managers.map(mgr => {
-      // Check which cycle criteria they follow (based on your DB column)
-      const isAgentCycle = mgr.payroll_cycle_type === 'Agent Cycle';
-      const { start, end } = isAgentCycle ? agentRange : standardRange;
-
-      const totalWorkingDays = countWorkingDays(start, end);
-
-      const attRecords = attendance.filter(att =>
-        att.agentName === mgr.agent_name &&
-        new Date(att.date) >= start &&
-        new Date(att.date) <= end
-      );
-
-      const daysPresent = attRecords.filter(a => a.status === 'Present' || a.status === 'Late').length;
-
-      // [FIXED] Read directly from HR Record (base_salary)
-      // We fallback to 0 if missing. 
-      // Note: Supabase returns snake_case 'base_salary'.
-      // Make sure this line matches the DB column name
-      const baseSalary = mgr.base_salary || mgr.baseSalary || 0;
-
-      const earnedBase = totalWorkingDays > 0 ? Math.round((baseSalary / totalWorkingDays) * daysPresent) : 0;
-
-      return { ...mgr, baseSalary, daysPresent, totalWorkingDays, earnedBase, netSalary: earnedBase };
-    });
-  }, [hrRecords, agents, attendance, selectedMonth]);
 
   // 9. Bonuses (Respects Team/Center)
   const filteredBonuses = useMemo(() => {
@@ -1350,26 +1314,6 @@ const AgentPayrollSystem = () => {
 
     return stats;
   }, [sales, getActiveDateRange, teamFilter, centerFilter, userRole, currentUser]);
-
-  // 6. Attendance Table (Respects Team/Center)
-  const filteredAttendance = useMemo(() => {
-    const { start, end } = getActiveDateRange;
-
-    return attendance.filter(record => {
-      const matchesSearch = record.agentName.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesDate = record.date >= start && record.date <= end;
-      const matchesTeamCenter = validAgentNames.has(record.agentName);
-
-      // [FIX] Independent Attendance Filter Logic
-      let matchesStatus = true;
-      if (attendanceStatusFilter === 'Present') matchesStatus = record.status === 'Present';
-      else if (attendanceStatusFilter === 'Absent') matchesStatus = record.status === 'Absent';
-      else if (attendanceStatusFilter === 'Late') matchesStatus = record.status === 'Present' && record.late === true;
-      else if (attendanceStatusFilter === 'OnTime') matchesStatus = record.status === 'Present' && record.late === false;
-
-      return matchesSearch && matchesDate && matchesTeamCenter && matchesStatus;
-    });
-  }, [attendance, searchQuery, getActiveDateRange, validAgentNames, attendanceStatusFilter]);
 
   // 7. Agents Table (Respects Team/Center)
   const filteredAgents = useMemo(() => {
@@ -1614,40 +1558,6 @@ const AgentPayrollSystem = () => {
     }
   };
 
-  // [FIXED] Mark as Left with Error Handling
-  // 2. Mark as Left (Use cnic)
-  const handleMarkAsLeft = async (agentCnic) => {
-    if (window.confirm('Are you sure you want to mark this agent as Left?')) {
-      const leftDate = new Date().toISOString().split('T')[0];
-
-      try {
-        // 1. Update Agents table (Payroll side)
-        const { error: agentError } = await supabase
-          .from('agents')
-          .update({ status: 'Left', leftDate })
-          .eq('cnic', agentCnic);
-
-        if (agentError) throw agentError;
-
-        // 2. Update HR Records table (Employment side)
-        const { error: hrError } = await supabase
-          .from('hr_records')
-          .update({ status: 'Left' })
-          .eq('cnic', agentCnic);
-
-        if (hrError) throw hrError;
-
-        // 3. Update local state for both tabs
-        setAgents(agents.map(a => a.cnic === agentCnic ? { ...a, status: 'Left', leftDate } : a));
-        setHrRecords(hrRecords.map(h => h.cnic === agentCnic ? { ...h, status: 'Left' } : h));
-
-        alert("Agent status updated to 'Left' in both systems.");
-      } catch (error) {
-        console.error('Error updating status:', error.message);
-        alert("Failed to update status: " + error.message);
-      }
-    }
-  };
 
   // 3. Reactivate (Use cnic)
   // 3. Reactivate (Syncs Agents + HR)
@@ -2373,12 +2283,6 @@ const AgentPayrollSystem = () => {
             const timestampRaw = values[0];
             const xferTimeFixed = normalizeTime(values[14]);
 
-            // 2. Define Sanitizer Helper
-            const sanitizeText = (text) => {
-              if (!text) return '';
-              return text.replace(/[\r\n]+/g, ' ').trim();
-            };
-
             // 3. Construct the Object
             return {
               // Fix: Use manualDate if provided, otherwise calculate from timestamp
@@ -2564,65 +2468,6 @@ const AgentPayrollSystem = () => {
     }
   };
 
-
-  // 2. Mark as Left / Reactivate (Saves Date to BOTH tables)
-  const handleToggleHRStatus = async (id, currentStatus, cnic, agentName) => {
-    if (!id) return alert("Error: Record ID is missing.");
-
-    const newStatus = currentStatus === 'Active' ? 'Left' : 'Active';
-    // Calculate date: Today if leaving, NULL if reactivating
-    const leftDateVal = newStatus === 'Left' ? new Date().toISOString().split('T')[0] : null;
-
-    const confirmMsg = newStatus === 'Left'
-      ? `Mark ${agentName} as LEFT?`
-      : `Reactivate ${agentName}?`;
-
-    if (window.confirm(confirmMsg)) {
-      try {
-        setLoading(true);
-
-        // A. Update HR Record (Now saving leftDate here too!)
-        const { error: hrError } = await supabase
-          .from('hr_records')
-          .update({
-            status: newStatus,
-            left_date: leftDateVal // Make sure your DB column is 'left_date' or 'leftDate'
-          })
-          .eq('id', id);
-
-        if (hrError) throw hrError;
-
-        // B. Sync with Agents Table (Only if they exist there)
-        let agentUpdateQuery = supabase.from('agents').update({ status: newStatus, leftDate: leftDateVal });
-
-        if (cnic && cnic.trim() !== '') {
-          await agentUpdateQuery.eq('cnic', cnic);
-        } else if (agentName) {
-          await agentUpdateQuery.eq('name', agentName);
-        }
-
-        // C. Update Local State (Both Tabs)
-        // We now update 'left_date' in local HR state immediately
-        setHrRecords(prev => prev.map(h => h.id === id ? { ...h, status: newStatus, left_date: leftDateVal } : h));
-
-        setAgents(prev => prev.map(a => {
-          const isMatch = (cnic && a.cnic === cnic) || (agentName && a.name === agentName);
-          if (isMatch) {
-            return { ...a, status: newStatus, leftDate: leftDateVal };
-          }
-          return a;
-        }));
-
-        alert(`Success! Status changed to ${newStatus}`);
-
-      } catch (error) {
-        console.error("Status Update Error:", error);
-        alert("Failed to update status: " + error.message);
-      } finally {
-        setLoading(false);
-      }
-    }
-  };
   // 3. Delete Record (Smart Sync)
   const handleDeleteHR = async (id, cnic, agentName) => {
     if (window.confirm(`CRITICAL: Permanently delete ${agentName}? \nThis removes them from BOTH HR and Agent lists.`)) {
@@ -3923,14 +3768,14 @@ const AgentPayrollSystem = () => {
                       {['Admin', 'SuperAdmin'].includes(userRole) && (
                       <div className="flex items-center gap-3">
 
-{/* [NEW] Goal Settings Button */}
-                        <button
-                          onClick={() => setShowGoalModal(true)}
-                          className="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-all border border-slate-600 shadow-sm"
-                          title="Configure Goal Rules"
-                        >
-                          <Settings className="w-4 h-4" />
-                        </button>
+{/* [FIX] Update onClick to initialize Temp State */}
+<button
+  onClick={() => setShowGoalModal(true)} 
+  className="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-all border border-slate-600 shadow-sm"
+  title="Configure Goal Rules"
+>
+  <Settings className="w-4 h-4" />
+</button>
 
                         </div>
 )}
@@ -6658,110 +6503,19 @@ const AgentPayrollSystem = () => {
         </div>
       )}
 
-      {/* --- GOAL SETTINGS MODAL --- */}
+      {/* --- GOAL SETTINGS MODAL (Optimized for Speed) --- */}
       {showGoalModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-slate-900 rounded-2xl border border-slate-700 shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200">
-            
-            {/* Header */}
-            <div className="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-950">
-              <div>
-                <h3 className="text-xl font-bold text-white">Goal Settings</h3>
-                <p className="text-slate-400 text-sm">Define automated goals based on salary ranges.</p>
-              </div>
-              <button onClick={() => setShowGoalModal(false)} className="text-slate-400 hover:text-white transition-colors">
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-
-            {/* Body */}
-            <div className="p-6 space-y-4">
-              <div className="grid grid-cols-12 gap-2 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                <div className="col-span-4">Min Salary</div>
-                <div className="col-span-4">Max Salary</div>
-                <div className="col-span-3 text-center">Goal</div>
-              </div>
-
-              <div className="space-y-3">
-                {goalRules.map((rule, index) => (
-                  <div key={rule.id} className="grid grid-cols-12 gap-2 items-center">
-                    {/* Min Input */}
-                    <div className="col-span-4 relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs">PKR</span>
-                      <input
-                        type="number"
-                        value={rule.min}
-                        onChange={(e) => {
-                          const newRules = [...goalRules];
-                          newRules[index].min = parseInt(e.target.value) || 0;
-                          setGoalRules(newRules);
-                        }}
-                        className="w-full pl-10 pr-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                      />
-                    </div>
-
-                    {/* Max Input */}
-                    <div className="col-span-4 relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs">PKR</span>
-                      <input
-                        type="number"
-                        value={rule.max}
-                        onChange={(e) => {
-                          const newRules = [...goalRules];
-                          newRules[index].max = parseInt(e.target.value) || 0;
-                          setGoalRules(newRules);
-                        }}
-                        className="w-full pl-10 pr-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                      />
-                    </div>
-
-                    {/* Goal Input */}
-                    <div className="col-span-3">
-                      <input
-                        type="number"
-                        value={rule.goal}
-                        onChange={(e) => {
-                          const newRules = [...goalRules];
-                          newRules[index].goal = parseInt(e.target.value) || 0;
-                          setGoalRules(newRules);
-                        }}
-                        className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-center text-blue-400 font-bold focus:ring-2 focus:ring-blue-500 outline-none"
-                      />
-                    </div>
-                    
-                    {/* Remove Button (Optional) */}
-                    <div className="col-span-1 flex justify-center">
-                       {/* You can add a delete button here if needed */}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Add Rule Button */}
-              <button 
-                onClick={() => setGoalRules([...goalRules, { id: Date.now(), min: 0, max: 0, goal: 0 }])}
-                className="w-full py-2 mt-2 border border-dashed border-slate-600 rounded-lg text-slate-400 text-sm hover:bg-slate-800 hover:text-white transition-all flex items-center justify-center gap-2"
-              >
-                <Plus className="w-4 h-4" /> Add New Range
-              </button>
-            </div>
-
-            {/* Footer */}
-            <div className="p-4 bg-slate-950 border-t border-slate-800 flex justify-end gap-3">
-              <button 
-                onClick={() => setShowGoalModal(false)}
-                className="px-4 py-2 text-slate-400 hover:text-white text-sm font-medium transition-colors"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={() => setShowGoalModal(false)} // Changes are live via state, just close
-                className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-all shadow-lg shadow-blue-900/20"
-              >
-                Save Changes
-              </button>
-            </div>
-          </div>
+          {/* Optimized Goal Modal from external file */}
+      <GoalSettingModal 
+        isOpen={showGoalModal}
+        onClose={() => setShowGoalModal(false)}
+        currentRules={goalRules}
+        onSave={(newRules) => {
+          setGoalRules(newRules); // Updates main app ONLY on save
+          setShowGoalModal(false);
+        }}
+      />
         </div>
       )}
 
