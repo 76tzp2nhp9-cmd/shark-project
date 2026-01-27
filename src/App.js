@@ -20,7 +20,7 @@ import * as XLSX from 'xlsx';
 
 import {
   Users, Edit, DollarSign, Calendar, AlertCircle, TrendingUp, Download,
-  Plus, X, Upload, LogOut, Lock, Clock,
+  Plus, X, Upload, LogOut, Lock, Clock, Search, Gift,
   Pencil, Trash2, UserX, Shield, RotateCcw, Settings,
   CheckCircle, XCircle, AlertTriangle// <--- ENSURE THESE ARE HERE
 } from 'lucide-react';
@@ -602,6 +602,31 @@ const AgentPayrollSystem = () => {
     showAddCenterModal
   ]);
 
+// [FIX] Redirect Restricted Roles away from hidden sub-tabs
+  useEffect(() => {
+   // 1. Management Tab Redirects
+    if (activeTab === 'management') {
+      // If NON-Allowed role tries to view Payroll -> Send to Attendance
+      if (managementSubTab === 'payroll' && !['HR', 'Admin', 'SuperAdmin', 'Finance'].includes(userRole)) {
+        setManagementSubTab('attendance');
+      }
+      // [NEW] If Finance tries to view Attendance -> Send to Payroll
+      if (managementSubTab === 'attendance' && userRole === 'Finance') {
+        setManagementSubTab('payroll');
+      }
+    }
+
+    // 2. Sales Tab: HR & Finance cannot see Sales List -> Send to Matrix
+    if (activeTab === 'sales' && salesSubTab === 'list' && ['HR', 'Finance'].includes(userRole)) {
+      setSalesSubTab('matrix');
+    }
+
+    // 3. Attendance Tab: HR & Finance cannot see Daily Attendance -> Send to Matrix
+    if (activeTab === 'attendance' && attendanceSubTab === 'daily' && ['HR', 'Finance'].includes(userRole)) {
+      setAttendanceSubTab('matrix');
+    }
+  }, [activeTab, managementSubTab, salesSubTab, attendanceSubTab, userRole]);
+
   // Login Logic
   // --- LOGIN LOGIC (Dual Table Check + Status Check) ---
   const handleLogin = async (e) => {
@@ -910,7 +935,7 @@ const AgentPayrollSystem = () => {
       // Table 2: Agent Cycle
       agentCycle: managementStaff.filter(e => e.cycleTypeNormalized.includes('agent'))
     };
-  }, [hrRecords, selectedMonth, attendance, bonuses, fines]); // Added 'holidays' dependency
+  }, [hrRecords, selectedMonth, attendance, bonuses, fines, holidays]); // Added 'holidays' dependency
 
   // --- HELPER: Get Management List (Designation != Agent) ---
   const managementEmployees = useMemo(() => {
@@ -1024,13 +1049,11 @@ const AgentPayrollSystem = () => {
       const hrRecord = hrRecords.find(h => (agent.cnic && h.cnic === agent.cnic) || (h.agent_name?.toString().trim().toLowerCase() === targetName));
       
       // --- [FIX PART 1] Parse Joining Date for Daily Logic ---
-      // We parse this early so we can use it inside the loop later
       const joinStr = hrRecord?.joining_date || agent.activeDate || agent.active_date;
       const joinDate = joinStr ? new Date(joinStr) : null;
-      // Important: Normalize to midnight to avoid timezone bugs
       if (joinDate) joinDate.setHours(0, 0, 0, 0); 
 
-      // 1. Phone Number (For Search)
+      // 1. Phone Number
       const rawPhone = agent.phone || hrRecord?.phone || hrRecord?.phone_number || hrRecord?.mobile || hrRecord?.contact || '';
       const finalPhone = rawPhone ? rawPhone.toString().trim() : '';
 
@@ -1038,12 +1061,9 @@ const AgentPayrollSystem = () => {
       let salary = agent.baseSalary || hrRecord?.base_salary || hrRecord?.baseSalary || 0;
       if (typeof salary === 'string') salary = parseInt(salary.replace(/,/g, '')) || 0;
 
-      // 3. [UPDATED] Dynamic Goal Logic (Uses State)
-      let autoGoal = 3; // Default fallback
-      
-      // Find the rule that matches the current salary
+      // 3. Dynamic Goal Logic
+      let autoGoal = 3; 
       const matchingRule = goalRules.find(rule => salary >= rule.min && salary <= rule.max);
-      
       if (matchingRule) {
         autoGoal = matchingRule.goal;
       }
@@ -1068,12 +1088,8 @@ const AgentPayrollSystem = () => {
       let loopDate = new Date(startStr);
       const loopEnd = new Date(endStr);
 
-      // (Note: We do NOT use setHours on loopDate here to avoid the "missing day" bug you faced)
-
       while (loopDate <= loopEnd) {
         // --- [FIX PART 2] SKIP DAYS BEFORE JOINING ---
-        // If this specific day in the loop is BEFORE the agent joined, skip it.
-        // This prevents holidays (or any stats) from counting before they were hired.
         if (joinDate && loopDate < joinDate) {
            loopDate.setDate(loopDate.getDate() + 1);
            continue; 
@@ -1093,15 +1109,17 @@ const AgentPayrollSystem = () => {
             else if (dailySalesCount === 2) daysOn2++;
             else if (dailySalesCount >= 3) daysOn3++;
           } else if (!isHoliday) {
-            daysOn0++; // Only count '0' if it wasn't a holiday
+            daysOn0++; 
           }
         }
         loopDate.setDate(loopDate.getDate() + 1);
       }
 
-      // --- FINANCIALS ---
-      const agentBonuses = bonuses.filter(b => b.agentName?.toString().trim().toLowerCase() === targetName && b.month === selectedMonth)
+    // --- FINANCIALS (Standard DB Fetch) ---
+      // We rename this to 'totalBonuses' so it matches your return statement
+      const totalBonuses = bonuses.filter(b => b.agentName?.toString().trim().toLowerCase() === targetName && b.month === selectedMonth)
         .reduce((sum, b) => sum + (b.amount || 0), 0);
+        
       const agentFines = fines.filter(f => f.agentName?.toString().trim().toLowerCase() === targetName && f.month === selectedMonth)
         .reduce((sum, f) => sum + (f.amount || 0), 0);
 
@@ -1112,16 +1130,18 @@ const AgentPayrollSystem = () => {
       } else {
         earnedBase = salary;
       }
-      const netSalary = earnedBase + agentBonuses - agentFines;
+      
+      // Use 'totalBonuses' here too
+      const netSalary = earnedBase + totalBonuses - agentFines;
 
       // Final Left Date
       const finalLeftDate = agent.status === 'Promoted' ? null : (agent.leftDate || agent.left_date || hrRecord?.leftDate || null);
 
       return {
         ...agent,
-        phone: finalPhone,      // [NEW] Added Phone
-        target: autoGoal,       // [NEW] Added Auto Goal
-        baseSalary: salary,     // [NEW] Normalized Salary
+        phone: finalPhone,      
+        target: autoGoal,       
+        baseSalary: salary,     
         leftDate: finalLeftDate,
         isPromoted: agent.status === 'Promoted',
         designation: agent.designation || hrRecord?.designation || 'Agent',
@@ -1129,7 +1149,7 @@ const AgentPayrollSystem = () => {
         lpd: dialingDays > 0 ? (approvedSales.length / dialingDays).toFixed(2) : "0.00",
         dialingDays, daysOn0, daysOn1, daysOn2, daysOn3,
         totalFines: agentFines || 0,
-        totalBonuses: agentBonuses || 0,
+        totalBonuses: totalBonuses || 0, // [UPDATED] Uses total calculated bonus
         daysPresent: dialingDays,
         totalWorkingDays,
         earnedBase,
@@ -1140,7 +1160,7 @@ const AgentPayrollSystem = () => {
     });
 
     return agentStats.sort((a, b) => a.name.localeCompare(b.name));
-  }, [agents, sales, fines, bonuses, attendance, hrRecords, selectedMonth, userRole, currentUser, holidays, goalRules]); // Removed teamFilter/centerFilter
+  }, [agents, sales, fines, bonuses, attendance, hrRecords, selectedMonth, userRole, currentUser, holidays, goalRules]);
 
 
   // 9. Bonuses (Respects Team/Center)
@@ -1185,7 +1205,7 @@ const AgentPayrollSystem = () => {
     const activeAgentCount = agents.filter(a => a.status === 'Active').length;
 
     return { totalAgents: activeAgentCount, totalSalesCount, totalBonusPayout, totalPayroll };
-  }, [agents, sales, filteredBonuses, monthlyStats, getActiveDateRange, teamFilter, centerFilter, holidays]);
+  }, [agents, sales, filteredBonuses, monthlyStats, getActiveDateRange, teamFilter, centerFilter]);
 
 
   // 4. Top Performers (Updated: Shows Real Bonus & Net Salary)
@@ -1215,7 +1235,7 @@ const AgentPayrollSystem = () => {
     });
 
     return stats.sort((a, b) => b.totalSales - a.totalSales);
-  }, [agents, sales, monthlyStats, getActiveDateRange, validAgentNames, holidays]);
+  }, [agents, sales, monthlyStats, getActiveDateRange, validAgentNames]);
 
   // 5. Sales Table (Smart Filter: Agents + HR Only)
   const filteredSales = useMemo(() => {
@@ -1959,13 +1979,36 @@ const AgentPayrollSystem = () => {
     if (!error) { setFines([...fines, ...data]); setShowAddFine(false); }
   };
 
-  // Add Bonus
-  const handleAddBonus = async (formData) => {
-    const newBonus = { ...formData, month: selectedMonth };
-    const { data, error } = await supabase.from('bonuses').insert([newBonus]).select();
-    if (!error) { setBonuses([...bonuses, ...data]); setShowAddBonus(false); }
-  };
+const handleAddBonus = async (formData) => {
+    // 1. Prepare Safe Payload (Prevents DB Crashes)
+    const payload = {
+      ...formData,
+      month: selectedMonth,
+      date: new Date().toISOString().split('T')[0],
+      
+      // Fallbacks to prevent "Null" errors
+      reason: formData.reason || 'Manual Bonus',
+      period: formData.period || selectedMonth,
+      
+      // Ensure numbers are numbers
+      targetSales: parseInt(formData.targetSales) || 0,
+      actualSales: parseInt(formData.actualSales) || 0,
+      amount: parseInt(formData.amount) || 0,
+      
+      type: formData.type || 'Bonus'
+    };
 
+    // 2. Insert into Supabase
+    const { data, error } = await supabase.from('bonuses').insert([payload]).select();
+
+    if (!error) {
+      setBonuses([...bonuses, ...data]);
+      setShowAddBonus(false);
+    } else {
+      console.error("Bonus Error:", error);
+      alert("Error: " + error.message);
+    }
+  };
   const handleSaveHR = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -2468,6 +2511,222 @@ const AgentPayrollSystem = () => {
     }
   };
 
+// --- HELPER: GET BUSINESS WEEKS (MON-FRI ONLY) ---
+  const getBusinessWeeks = (year, monthIndex) => {
+    const weeks = [];
+    let currentDate = new Date(year, monthIndex, 1);
+    const lastDayOfMonth = new Date(year, monthIndex + 1, 0);
+    
+    // Normalize to Midnight to avoid time offsets
+    currentDate.setHours(0,0,0,0);
+    lastDayOfMonth.setHours(23,59,59,999);
+
+    let weekNum = 1;
+
+    while (currentDate <= lastDayOfMonth) {
+      // 1. If start day is Sat (6) or Sun (0), move to next Monday
+      const day = currentDate.getDay();
+      if (day === 6) currentDate.setDate(currentDate.getDate() + 2); // Sat -> Mon
+      else if (day === 0) currentDate.setDate(currentDate.getDate() + 1); // Sun -> Mon
+
+      if (currentDate > lastDayOfMonth) break;
+
+      // 2. Set Start Date (Monday)
+      const weekStart = new Date(currentDate);
+
+      // 3. Set End Date (Friday)
+      // Friday is 4 days after Monday
+      const weekEnd = new Date(currentDate);
+      weekEnd.setDate(weekEnd.getDate() + 4);
+
+      // 4. Cap at End of Month
+      // (If month ends on Wednesday, the week ends on Wednesday)
+      const finalEnd = weekEnd > lastDayOfMonth ? new Date(lastDayOfMonth) : weekEnd;
+
+      weeks.push({
+        name: `Week ${weekNum}`,
+        start: weekStart.toISOString().split('T')[0],
+        end: finalEnd.toISOString().split('T')[0]
+      });
+
+      // 5. Move to NEXT Monday
+      // We are at Monday. Add 7 days to get to next Monday.
+      currentDate.setDate(currentDate.getDate() + 7);
+      weekNum++;
+    }
+    return weeks;
+  };
+  
+// --- AUTO GENERATE BONUSES (HYBRID: MON-FRI WEEKS) ---
+  const handleGenerateAutoBonuses = async () => {
+    const confirmGen = window.confirm("Generating Bonuses:\n1. >50k Salaries: Monthly Calculation\n2. <50k Salaries: Weekly (Mon-Fri) Calculation\n\nProceed?");
+    if (!confirmGen) return;
+
+    setLoading(true);
+    try {
+      const range = getPayrollRange(selectedMonth);
+      const monthStartStr = new Date(range.start).toISOString().split('T')[0];
+      const monthEndStr = new Date(range.end).toISOString().split('T')[0];
+      
+      const monthDate = new Date(range.start);
+      // [FIX] Use the new Business Week Logic
+      const weeks = getBusinessWeeks(monthDate.getFullYear(), monthDate.getMonth());
+
+      const newBonuses = [];
+
+      agents.forEach(agent => {
+        const targetName = agent.name?.toString().trim().toLowerCase();
+        
+        // Get Salary
+        const hrRecord = hrRecords.find(h => (agent.cnic && h.cnic === agent.cnic) || (h.agent_name?.toString().trim().toLowerCase() === targetName));
+        let salary = agent.baseSalary || hrRecord?.base_salary || hrRecord?.baseSalary || 0;
+        if (typeof salary === 'string') salary = parseInt(salary.replace(/,/g, '')) || 0;
+
+        // ====================================================
+        // LOGIC A: MONTHLY BONUSES (> 50,000 Salaries)
+        // ====================================================
+        if (salary >= 50000) {
+          const count = sales.filter(s => {
+             const saleName = s.agentName?.toString().trim().toLowerCase();
+             return saleName === targetName && 
+               (s.status === 'Sale' || ['HW- Xfer', 'HW-IBXfer', 'HW-Xfer-CDR'].includes(s.disposition)) &&
+               (s.date >= monthStartStr && s.date <= monthEndStr);
+          }).length;
+
+          let autoBonus = 0;
+          let tierName = "";
+
+          // > 80k Tier
+          if (salary > 80000) {
+            tierName = ">80k Tier";
+            if (count >= 240) autoBonus = 125000;
+            else if (count >= 220) autoBonus = 100000;
+            else if (count >= 198) autoBonus = 85000;
+            else if (count >= 170) autoBonus = 65000;
+            else if (count >= 150) autoBonus = 25000;
+          }
+          // 60k - 80k Tier
+          else if (salary >= 60000) {
+            tierName = "60k Tier";
+            if (count >= 220) autoBonus = 125000;
+            else if (count >= 198) autoBonus = 100000;
+            else if (count >= 176) autoBonus = 85000;
+            else if (count >= 150) autoBonus = 65000;
+            else if (count >= 130) autoBonus = 25000;
+          }
+          // 50k - 60k Tier
+          else {
+            tierName = "50k Tier";
+            if (count >= 198) autoBonus = 100000;
+            else if (count >= 176) autoBonus = 85000;
+            else if (count >= 150) autoBonus = 65000;
+            else if (count >= 140) autoBonus = 40000;
+            else if (count >= 100) autoBonus = 25000;
+          }
+
+          if (autoBonus > 0) {
+            const alreadyExists = bonuses.some(b => b.agentName === agent.name && b.month === selectedMonth && b.reason.includes('Monthly Tier'));
+            if (!alreadyExists) {
+              newBonuses.push({
+                agentName: agent.name,
+                amount: autoBonus,
+                reason: `Auto Monthly Tier (${count} Sales) - ${tierName}`,
+                date: new Date().toISOString().split('T')[0],
+                month: selectedMonth,
+                period: selectedMonth, 
+                type: 'Performance',
+                targetSales: 0, actualSales: count
+              });
+            }
+          }
+        }
+
+        // ====================================================
+        // LOGIC B: WEEKLY BONUSES (Mon-Fri Only)
+        // ====================================================
+        else if (salary >= 35000) {
+          
+          weeks.forEach(week => {
+            // Count sales ONLY between Monday and Friday of this week
+            const weeklyCount = sales.filter(s => {
+               const saleName = s.agentName?.toString().trim().toLowerCase();
+               return saleName === targetName && 
+                 (s.status === 'Sale' || ['HW- Xfer', 'HW-IBXfer', 'HW-Xfer-CDR'].includes(s.disposition)) &&
+                 (s.date >= week.start && s.date <= week.end); 
+            }).length;
+
+            let weeklyBonus = 0;
+            let ruleName = "";
+
+            // 45k Tier (Weekly)
+            if (salary >= 45000) {
+              ruleName = "45k Wkly";
+              if (weeklyCount >= 35) weeklyBonus = 10000;
+              else if (weeklyCount >= 30) weeklyBonus = 7000;
+              else if (weeklyCount >= 25) weeklyBonus = 6000;
+              else if (weeklyCount >= 20) weeklyBonus = 5000;
+            }
+            // 40k Tier (Weekly)
+            else if (salary >= 40000) {
+              ruleName = "40k Wkly";
+              if (weeklyCount >= 32) weeklyBonus = 9000;
+              else if (weeklyCount >= 27) weeklyBonus = 6000;
+              else if (weeklyCount >= 22) weeklyBonus = 5000;
+              else if (weeklyCount >= 17) weeklyBonus = 4000;
+            }
+            // 35k Tier (Weekly)
+            else if (salary >= 35000) {
+              ruleName = "35k Wkly";
+              if (weeklyCount >= 30) weeklyBonus = 9000;
+              else if (weeklyCount >= 25) weeklyBonus = 6000;
+              else if (weeklyCount >= 20) weeklyBonus = 5000;
+              else if (weeklyCount >= 15) weeklyBonus = 4000;
+            }
+
+            if (weeklyBonus > 0) {
+              const weekId = `${week.name}`;
+              const alreadyExists = bonuses.some(b => 
+                b.agentName === agent.name && 
+                b.month === selectedMonth && 
+                b.period === weekId && 
+                b.type === 'Weekly'
+              );
+
+              if (!alreadyExists) {
+                newBonuses.push({
+                  agentName: agent.name,
+                  amount: weeklyBonus,
+                  reason: `Auto Weekly (${weeklyCount} Sales) - ${ruleName}`,
+                  date: new Date().toISOString().split('T')[0],
+                  month: selectedMonth,
+                  period: weekId,
+                  type: 'Weekly',
+                  targetSales: 0, actualSales: weeklyCount
+                });
+              }
+            }
+          });
+        }
+      });
+
+      // 3. Save
+      if (newBonuses.length > 0) {
+        const { data, error } = await supabase.from('bonuses').insert(newBonuses).select();
+        if (error) throw error;
+        setBonuses(prev => [...prev, ...data]);
+        alert(`Success! Generated ${newBonuses.length} bonuses.`);
+      } else {
+        alert("No new bonuses found.");
+      }
+
+    } catch (error) {
+      console.error(error);
+      alert("Error: " + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // 3. Delete Record (Smart Sync)
   const handleDeleteHR = async (id, cnic, agentName) => {
     if (window.confirm(`CRITICAL: Permanently delete ${agentName}? \nThis removes them from BOTH HR and Agent lists.`)) {
@@ -2722,7 +2981,11 @@ const AgentPayrollSystem = () => {
               // 4. IT Support: System View
               else if (userRole === 'IT') {
                 // IT mainly needs Management (Access) and Dashboard. Hide operations.
-                if (['sales', 'payroll', 'employees', 'bonuses', 'fines', 'super_controls'].includes(tab)) return null;
+                if (['sales', 'employees', 'bonuses', 'fines', 'super_controls'].includes(tab)) return null;
+              }
+
+              else if (userRole === 'Finance') {
+                if (!['dashboard', 'management', 'bonuses', 'fines', 'sales', 'attendance', 'payroll'].includes(tab)) return null;
               }
 
               // 5. ADMIN / HR / QA: Existing Logic
@@ -2803,7 +3066,7 @@ const AgentPayrollSystem = () => {
               />
 
               {/* [UPDATED] Financials - Only for Admin, SuperAdmin, HR */}
-              {['Admin', 'SuperAdmin', 'HR'].includes(userRole) && (
+              {['Admin', 'SuperAdmin', 'HR', 'Finance'].includes(userRole) && (
                 <StatCard
                   icon={<Calendar className="w-6 h-6" />}
                   label="Total Payroll"
@@ -3292,7 +3555,7 @@ const AgentPayrollSystem = () => {
 
             <SubTabBar
               tabs={[
-                { id: 'list', label: 'Sales List' },
+                ...(!['HR', 'Finance'].includes(userRole) ? [{ id: 'list', label: 'Sales List' }] : []),
                 { id: 'matrix', label: 'Monthly Matrix' }
               ]}
               activeSubTab={salesSubTab}
@@ -3747,7 +4010,7 @@ const AgentPayrollSystem = () => {
                       </div>
 
                       {/* Action Buttons */}
-                      {['Admin', 'SuperAdmin', 'QA', 'HR'].includes(userRole) && (
+                      {['Admin', 'SuperAdmin', 'Finance'].includes(userRole) && (
                         <div className="flex items-center gap-3">
                           <button
                             onClick={() => setShowAddBonus(true)}
@@ -3813,286 +4076,359 @@ const AgentPayrollSystem = () => {
                 )}
 
                 {/* --- MATRIX LOGIC STARTS HERE --- */}
+               {/* --- OPTIMIZED MATRIX LOGIC --- */}
                 {(() => {
                   // 1. Prepare Dates
                   const { start, end } = getPayrollRange(selectedMonth);
                   const dateArray = getDaysArray(start, end);
 
-                  // 2. [CRITICAL FIX] Calculate Filtered Data ONCE at the top
-                  // This list will be used by BOTH the Rows (Body) and the Grand Total (Footer)
+                  // 2. Filter Displayed Agents
                   const displayedStats = monthlyStats.filter(stat => {
-                    // Search Filter
                     const query = searchQuery.toLowerCase();
                     const nameMatch = stat.name && stat.name.toLowerCase().includes(query);
-                    const phoneMatch = stat.phone && stat.phone.toString().includes(query); // [FIX] Checks phone
+                    const phoneMatch = stat.phone && stat.phone.toString().includes(query);
                     const matchesSearch = !searchQuery || nameMatch || phoneMatch;
-
-
-                    // Status Filter (Active/Left)
                     const matchesStatus = agentStatusFilter === 'All' || stat.status === agentStatusFilter;
-
-                    // Team Filter
                     const matchesTeam = teamFilter === 'All' || stat.team === teamFilter;
-
-                    // Center Filter
                     const matchesCenter = centerFilter === 'All' || stat.center === centerFilter;
-
                     return matchesSearch && matchesStatus && matchesTeam && matchesCenter;
                   });
 
-                  // 3. Extract Unique Teams from the FILTERED list (so empty teams don't show)
                   const uniqueTeams = [...new Set(displayedStats.map(s => s.team))].filter(Boolean).sort();
+
+                  // =================================================================================
+                  // ⚡ PERFORMANCE OPTIMIZATION: Pre-Calculate Data Maps
+                  // =================================================================================
+                  
+                  // Maps to store counts: Map[Key][Date] = Count
+                  const agentDailyMap = {}; 
+                  const teamDailyMap = {};  
+                  const grandDailyMap = {}; 
+                  
+                  // Maps to store Weekly Totals (Key = Friday Date String)
+                  const agentWeeklyMap = {};
+                  const teamWeeklyMap = {};
+                  const grandWeeklyMap = {};
+
+                  // A. Single Loop through Sales to fill Daily Maps
+                  sales.forEach(s => {
+                    if (s.status === 'Sale' || ['HW- Xfer', 'HW-IBXfer', 'HW-Xfer-CDR'].includes(s.disposition)) {
+                      const sDate = s.date; // "YYYY-MM-DD"
+                      const sAgent = s.agentName?.toString().trim();
+                      
+                      // Find Agent in displayed list to get their Team
+                      const agentStat = displayedStats.find(a => a.name === sAgent);
+                      const sTeam = agentStat ? agentStat.team : null;
+
+                      if (!sDate) return;
+
+                      // Agent Count
+                      if (sAgent) {
+                        if (!agentDailyMap[sAgent]) agentDailyMap[sAgent] = {};
+                        agentDailyMap[sAgent][sDate] = (agentDailyMap[sAgent][sDate] || 0) + 1;
+                      }
+
+                      // Team Count
+                      if (sTeam) {
+                        if (!teamDailyMap[sTeam]) teamDailyMap[sTeam] = {};
+                        teamDailyMap[sTeam][sDate] = (teamDailyMap[sTeam][sDate] || 0) + 1;
+                      }
+
+                      // Grand Total Count (Only if agent is currently visible in filter)
+                      if (agentStat) {
+                        grandDailyMap[sDate] = (grandDailyMap[sDate] || 0) + 1;
+                      }
+                    }
+                  });
+
+                  // B. Calculate Weekly Summaries (Mon-Fri)
+                  dateArray.forEach(dateStr => {
+                    const d = new Date(dateStr);
+                    if (d.getDay() === 5) { // If Friday
+                      // Generate Mon-Fri dates for this week
+                      const weekDates = [];
+                      for (let i = 4; i >= 0; i--) {
+                        const past = new Date(d);
+                        past.setDate(d.getDate() - i);
+                        weekDates.push(past.toISOString().split('T')[0]);
+                      }
+
+                      // Agent Weekly Sums
+                      displayedStats.forEach(agent => {
+                        const sum = weekDates.reduce((acc, currDate) => acc + (agentDailyMap[agent.name]?.[currDate] || 0), 0);
+                        if (!agentWeeklyMap[agent.name]) agentWeeklyMap[agent.name] = {};
+                        agentWeeklyMap[agent.name][dateStr] = sum;
+                      });
+
+                      // Team Weekly Sums
+                      uniqueTeams.forEach(team => {
+                        const sum = weekDates.reduce((acc, currDate) => acc + (teamDailyMap[team]?.[currDate] || 0), 0);
+                        if (!teamWeeklyMap[team]) teamWeeklyMap[team] = {};
+                        teamWeeklyMap[team][dateStr] = sum;
+                      });
+
+                      // Grand Weekly Sums
+                      const sum = weekDates.reduce((acc, currDate) => acc + (grandDailyMap[currDate] || 0), 0);
+                      grandWeeklyMap[dateStr] = sum;
+                    }
+                  });
+
+                  // =================================================================================
+                  // RENDER TABLE
+                  // =================================================================================
 
                   return (
                     <div className="bg-slate-900 rounded-xl border border-slate-700 shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
                       <div className="overflow-auto relative">
-                        <table className="w-full text-slate-300 border-collapse table-fixed">
+                      <table className="w-full text-slate-300 border-collapse table-fixed">
 
-                          {/* --- HEADER --- */}
-                          <thead className="sticky top-0 z-40 shadow-md">
-                            <tr className="bg-slate-950">
-                              <th className="p-3 text-center border-b border-r border-slate-800 sticky left-0 z-50 bg-slate-950 w-12">No.</th>
-                              <th className="p-3 text-left border-b border-r border-slate-800 sticky left-12 z-50 bg-slate-950 w-44">Agent Name</th>
+                        {/* --- HEADER --- */}
+                        <thead className="sticky top-0 z-40 shadow-md">
+                          <tr className="bg-slate-950">
+                            <th className="p-3 text-center border-b border-r border-slate-800 sticky left-0 z-50 bg-slate-950 w-12">No.</th>
+                            <th className="p-3 text-left border-b border-r border-slate-800 sticky left-12 z-50 bg-slate-950 w-44">Agent Name</th>
 
-                              {/* [NEW] Goal & Salary Columns */}
-                              <th className="p-2 text-center border-b border-r border-slate-800 bg-slate-900 text-slate-300 text-[10px] font-bold w-20">SALARY</th>
-                              <th className="p-2 text-center border-b border-r border-slate-800 bg-slate-900 text-slate-300 text-[10px] font-bold w-16">GOAL</th>
+                            <th className="p-2 text-center border-b border-r border-slate-800 bg-slate-900 text-slate-300 text-[10px] font-bold w-20">SALARY</th>
+                            <th className="p-2 text-center border-b border-r border-slate-800 bg-slate-900 text-slate-300 text-[10px] font-bold w-16">GOAL</th>
 
-                              {/* Metric Headers */}
-                              <th className="p-2 text-center border-b border-r border-slate-800 bg-blue-900/40 text-blue-400 text-[10px] font-bold w-14">LPD</th>
-                              <th className="p-2 text-center border-b border-r border-slate-800 bg-slate-800 text-slate-400 text-[10px] w-12">DAYS</th>
-                              <th className="p-2 text-center border-b border-slate-800 bg-red-900/20 text-red-400 text-[10px] w-10">0s</th>
-                              <th className="p-2 text-center border-b border-slate-800 bg-orange-900/20 text-orange-400 text-[10px] w-10">1s</th>
-                              <th className="p-2 text-center border-b border-slate-800 bg-yellow-900/20 text-yellow-400 text-[10px] w-10">2s</th>
-                              <th className="p-2 text-center border-b border-r border-slate-800 bg-green-900/20 text-green-400 text-[10px] w-10">3s</th>
+                            <th className="p-2 text-center border-b border-r border-slate-800 bg-blue-900/40 text-blue-400 text-[10px] font-bold w-14">LPD</th>
+                            <th className="p-2 text-center border-b border-r border-slate-800 bg-slate-800 text-slate-400 text-[10px] w-12">DAYS</th>
+                            <th className="p-2 text-center border-b border-slate-800 bg-red-900/20 text-red-400 text-[10px] w-10">0s</th>
+                            <th className="p-2 text-center border-b border-slate-800 bg-orange-900/20 text-orange-400 text-[10px] w-10">1s</th>
+                            <th className="p-2 text-center border-b border-slate-800 bg-yellow-900/20 text-yellow-400 text-[10px] w-10">2s</th>
+                            <th className="p-2 text-center border-b border-r border-slate-800 bg-green-900/20 text-green-400 text-[10px] w-10">3s</th>
 
-                              {/* Date Columns */}
-                              {dateArray.map(dateStr => {
-                                const d = new Date(dateStr);
-                                const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-                                return (
-                                  <th key={dateStr} className={`p-2 text-center border-b border-slate-800 w-10 ${isWeekend ? 'bg-slate-800' : 'bg-slate-900'}`}>
+                            {dateArray.map(dateStr => {
+                              const d = new Date(dateStr);
+                              const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+                              const isFriday = d.getDay() === 5; 
+
+                              return (
+                                <React.Fragment key={dateStr}>
+                                  <th className={`p-2 text-center border-b border-slate-800 w-10 ${isWeekend ? 'bg-slate-800' : 'bg-slate-900'}`}>
                                     <div className="text-[10px] text-slate-500 uppercase">{d.toLocaleDateString('en-US', { weekday: 'narrow' })}</div>
                                     <div className={`text-xs font-bold ${isWeekend ? 'text-slate-500' : 'text-white'}`}>{d.getDate()}</div>
                                   </th>
-                                );
-                              })}
-                              <th className="p-3 text-center bg-slate-950 border-b border-l border-slate-800 font-bold text-green-400 sticky right-0 z-40 w-16 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">TOTAL</th>
-                            </tr>
-                          </thead>
 
-                          {/* --- BODY --- */}
-                          <tbody className="divide-y divide-slate-800">
-                            {uniqueTeams.map(teamName => {
-                              // Filter and Sort Agents for this Team (from displayedStats)
-                              const teamAgents = displayedStats
-                                .filter(s => s.team === teamName)
-                                .sort((a, b) => a.name.localeCompare(b.name));
-
-                              if (teamAgents.length === 0) return null;
-
-                              // Calculate Team Sub-Totals
-                              const teamTotalSales = teamAgents.reduce((sum, a) => sum + a.totalSales, 0);
-                              const teamTotalDays = teamAgents.reduce((sum, a) => sum + a.dialingDays, 0);
-                              const teamAvgLPD = teamTotalDays > 0 ? (teamTotalSales / teamTotalDays).toFixed(2) : "0.00";
-
-                              // Get sales relevant to this team for daily breakdown
-                              const teamAllSales = sales.filter(s =>
-                                (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer') &&
-                                teamAgents.some(a => a.name?.toString().trim().toLowerCase() === s.agentName?.toString().trim().toLowerCase())
-                              );
-
-                              return (
-                                <React.Fragment key={teamName}>
-                                  {/* Team Header Row */}
-                                  <tr className="bg-slate-800/80 sticky top-[53px] z-30">
-                                    <td colSpan={2} className="p-2 px-4 border-r border-slate-700 font-black text-blue-400 uppercase tracking-widest text-sm sticky left-0 z-30 bg-slate-800">
-                                      {teamName}
-                                    </td>
-<td className="p-1 text-center border-r border-slate-800 text-slate-300 font-mono text-[10px]">
-                                          {agents.baseSalary ? parseInt(agents.baseSalary).toLocaleString() : '-'}
-                                        </td>
-                                        <td className="p-1 text-center border-r border-slate-800 text-slate-300 font-mono text-[10px]">
-                                          {agents.target || '-'}
-                                        </td>
-
-                                    <td className="text-center font-bold text-blue-300 border-r border-slate-700 bg-slate-800">{teamAvgLPD}</td>
-                                    <td className="text-center text-slate-400 border-r border-slate-700 bg-slate-800">{teamTotalDays}</td>
-                                    <td colSpan={4} className="bg-slate-800 border-r border-slate-700"></td>
-
-                                    {dateArray.map(d => {
-                                      const dailyCount = teamAllSales.filter(s => s.date === d).length;
-                                      return (
-                                        <td key={d} className={`text-center text-[10px] border-b border-slate-700 font-bold ${dailyCount > 0 ? 'text-blue-300 bg-blue-500/10' : 'text-slate-600 bg-slate-800/30'}`}>
-                                          {dailyCount > 0 ? dailyCount : '-'}
-                                        </td>
-                                      );
-                                    })}
-
-                                    <td className="text-center font-black text-green-400 sticky right-0 z-30 bg-slate-800 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
-                                      {teamTotalSales}
-                                    </td>
-                                  </tr>
-
-                                  {/* Agent Rows */}
-                                  {teamAgents.map((stat, idx) => {
-                                    const agentSales = sales.filter(s =>
-                                      s.agentName?.toString().trim().toLowerCase() === stat.name?.toString().trim().toLowerCase() &&
-                                      (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer')
-                                    );
-
-                                    // Get Agent's Join Date for comparison
-                                    const hrRec = hrRecords.find(h => h.cnic === stat.cnic) || {};
-                                    const joinDateStr = hrRec.joining_date || stat.activeDate || stat.active_date;
-                                    const joinDate = joinDateStr ? new Date(joinDateStr) : null;
-                                    if (joinDate) joinDate.setHours(0, 0, 0, 0);
-
-                                    // [NEW CODE] - Checks for ANY inactive status (Left, Terminated, NCNS)
-                                    const isInactive = stat.status !== 'Active' && stat.status !== 'Promoted';
-                                    const rowClass = isInactive ? 'bg-red-900/10 hover:bg-red-900/20' : 'hover:bg-blue-900/10';
-                                    const nameClass = isInactive ? 'text-red-400' : 'text-slate-200';
-
-                                    return (
-                                      <tr key={stat.id} className={`${rowClass} transition-colors group`}>
-                                        <td className="p-2 text-center border-r border-slate-800 bg-slate-900 text-slate-600 font-mono text-[10px] sticky left-0 z-10 group-hover:text-white">{idx + 1}</td>
-
-                                        <td className="p-2 px-3 font-medium border-r border-slate-800 bg-slate-900 sticky left-12 z-10 truncate text-xs">
-                                          <div className={nameClass}>{stat.name}</div>
-                                          {stat.isPromoted ? (
-                                            <div className="text-[9px] text-red-500 font-bold uppercase mt-0.5 tracking-tighter">
-                                              PROMOTED TO {stat.designation.toUpperCase()}
-                                            </div>
-                                          ) : (
-                                            isInactive && (
-                                              <div className="text-[9px] text-red-500/80 font-mono mt-0.5 font-bold">
-                                                {stat.status.toUpperCase()}: {stat.leftDate || 'N/A'}
-                                              </div>
-                                            )
-                                          )}
-                                        </td>
-
-                                        <td className="p-1 text-center border-r border-slate-800 text-slate-300 font-mono text-[10px]">
-                                          {stat.baseSalary ? parseInt(stat.baseSalary).toLocaleString() : '0'}
-                                        </td>
-                                        <td className="p-1 text-center border-r border-slate-800 text-slate-300 font-mono text-[10px]">
-                                          {stat.target || '-'}
-                                        </td>
-
-                                        <td className="p-1 text-center border-r border-slate-800 bg-blue-500/5 font-bold text-blue-400 text-xs">{stat.lpd}</td>
-                                        <td className="p-1 text-center border-r border-slate-800 text-slate-400 text-[10px]">{stat.dialingDays}</td>
-                                        <td className="p-1 text-center text-red-400 text-[10px]">{stat.daysOn0}</td>
-                                        <td className="p-1 text-center text-orange-300/80 text-[10px]">{stat.daysOn1}</td>
-                                        <td className="p-1 text-center text-yellow-300/80 text-[10px]">{stat.daysOn2}</td>
-                                        <td className="p-1 text-center border-r border-slate-800 text-green-400 font-bold text-[10px]">{stat.daysOn3}</td>
-
-                                        {dateArray.map(dateStr => {
-                                          const currentDate = new Date(dateStr);
-                                          currentDate.setHours(0, 0, 0, 0);
-
-                                          // 1. Check for Holiday
-                                          const isHoliday = holidays.some(h => h.date === dateStr);
-
-                                          // 2. Is this date BEFORE they joined?
-                                          const isBeforeJoining = joinDate && currentDate < joinDate;
-
-                                          const dailyCount = agentSales.filter(s => s.date === dateStr).length;
-
-                                          // check attendance for '0' vs 'A' logic
-                                          const hasAttendance = attendance.some(a =>
-                                            a.date === dateStr &&
-                                            a.agentName?.toString().trim().toLowerCase() === stat.name?.toString().trim().toLowerCase() &&
-                                            (a.status === 'Present' || a.status === 'Late')
-                                          );
-
-                                          // check if others worked (to decide if it was a working day)
-                                          const isWorkingDay = sales.some(s => s.date === dateStr && (s.status === 'Sale' || ['HW- Xfer', 'HW-IBXfer'].includes(s.disposition)));
-
-                                          let cellContent = '-';
-                                          let cellClass = 'text-slate-700';
-
-                                          // PRIORITY 1: Sales (Green) - Work done overrides everything
-                                          if (dailyCount > 0) {
-                                            cellContent = dailyCount;
-                                            cellClass = 'bg-green-500/10 text-green-400 font-bold';
-                                          }
-                                          // PRIORITY 2: Holiday (Purple 'H') - Only if NO sales
-                                          else if (isHoliday) {
-                                            cellContent = 'H';
-                                            cellClass = 'text-purple-400 font-bold bg-purple-900/20';
-                                          }
-                                          // PRIORITY 3: Normal Status (0, A, or -)
-                                          else if (!isBeforeJoining) {
-                                            if (hasAttendance) {
-                                              cellContent = '0';
-                                              cellClass = 'bg-red-500/20 text-red-400 font-bold';
-                                            }
-                                            else if (isWorkingDay) {
-                                              cellContent = 'A';
-                                              cellClass = 'text-red-500 font-black';
-                                            }
-                                          }
-
-                                          return (
-                                            <td key={dateStr} className={`p-1 text-center border-b border-slate-800 text-[11px] ${cellClass}`}>
-                                              {cellContent}
-                                            </td>
-                                          );
-                                        })}
-
-                                        <td className="p-2 text-center font-bold text-white bg-slate-900 sticky right-0 z-10 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
-                                          {stat.totalSales}
-                                        </td>
-                                      </tr>
-                                    );
-                                  })}
+                                  {/* [INJECT] Weekly Total Header */}
+                                  {isFriday && (
+                                    <th className="p-1 text-center border-b border-r border-l border-slate-800 bg-emerald-950/50 w-10">
+                                      <div className="text-[8px] font-bold text-emerald-500 uppercase">WK</div>
+                                      <div className="text-[9px] font-black text-emerald-400">TOT</div>
+                                    </th>
+                                  )}
                                 </React.Fragment>
                               );
                             })}
-                          </tbody>
+                            <th className="p-3 text-center bg-slate-950 border-b border-l border-slate-800 font-bold text-green-400 sticky right-0 z-40 w-16 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">TOTAL</th>
+                          </tr>
+                        </thead>
 
-                          {/* --- FOOTER (Grand Totals using DISPLAYEDSTATS) --- */}
-                          <tfoot className="sticky bottom-0 z-40 shadow-[0_-4px_10px_rgba(0,0,0,0.5)]">
-                            <tr className="bg-slate-950 border-t-2 border-blue-500 font-black text-white">
-                              <td colSpan={2} className="p-3 text-left sticky left-0 bg-slate-950 z-50 uppercase tracking-tighter">Grand Total</td>
+                        {/* --- BODY --- */}
+                        <tbody className="divide-y divide-slate-800">
+                          {uniqueTeams.map(teamName => {
+                            const teamAgents = displayedStats
+                              .filter(s => s.team === teamName)
+                              .sort((a, b) => a.name.localeCompare(b.name));
 
-<td className="p-1 text-center border-r border-slate-800 text-slate-300 font-mono text-[10px]">
-                                          {agents.baseSalary ? parseInt(agents.baseSalary).toLocaleString() : '-'}
+                            if (teamAgents.length === 0) return null;
+
+                            const teamTotalSales = teamAgents.reduce((sum, a) => sum + a.totalSales, 0);
+                            const teamTotalDays = teamAgents.reduce((sum, a) => sum + a.dialingDays, 0);
+                            const teamAvgLPD = teamTotalDays > 0 ? (teamTotalSales / teamTotalDays).toFixed(2) : "0.00";
+
+                            return (
+                              <React.Fragment key={teamName}>
+                                {/* Team Header Row */}
+                                <tr className="bg-slate-800/80 sticky top-[53px] z-30">
+                                  <td colSpan={2} className="p-2 px-4 border-r border-slate-700 font-black text-blue-400 uppercase tracking-widest text-sm sticky left-0 z-30 bg-slate-800">
+                                    {teamName}
+                                  </td>
+                                  <td className="p-1 border-r border-slate-800 bg-slate-800"></td>
+                                  <td className="p-1 border-r border-slate-800 bg-slate-800"></td>
+                                  <td className="text-center font-bold text-blue-300 border-r border-slate-700 bg-slate-800">{teamAvgLPD}</td>
+                                  <td className="text-center text-slate-400 border-r border-slate-700 bg-slate-800">{teamTotalDays}</td>
+                                  <td colSpan={4} className="bg-slate-800 border-r border-slate-700"></td>
+
+                                  {dateArray.map(d => {
+                                    // ⚡ FAST LOOKUP: O(1) Access
+                                    const dailyCount = teamDailyMap[teamName]?.[d] || 0;
+                                    const isFriday = new Date(d).getDay() === 5;
+
+                                    return (
+                                      <React.Fragment key={d}>
+                                        <td className={`text-center text-[10px] border-b border-slate-700 font-bold ${dailyCount > 0 ? 'text-blue-300 bg-blue-500/10' : 'text-slate-600 bg-slate-800/30'}`}>
+                                          {dailyCount > 0 ? dailyCount : '-'}
                                         </td>
-                                        <td className="p-1 text-center border-r border-slate-800 text-slate-300 font-mono text-[10px]">
-                                          {agents.target || '-'}
-                                        </td>
 
-                              <td className="text-center text-blue-400 bg-slate-950">
-                                {/* Calculate Average LPD for VISIBLE agents only */}
-                                {(displayedStats.reduce((s, a) => s + a.totalSales, 0) / (displayedStats.reduce((s, a) => s + a.dialingDays, 0) || 1)).toFixed(2)}
-                              </td>
-                              <td className="text-center text-slate-400 bg-slate-950">
-                                {displayedStats.reduce((s, a) => s + a.dialingDays, 0)}
-                              </td>
-                              <td colSpan={4} className="bg-slate-950"></td>
+                                        {/* [INJECT] Team Weekly Total */}
+                                        {isFriday && (
+                                          <td className="text-center text-[10px] border-b border-r border-l border-slate-700 font-black text-emerald-400 bg-emerald-900/20">
+                                            {teamWeeklyMap[teamName]?.[d] || 0}
+                                          </td>
+                                        )}
+                                      </React.Fragment>
+                                    );
+                                  })}
 
-                              {dateArray.map(d => {
-                                // Grand Total for each day must check displayedStats
-                                // We check if the sale belongs to ANY agent in the displayedStats list
-                                const dailyGrandTotal = sales.filter(s =>
-                                  s.date === d &&
-                                  (s.status === 'Sale' || s.disposition === 'HW- Xfer' || s.disposition === 'HW-IBXfer') &&
-                                  displayedStats.some(agent => agent.name?.toString().trim().toLowerCase() === s.agentName?.toString().trim().toLowerCase())
-                                ).length;
+                                  <td className="text-center font-black text-green-400 sticky right-0 z-30 bg-slate-800 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
+                                    {teamTotalSales}
+                                  </td>
+                                </tr>
 
-                                return (
-                                  <td key={d} className="bg-slate-950 text-center text-xs font-bold text-green-400">
+                                {/* Agent Rows */}
+                                {teamAgents.map((stat, idx) => {
+                                  // Join Date Logic
+                                  const hrRec = hrRecords.find(h => h.cnic === stat.cnic) || {};
+                                  const joinDateStr = hrRec.joining_date || stat.activeDate || stat.active_date;
+                                  const joinDate = joinDateStr ? new Date(joinDateStr) : null;
+                                  if (joinDate) joinDate.setHours(0, 0, 0, 0);
+
+                                  // Status Logic
+                                  const isInactive = stat.status !== 'Active' && stat.status !== 'Promoted';
+                                  const rowClass = isInactive ? 'bg-red-900/10 hover:bg-red-900/20' : 'hover:bg-blue-900/10';
+                                  const nameClass = isInactive ? 'text-red-400' : 'text-slate-200';
+
+                                  return (
+                                    <tr key={stat.id} className={`${rowClass} transition-colors group`}>
+                                      <td className="p-2 text-center border-r border-slate-800 bg-slate-900 text-slate-600 font-mono text-[10px] sticky left-0 z-10 group-hover:text-white">{idx + 1}</td>
+
+                                      <td className="p-2 px-3 font-medium border-r border-slate-800 bg-slate-900 sticky left-12 z-10 truncate text-xs">
+                                        <div className={nameClass}>{stat.name}</div>
+                                        {stat.isPromoted ? (
+                                          <div className="text-[9px] text-red-500 font-bold uppercase mt-0.5 tracking-tighter">
+                                            PROMOTED TO {stat.designation.toUpperCase()}
+                                          </div>
+                                        ) : (
+                                          isInactive && (
+                                            <div className="text-[9px] text-red-500/80 font-mono mt-0.5 font-bold">
+                                              {stat.status.toUpperCase()}: {stat.leftDate || 'N/A'}
+                                            </div>
+                                          )
+                                        )}
+                                      </td>
+
+                                      <td className="p-1 text-center border-r border-slate-800 text-slate-300 font-mono text-[10px]">
+                                        {stat.baseSalary ? parseInt(stat.baseSalary).toLocaleString() : '0'}
+                                      </td>
+                                      <td className="p-1 text-center border-r border-slate-800 text-slate-300 font-mono text-[10px]">
+                                        {stat.target || '-'}
+                                      </td>
+
+                                      <td className="p-1 text-center border-r border-slate-800 bg-blue-500/5 font-bold text-blue-400 text-xs">{stat.lpd}</td>
+                                      <td className="p-1 text-center border-r border-slate-800 text-slate-400 text-[10px]">{stat.dialingDays}</td>
+                                      <td className="p-1 text-center text-red-400 text-[10px]">{stat.daysOn0}</td>
+                                      <td className="p-1 text-center text-orange-300/80 text-[10px]">{stat.daysOn1}</td>
+                                      <td className="p-1 text-center text-yellow-300/80 text-[10px]">{stat.daysOn2}</td>
+                                      <td className="p-1 text-center border-r border-slate-800 text-green-400 font-bold text-[10px]">{stat.daysOn3}</td>
+
+                                      {/* Agent Date Loop */}
+                                      {dateArray.map(dateStr => {
+                                        const currentDate = new Date(dateStr);
+                                        currentDate.setHours(0, 0, 0, 0);
+                                        const isFriday = currentDate.getDay() === 5;
+
+                                        // ⚡ FAST LOOKUP: O(1) Access
+                                        const dailyCount = agentDailyMap[stat.name]?.[dateStr] || 0;
+                                        
+                                        // Checks
+                                        const isHoliday = holidays.some(h => h.date === dateStr);
+                                        const isBeforeJoining = joinDate && currentDate < joinDate;
+                                        const hasAttendance = attendance.some(a =>
+                                          a.date === dateStr &&
+                                          a.agentName?.toString().trim().toLowerCase() === stat.name?.toString().trim().toLowerCase() &&
+                                          (a.status === 'Present' || a.status === 'Late')
+                                        );
+                                        const isWorkingDay = grandDailyMap[dateStr] > 0; // Check if *anyone* made a sale
+
+                                        let cellContent = '-';
+                                        let cellClass = 'text-slate-700';
+
+                                        if (dailyCount > 0) {
+                                          cellContent = dailyCount;
+                                          cellClass = 'bg-green-500/10 text-green-400 font-bold';
+                                        } else if (isHoliday) {
+                                          cellContent = 'H';
+                                          cellClass = 'text-purple-400 font-bold bg-purple-900/20';
+                                        } else if (!isBeforeJoining) {
+                                          if (hasAttendance) {
+                                            cellContent = '0';
+                                            cellClass = 'bg-red-500/20 text-red-400 font-bold';
+                                          } else if (isWorkingDay) {
+                                            cellContent = 'A';
+                                            cellClass = 'text-red-500 font-black';
+                                          }
+                                        }
+
+                                        return (
+                                          <React.Fragment key={dateStr}>
+                                            <td className={`p-1 text-center border-b border-slate-800 text-[11px] ${cellClass}`}>
+                                              {cellContent}
+                                            </td>
+
+                                            {/* [INJECT] Agent Weekly Total */}
+                                            {isFriday && (
+                                              <td className="p-1 text-center border-b border-r border-l border-slate-800 text-[11px] font-bold text-emerald-300 bg-emerald-900/10">
+                                                {agentWeeklyMap[stat.name]?.[dateStr] || 0}
+                                              </td>
+                                            )}
+                                          </React.Fragment>
+                                        );
+                                      })}
+
+                                      <td className="p-2 text-center font-bold text-white bg-slate-900 sticky right-0 z-10 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
+                                        {stat.totalSales}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </React.Fragment>
+                            );
+                          })}
+                        </tbody>
+
+                        {/* --- FOOTER (Grand Totals) --- */}
+                        <tfoot className="sticky bottom-0 z-40 shadow-[0_-4px_10px_rgba(0,0,0,0.5)]">
+                          <tr className="bg-slate-950 border-t-2 border-blue-500 font-black text-white">
+                            <td colSpan={2} className="p-3 text-left sticky left-0 bg-slate-950 z-50 uppercase tracking-tighter">Grand Total</td>
+                            <td className="bg-slate-950"></td>
+                            <td className="bg-slate-950"></td>
+                            <td className="text-center text-blue-400 bg-slate-950">
+                              {(displayedStats.reduce((s, a) => s + a.totalSales, 0) / (displayedStats.reduce((s, a) => s + a.dialingDays, 0) || 1)).toFixed(2)}
+                            </td>
+                            <td className="text-center text-slate-400 bg-slate-950">
+                              {displayedStats.reduce((s, a) => s + a.dialingDays, 0)}
+                            </td>
+                            <td colSpan={4} className="bg-slate-950"></td>
+
+                            {/* Footer Date Loop */}
+                            {dateArray.map(d => {
+                              // ⚡ FAST LOOKUP
+                              const dailyGrandTotal = grandDailyMap[d] || 0;
+                              const isFriday = new Date(d).getDay() === 5;
+
+                              return (
+                                <React.Fragment key={d}>
+                                  <td className="bg-slate-950 text-center text-xs font-bold text-green-400">
                                     {dailyGrandTotal > 0 ? dailyGrandTotal : ''}
                                   </td>
-                                );
-                              })}
 
-                              <td className="p-3 text-center text-green-400 text-lg sticky right-0 bg-slate-950 z-50 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
-                                {displayedStats.reduce((s, a) => s + a.totalSales, 0)}
-                              </td>
-                            </tr>
-                          </tfoot>
-                        </table>
+                                  {/* [INJECT] Grand Weekly Total */}
+                                  {isFriday && (
+                                    <td className="bg-slate-950 border-r border-l border-slate-800 text-center text-xs font-black text-emerald-400">
+                                      {grandWeeklyMap[d] || 0}
+                                    </td>
+                                  )}
+                                </React.Fragment>
+                              );
+                            })}
+
+                            <td className="p-3 text-center text-green-400 text-lg sticky right-0 bg-slate-950 z-50 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
+                              {displayedStats.reduce((s, a) => s + a.totalSales, 0)}
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
                       </div>
                     </div>
                   );
@@ -4110,16 +4446,18 @@ const AgentPayrollSystem = () => {
         {activeTab === 'management' && (
 
           <div className="space-y-6">
-            <SubTabBar
+           <SubTabBar
               tabs={[
-                { id: 'payroll', label: 'Payroll' },
-                { id: 'attendance', label: 'Attendance' }
+                // [FIX] Show Payroll tab ONLY to HR, Admin, SuperAdmin
+                ...(['HR', 'Admin', 'SuperAdmin', 'Finance'].includes(userRole) ? [{ id: 'payroll', label: 'Payroll' }] : []),
+                
+                ...(userRole !== 'Finance' ? [{ id: 'attendance', label: 'Attendance' }] : [])
               ]}
               activeSubTab={managementSubTab}
               setActiveSubTab={setManagementSubTab}
             />
 
-            {managementSubTab === 'payroll' && (
+            {managementSubTab === 'payroll' && ['HR', 'Admin', 'SuperAdmin', 'Finance'].includes(userRole) && (
               <div className="space-y-8 animate-in fade-in duration-300">
 
                 {/* Header Section */}
@@ -4594,8 +4932,8 @@ const AgentPayrollSystem = () => {
           <div className="space-y-6">
 
             <SubTabBar
-              tabs={[
-                { id: 'daily', label: 'Daily Attendance' },
+              tabs={[              
+                ...(!['HR', 'Finance'].includes(userRole) ? [{ id: 'daily', label: 'Daily Attendance' }] : []),
                 { id: 'matrix', label: 'Attendance Matrix' }
               ]}
               activeSubTab={attendanceSubTab}
@@ -4885,7 +5223,7 @@ const AgentPayrollSystem = () => {
                       Cycle: <span className="text-slate-300">{getPayrollRange(selectedMonth).start.toDateString()} - {getPayrollRange(selectedMonth).end.toDateString()}</span>
                     </div>
 
-                    {['Admin', 'SuperAdmin', 'QA', 'HR'].includes(userRole) && (
+                    {['Admin', 'SuperAdmin', 'QA', 'HR', 'IT'].includes(userRole) && (
                       <div className="flex items-center gap-3">
                         <button
                           onClick={() => setShowAddBonus(true)} // [FIXED] Matches your existing state
@@ -5360,56 +5698,147 @@ const AgentPayrollSystem = () => {
           </div>
         )}
 
-        {/* Bonuses Tab */}
+   {/* --- BONUSES TAB (Modern UI) --- */}
         {activeTab === 'bonuses' && (
-          <div className="space-y-6">
-            <div className="flex justify-between items-center">
-              <h2 className="text-xl font-semibold text-white">Bonuses Management</h2>
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            
+            {/* Header Section */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-900/50 p-6 rounded-2xl border border-slate-700/50 backdrop-blur-sm">
+              <div>
+                <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                  <span className="bg-clip-text text-transparent bg-gradient-to-r from-green-400 to-emerald-500">
+                    Bonuses Management
+                  </span>
+                </h2>
+                <p className="text-slate-400 text-sm mt-1">Manage agent incentives, automated tiers, and manual rewards.</p>
+              </div>
 
-              <button onClick={() => setShowAddBonus(true)} className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"><Plus className="w-4 h-4" /> Add Bonus</button>
+              <div className="flex gap-3">
+                {/* Auto Gen Button */}
+                <button
+                  onClick={handleGenerateAutoBonuses}
+                  className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-purple-900/20 transition-all hover:scale-[1.02] border border-white/10"
+                >
+                  <TrendingUp className="w-4 h-4" /> Auto-Gen Bonuses
+                </button>
 
+                {/* Add Bonus Button */}
+                <button
+                  onClick={() => setShowAddBonus(true)}
+                  className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-green-900/20 transition-all hover:scale-[1.02] border border-white/10"
+                >
+                  <Plus className="w-4 h-4" /> Add Bonus
+                </button>
+              </div>
             </div>
-            {/* Search ... */}
-            <div className="bg-slate-800 rounded-xl shadow-sm border border-slate-600 p-4">
-              <input type="text" placeholder="Search by agent name..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-white" />
+
+            {/* Search Bar */}
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <Search className="h-5 w-5 text-slate-500" />
+              </div>
+              <input
+                type="text"
+                placeholder="Search bonuses by agent name..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-11 pr-4 py-3 bg-slate-900/80 border border-slate-700 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all shadow-sm"
+              />
             </div>
 
-            <div className="bg-slate-800/80 rounded-xl shadow-sm border border-slate-600 overflow-hidden">
-              <table className="w-full">
-                <thead className="bg-slate-900">
-                  <tr>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">No.</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">Agent</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">Period</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">Type</th>
-                    <th className="text-right py-3 px-4 text-sm font-medium text-slate-200">Target</th>
-                    <th className="text-right py-3 px-4 text-sm font-medium text-slate-200">Actual</th>
-                    <th className="text-right py-3 px-4 text-sm font-medium text-slate-200">Amount</th>
-                    <th className="text-center py-3 px-4 text-sm font-medium text-slate-200">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredBonuses.map((bonus, idx) => (
-                    <tr key={bonus.id} className="border-b border-slate-700 hover:bg-slate-700">
-                      <td className="py-3 px-4 text-slate-300">{idx + 1}</td>
-                      <td className="py-3 px-4 font-medium text-white">{bonus.agentName}</td>
-                      <td className="py-3 px-4 text-slate-300">{bonus.period}</td>
-                      <td className="py-3 px-4"><span className={`px-3 py-1 rounded-full text-xs font-medium ${bonus.type === 'Weekly' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>{bonus.type}</span></td>
-                      <td className="py-3 px-4 text-right text-slate-100">{bonus.targetSales}</td>
-                      <td className="py-3 px-4 text-right font-semibold text-green-400">{bonus.actualSales}</td>
-                      <td className="py-3 px-4 text-right font-semibold text-green-400">{bonus.amount.toLocaleString()} PKR</td>
-
-                      <td className="py-3 px-4">
-                        <div className="flex items-center justify-center gap-2">
-                          <button onClick={() => { setEditingBonus(bonus); setShowAddBonus(true); }} className="p-1.5 bg-blue-500/10 text-blue-400 rounded hover:bg-blue-500/20" title="Edit"><Pencil className="w-4 h-4" /></button>
-                          <button onClick={() => handleDeleteBonus(bonus.id)} className="p-1.5 bg-red-500/10 text-red-400 rounded hover:bg-red-500/20" title="Delete"><Trash2 className="w-4 h-4" /></button>
-                        </div>
-                      </td>
-
+            {/* Table Container */}
+            <div className="bg-slate-900/80 rounded-2xl shadow-xl border border-slate-700/50 overflow-hidden backdrop-blur-md">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-slate-950/50 border-b border-slate-700">
+                    <tr>
+                      <th className="text-left py-4 px-6 text-xs font-bold text-slate-400 uppercase tracking-wider">No.</th>
+                      <th className="text-left py-4 px-6 text-xs font-bold text-slate-400 uppercase tracking-wider">Agent</th>
+                      <th className="text-left py-4 px-6 text-xs font-bold text-slate-400 uppercase tracking-wider">Month</th>
+                      <th className="text-left py-4 px-6 text-xs font-bold text-slate-400 uppercase tracking-wider">Type</th>
+                      <th className="text-left py-4 px-6 text-xs font-bold text-slate-400 uppercase tracking-wider">Reason / Details</th>
+                      <th className="text-right py-4 px-6 text-xs font-bold text-slate-400 uppercase tracking-wider">Amount</th>
+                      <th className="text-center py-4 px-6 text-xs font-bold text-slate-400 uppercase tracking-wider">Actions</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/50">
+                    {filteredBonuses.length > 0 ? (
+                      filteredBonuses.map((bonus, idx) => (
+                        <tr key={bonus.id} className="group hover:bg-slate-800/40 transition-colors duration-200">
+                          <td className="py-4 px-6 text-slate-500 font-mono text-sm">{idx + 1}</td>
+                          
+                          <td className="py-4 px-6">
+                            <span className="font-semibold text-white block">{bonus.agentName}</span>
+                          </td>
+
+                          <td className="py-4 px-6 text-slate-400 text-sm">
+                            {bonus.month || bonus.period}
+                          </td>
+                          
+                          <td className="py-4 px-6">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold border ${
+                              bonus.type === 'Weekly' 
+                                ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' 
+                                : bonus.type === 'Performance' 
+                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+                                : 'bg-purple-500/10 text-purple-400 border-purple-500/20'
+                            }`}>
+                              {bonus.type || 'Bonus'}
+                            </span>
+                          </td>
+
+                          <td className="py-4 px-6 text-slate-300 text-sm">
+                            {bonus.reason ? (
+                              <span className="line-clamp-1">{bonus.reason}</span>
+                            ) : (
+                              <div className="flex gap-3 text-xs text-slate-500">
+                                <span>Target: <span className="text-slate-300">{bonus.targetSales || '-'}</span></span>
+                                <span>Actual: <span className="text-slate-300">{bonus.actualSales || '-'}</span></span>
+                              </div>
+                            )}
+                          </td>
+
+                          <td className="py-4 px-6 text-right">
+                            <span className="font-mono font-bold text-emerald-400 text-sm bg-emerald-500/5 px-2 py-1 rounded">
+                              {bonus.amount ? bonus.amount.toLocaleString() : '0'} PKR
+                            </span>
+                          </td>
+
+                          <td className="py-4 px-6">
+                            <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button 
+                                onClick={() => { setEditingBonus(bonus); setShowAddBonus(true); }} 
+                                className="p-2 bg-blue-500/10 text-blue-400 rounded-lg hover:bg-blue-500 hover:text-white transition-all shadow-sm border border-transparent hover:border-blue-400" 
+                                title="Edit"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                              <button 
+                                onClick={() => handleDeleteBonus(bonus.id)} 
+                                className="p-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500 hover:text-white transition-all shadow-sm border border-transparent hover:border-red-400" 
+                                title="Delete"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan="7" className="py-12 text-center text-slate-500">
+                          <div className="flex flex-col items-center justify-center gap-3">
+                            <div className="p-4 bg-slate-800/50 rounded-full">
+                              <Gift className="w-8 h-8 text-slate-600" />
+                            </div>
+                            <p>No bonuses found for this month.</p>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
@@ -5438,7 +5867,7 @@ const AgentPayrollSystem = () => {
                   Cycle: <span className="text-slate-300">{getPayrollRange(selectedMonth).start.toDateString()} - {getPayrollRange(selectedMonth).end.toDateString()}</span>
                 </div>
 
-                {['Admin', 'SuperAdmin', 'QA', 'HR'].includes(userRole) && (
+                {['Admin', 'SuperAdmin', 'Finance'].includes(userRole) && (
                   <div className="flex items-center gap-3">
                     <button
                       onClick={() => setShowAddBonus(true)} // [FIXED] Matches your existing state
@@ -5809,6 +6238,7 @@ const AgentPayrollSystem = () => {
         />
       )}
 
+{/* This looks correct! */}
       {showAddBonus && (
         <BonusModal
           agents={agents}
@@ -6108,6 +6538,7 @@ const AgentPayrollSystem = () => {
                       <option value="HR">HR</option>
                       <option value="IT">IT</option>
                       <option value="TL">TL</option>
+                      <option value="Finance">Finance</option>
 
                     </select>
                   </div>
