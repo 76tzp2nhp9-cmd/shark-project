@@ -4572,13 +4572,49 @@ const handleAddBonus = async (formData) => {
    ===================================================================================== */}
 
                 <div className="space-y-6">
-                  {/* Header */}
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <h2 className="text-xl text-white font-bold">Management Attendance Matrix ({selectedMonth})</h2>
-                      <p className="text-xs text-slate-400 mt-1 uppercase tracking-wider">Login Times • Late Tracking • Non-Agent Staff</p>
-                    </div>
+                  
+                   {/* [FIXED] Attendance Matrix Header & Action Bar */}
+                <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-slate-800 p-6 rounded-2xl border border-slate-700 mb-6">
+                  <div>
+                    <h2 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+                      Management Attendance Matrix
+                    </h2>
+                    <p className="text-slate-400 text-sm mt-1">
+                      Login Times • Late Tracking • Non-Agent Staff for {selectedMonth}
+                    </p>
                   </div>
+
+                  {/* RIGHT SIDE: Cycle Dates & Buttons */}
+                  <div className="flex flex-col md:flex-row items-center gap-4">
+
+                    {/* Cycle Text */}
+                    <div className="text-xs text-slate-500 font-medium bg-slate-900/50 px-3 py-1.5 rounded border border-slate-700/50">
+                      Cycle: <span className="text-slate-300">{getPayrollRange(selectedMonth).start.toDateString()} - {getPayrollRange(selectedMonth).end.toDateString()}</span>
+                    </div>
+
+                    {['Admin', 'SuperAdmin', 'QA','Finance'].includes(userRole) && (
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => setShowMgmtBonus(true)} // [FIXED] Matches your existing state
+                          className="flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-lg shadow-green-900/20"
+                        >
+                          <Plus className="w-4 h-4" /> Add Bonus
+                        </button>
+                      </div>
+                    )}
+
+                        {['Admin', 'SuperAdmin', 'QA', 'HR', 'IT'].includes(userRole) && (
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => setShowMgmtFine(true)} // Opens NEW Modal
+                          className="flex items-center gap-2 bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-lg shadow-red-900/20"
+                        >
+                          <Plus className="w-4 h-4" /> Add Fine
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
 
                   {/* --- [ADDED] FILTER BAR --- */}
                   <div className="bg-slate-800 rounded-xl shadow-sm border border-slate-600 p-4">
@@ -5223,7 +5259,7 @@ const handleAddBonus = async (formData) => {
                       Cycle: <span className="text-slate-300">{getPayrollRange(selectedMonth).start.toDateString()} - {getPayrollRange(selectedMonth).end.toDateString()}</span>
                     </div>
 
-                    {['Admin', 'SuperAdmin', 'QA', 'HR', 'IT'].includes(userRole) && (
+                    {['Admin', 'SuperAdmin', 'QA','Finance'].includes(userRole) && (
                       <div className="flex items-center gap-3">
                         <button
                           onClick={() => setShowAddBonus(true)} // [FIXED] Matches your existing state
@@ -5231,6 +5267,11 @@ const handleAddBonus = async (formData) => {
                         >
                           <Plus className="w-4 h-4" /> Add Bonus
                         </button>
+                      </div>
+                    )}
+
+                        {['Admin', 'SuperAdmin', 'QA', 'HR', 'IT'].includes(userRole) && (
+                      <div className="flex items-center gap-3">
                         <button
                           onClick={() => setShowAddFine(true)} // [FIXED] Matches your existing state
                           className="flex items-center gap-2 bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-lg shadow-red-900/20"
