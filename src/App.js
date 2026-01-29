@@ -4246,6 +4246,7 @@ const AgentPayrollSystem = () => {
 
                 {/* --- MATRIX LOGIC STARTS HERE --- */}
                 {/* --- OPTIMIZED MATRIX LOGIC --- */}
+              {/* --- OPTIMIZED MATRIX LOGIC --- */}
                 {(() => {
                   // 1. Prepare Dates
                   const { start, end } = getPayrollRange(selectedMonth);
@@ -4283,18 +4284,22 @@ const AgentPayrollSystem = () => {
                   sales.forEach(s => {
                     if (s.status === 'Sale' || ['HW- Xfer', 'HW-IBXfer', 'HW-Xfer-CDR'].includes(s.disposition)) {
                       const sDate = s.date; // "YYYY-MM-DD"
-                      const sAgent = s.agentName?.toString().trim();
+                      
+                      // [FIX 1] Normalize Sales Agent Name (Lowercase + Trim)
+                      // This ensures "Asif Ali" matches "asif ali"
+                      const sAgentRaw = s.agentName?.toString() || '';
+                      const sAgentClean = sAgentRaw.trim().toLowerCase(); 
 
-                      // Find Agent in displayed list to get their Team
-                      const agentStat = displayedStats.find(a => a.name === sAgent);
+                      // [FIX 2] Find Agent using Case-Insensitive Match
+                      const agentStat = displayedStats.find(a => a.name.toLowerCase().trim() === sAgentClean);
                       const sTeam = agentStat ? agentStat.team : null;
 
                       if (!sDate) return;
 
-                      // Agent Count
-                      if (sAgent) {
-                        if (!agentDailyMap[sAgent]) agentDailyMap[sAgent] = {};
-                        agentDailyMap[sAgent][sDate] = (agentDailyMap[sAgent][sDate] || 0) + 1;
+                      // Agent Count (Use Clean Name as Key)
+                      if (sAgentClean) {
+                        if (!agentDailyMap[sAgentClean]) agentDailyMap[sAgentClean] = {};
+                        agentDailyMap[sAgentClean][sDate] = (agentDailyMap[sAgentClean][sDate] || 0) + 1;
                       }
 
                       // Team Count
@@ -4324,9 +4329,11 @@ const AgentPayrollSystem = () => {
 
                       // Agent Weekly Sums
                       displayedStats.forEach(agent => {
-                        const sum = weekDates.reduce((acc, currDate) => acc + (agentDailyMap[agent.name]?.[currDate] || 0), 0);
-                        if (!agentWeeklyMap[agent.name]) agentWeeklyMap[agent.name] = {};
-                        agentWeeklyMap[agent.name][dateStr] = sum;
+                        // [FIX 3] Use Lowercase Key for Lookup
+                        const agentKey = agent.name.toLowerCase().trim();
+                        const sum = weekDates.reduce((acc, currDate) => acc + (agentDailyMap[agentKey]?.[currDate] || 0), 0);
+                        if (!agentWeeklyMap[agentKey]) agentWeeklyMap[agentKey] = {};
+                        agentWeeklyMap[agentKey][dateStr] = sum;
                       });
 
                       // Team Weekly Sums
@@ -4458,6 +4465,9 @@ const AgentPayrollSystem = () => {
                                     const rowClass = isInactive ? 'bg-red-900/10 hover:bg-red-900/20' : 'hover:bg-blue-900/10';
                                     const nameClass = isInactive ? 'text-red-400' : 'text-slate-200';
 
+                                    // [FIX 4] Create Normalized Key for this Row (Lowercase)
+                                    const agentKey = stat.name.toLowerCase().trim();
+
                                     return (
                                       <tr key={stat.id} className={`${rowClass} transition-colors group`}>
                                         <td className="p-2 text-center border-r border-slate-800 bg-slate-900 text-slate-600 font-mono text-[10px] sticky left-0 z-10 group-hover:text-white">{idx + 1}</td>
@@ -4497,15 +4507,17 @@ const AgentPayrollSystem = () => {
                                           currentDate.setHours(0, 0, 0, 0);
                                           const isFriday = currentDate.getDay() === 5;
 
-                                          // ⚡ FAST LOOKUP: O(1) Access
-                                          const dailyCount = agentDailyMap[stat.name]?.[dateStr] || 0;
+                                          // [FIX 5] Case-Insensitive Lookup (O(1))
+                                          const dailyCount = agentDailyMap[agentKey]?.[dateStr] || 0;
 
                                           // Checks
                                           const isHoliday = holidays.some(h => h.date === dateStr);
                                           const isBeforeJoining = joinDate && currentDate < joinDate;
+                                          
+                                          // [FIX 6] Case-Insensitive Attendance Check
                                           const hasAttendance = attendance.some(a =>
                                             a.date === dateStr &&
-                                            a.agentName?.toString().trim().toLowerCase() === stat.name?.toString().trim().toLowerCase() &&
+                                            a.agentName?.toString().trim().toLowerCase() === agentKey &&
                                             (a.status === 'Present' || a.status === 'Late')
                                           );
                                           const isWorkingDay = grandDailyMap[dateStr] > 0; // Check if *anyone* made a sale
@@ -4538,7 +4550,7 @@ const AgentPayrollSystem = () => {
                                               {/* [INJECT] Agent Weekly Total */}
                                               {isFriday && (
                                                 <td className="p-1 text-center border-b border-r border-l border-slate-800 text-[11px] font-bold text-emerald-300 bg-emerald-900/10">
-                                                  {agentWeeklyMap[stat.name]?.[dateStr] || 0}
+                                                  {agentWeeklyMap[agentKey]?.[dateStr] || 0}
                                                 </td>
                                               )}
                                             </React.Fragment>
