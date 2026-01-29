@@ -198,13 +198,20 @@ const AgentPayrollSystem = () => {
   ]);
 
   // [SMART DATE STATE] Automatically detects Jan 2026 cycle if today > Dec 20
-  const [selectedMonth, setSelectedMonth] = useState(() => {
-    const today = new Date();
-    // If today is after the 20th, we are in the NEXT month's cycle
-    if (today.getDate() > 20) {
-      today.setMonth(today.getMonth() + 1);
+const [selectedMonth, setSelectedMonth] = useState(() => {
+    const now = new Date();
+    const currentDay = now.getDate(); // Capture "30" before we change the date
+
+    // 1. Reset to the 1st of the month immediately.
+    // This ensures that adding 1 month to "Jan 1" safely gives "Feb 1".
+    const targetDate = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    // 2. Apply your logic
+    if (currentDay > 20) {
+      targetDate.setMonth(targetDate.getMonth() + 1);
     }
-    return `${today.toLocaleString('default', { month: 'long' })} ${today.getFullYear()}`;
+
+    return targetDate.toLocaleString('default', { month: 'long', year: 'numeric' });
   });
 
   const handleUpdateAttendance = async (updates) => {
