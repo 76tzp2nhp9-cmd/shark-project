@@ -22,7 +22,7 @@ import * as XLSX from 'xlsx';
 import {
   Users, Edit, DollarSign, Calendar, AlertCircle, TrendingUp, Download,
   Plus, X, Upload, LogOut, Lock, Clock, Search, Gift,
-  Pencil, Trash2, UserX, Shield, RotateCcw, Settings
+  Pencil, Trash2, UserX, Shield, RotateCcw, Settings, FileText
 } from 'lucide-react';
 
 
@@ -186,6 +186,8 @@ const AgentPayrollSystem = () => {
   const [showAddCenterModal, setShowAddCenterModal] = useState(false);
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
   const [showMgmtAttendanceModal, setShowMgmtAttendanceModal] = useState(false);
+  // Default to showing Salary Slips, but allow switching to 'master'
+const [payrollSubTab, setPayrollSubTab] = useState('slips');
 
   // --- GOAL SETTINGS STATE ---
   const [showGoalModal, setShowGoalModal] = useState(false);
@@ -2714,20 +2716,108 @@ const [selectedMonth, setSelectedMonth] = useState(() => {
     return weeks;
   };
 
-  // --- AUTO GENERATE BONUSES (HYBRID: MON-FRI WEEKS) ---
+  // Helper: Generates Mon-Fri weeks strictly between two dates
+const getCycleWeeks = (startDate, endDate) => {
+  const weeks = [];
+  let current = new Date(startDate);
+  const end = new Date(endDate);
+  
+  // Align start to the first day of that week (or keep as is if valid)
+  // We want to group by standard weeks, but filter strictly by the range
+  
+  let weekIndex = 1;
+  let currentWeekStart = new Date(current);
+  let currentWeekEnd = new Date(current);
+  
+  // Iterate through every day of the cycle
+  while (current <= end) {
+    const dayNum = current.getDay();
+    
+    // If it's Monday (1), start a new week buffer
+    if (dayNum === 1 && current > new Date(startDate)) {
+       weeks.push({
+         name: `Week ${weekIndex}`,
+         start: currentWeekStart.toISOString().split('T')[0],
+         end: currentWeekEnd.toISOString().split('T')[0]
+       });
+       weekIndex++;
+       currentWeekStart = new Date(current);
+    }
+    
+    // Update the end of the current week
+    currentWeekEnd = new Date(current);
+    
+    // Move to next day
+    current.setDate(current.getDate() + 1);
+  }
+
+  // Push the final partial week
+  weeks.push({
+    name: `Week ${weekIndex}`,
+    start: currentWeekStart.toISOString().split('T')[0],
+    end: currentWeekEnd.toISOString().split('T')[0]
+  });
+
+  return weeks;
+};
+
+
+// SMART WEEK GENERATOR (Carry-Over Logic)
+const getSmartWeeks = (cycleStartStr, cycleEndStr) => {
+  const weeks = [];
+  const cycleEnd = new Date(cycleEndStr);
+  
+  // 1. Find the Monday of the week where the cycle STARTS
+  // e.g. If Cycle starts Wed 21st, we snap back to Mon 19th
+  let current = new Date(cycleStartStr);
+  const day = current.getDay();
+  // Calculate difference to get to previous Monday (1)
+  // If day is 0 (Sun), go back 6 days. Else go back (day - 1)
+  const diff = current.getDate() - day + (day === 0 ? -6 : 1);
+  current.setDate(diff); // 'current' is now the Monday of the first week
+  
+  // 2. Loop through weeks
+  while (true) {
+    const monday = new Date(current);
+    const friday = new Date(current);
+    friday.setDate(monday.getDate() + 4); // Add 4 days to get Friday
+    
+    // STOPPING CONDITION:
+    // If the Friday of this week falls AFTER the cycle end date (the 20th),
+    // we DROP this entire week. It will be picked up as "Week 1" of the NEXT month.
+    if (friday > cycleEnd) break;
+    
+    weeks.push({
+      name: `Week ${weeks.length + 1}`,
+      start: monday.toISOString().split('T')[0],
+      end: friday.toISOString().split('T')[0]
+    });
+    
+    // Jump to next Monday
+    current.setDate(current.getDate() + 7);
+  }
+  
+  return weeks;
+};
+
+// --- AUTO GENERATE BONUSES (SMART CARRY-OVER) ---
   const handleGenerateAutoBonuses = async () => {
-    const confirmGen = window.confirm("Generating Bonuses:\n1. >50k Salaries: Monthly Calculation\n2. <50k Salaries: Weekly (Mon-Fri) Calculation\n\nProceed?");
+    const confirmGen = window.confirm("Generating Bonuses with Carry-Over Logic:\n\n- Partial weeks at month-end are SKIPPED.\n- They will appear as 'Week 1' in the NEXT month.\n\nProceed?");
     if (!confirmGen) return;
 
     setLoading(true);
     try {
+      // 1. Get Exact Cycle Dates (21st - 20th)
       const range = getPayrollRange(selectedMonth);
-      const monthStartStr = new Date(range.start).toISOString().split('T')[0];
-      const monthEndStr = new Date(range.end).toISOString().split('T')[0];
+      const cycleStartStr = range.start.toISOString().split('T')[0];
+      const cycleEndStr = range.end.toISOString().split('T')[0];
 
-      const monthDate = new Date(range.start);
-      // [FIX] Use the new Business Week Logic
-      const weeks = getBusinessWeeks(monthDate.getFullYear(), monthDate.getMonth());
+      // 2. Generate Full Weeks (Snapping to Mon-Fri)
+      const weeks = getSmartWeeks(cycleStartStr, cycleEndStr);
+
+      // [DEBUG] Confirm weeks look correct in console
+      console.log(`\n🗓️ Generating for ${selectedMonth}`);
+      console.table(weeks);
 
       const newBonuses = [];
 
@@ -2739,21 +2829,19 @@ const [selectedMonth, setSelectedMonth] = useState(() => {
         let salary = agent.baseSalary || hrRecord?.base_salary || hrRecord?.baseSalary || 0;
         if (typeof salary === 'string') salary = parseInt(salary.replace(/,/g, '')) || 0;
 
-        // ====================================================
-        // LOGIC A: MONTHLY BONUSES (> 50,000 Salaries)
-        // ====================================================
+        // --- LOGIC A: MONTHLY (>50k) ---
+        // (This part remains unchanged - it uses the strict 21-20 dates)
         if (salary >= 50000) {
-          const count = sales.filter(s => {
+           const count = sales.filter(s => {
             const saleName = s.agentName?.toString().trim().toLowerCase();
             return saleName === targetName &&
               (s.status === 'Sale' || ['HW- Xfer', 'HW-IBXfer', 'HW-Xfer-CDR'].includes(s.disposition)) &&
-              (s.date >= monthStartStr && s.date <= monthEndStr);
+              (s.date >= cycleStartStr && s.date <= cycleEndStr);
           }).length;
 
           let autoBonus = 0;
           let tierName = "";
 
-          // > 80k Tier
           if (salary > 80000) {
             tierName = ">80k Tier";
             if (count >= 240) autoBonus = 125000;
@@ -2762,7 +2850,6 @@ const [selectedMonth, setSelectedMonth] = useState(() => {
             else if (count >= 170) autoBonus = 65000;
             else if (count >= 150) autoBonus = 25000;
           }
-          // 60k - 80k Tier
           else if (salary >= 60000) {
             tierName = "60k Tier";
             if (count >= 220) autoBonus = 125000;
@@ -2771,7 +2858,6 @@ const [selectedMonth, setSelectedMonth] = useState(() => {
             else if (count >= 150) autoBonus = 65000;
             else if (count >= 130) autoBonus = 25000;
           }
-          // 50k - 60k Tier
           else {
             tierName = "50k Tier";
             if (count >= 198) autoBonus = 100000;
@@ -2785,37 +2871,33 @@ const [selectedMonth, setSelectedMonth] = useState(() => {
             const alreadyExists = bonuses.some(b => b.agentName === agent.name && b.month === selectedMonth && b.reason.includes('Monthly Tier'));
             if (!alreadyExists) {
               newBonuses.push({
-                agentName: agent.name,
-                amount: autoBonus,
-                reason: `Auto Monthly Tier (${count} Sales) - ${tierName}`,
-                date: new Date().toISOString().split('T')[0],
-                month: selectedMonth,
-                period: selectedMonth,
-                type: 'Performance',
-                targetSales: 0, actualSales: count
+                agentName: agent.name, amount: autoBonus, reason: `Auto Monthly Tier (${count} Sales) - ${tierName}`,
+                date: new Date().toISOString().split('T')[0], month: selectedMonth, period: selectedMonth,
+                type: 'Performance', targetSales: 0, actualSales: count
               });
             }
           }
         }
 
-        // ====================================================
-        // LOGIC B: WEEKLY BONUSES (Mon-Fri Only)
-        // ====================================================
+        // --- LOGIC B: WEEKLY (Full Mon-Fri Weeks Only) ---
         else if (salary >= 35000) {
 
           weeks.forEach(week => {
-            // Count sales ONLY between Monday and Friday of this week
+            // Count Sales for this FULL week
             const weeklyCount = sales.filter(s => {
               const saleName = s.agentName?.toString().trim().toLowerCase();
               return saleName === targetName &&
                 (s.status === 'Sale' || ['HW- Xfer', 'HW-IBXfer', 'HW-Xfer-CDR'].includes(s.disposition)) &&
-                (s.date >= week.start && s.date <= week.end);
+                (s.date >= week.start && s.date <= week.end); 
+                // No need to check "isWeekday" because week.start/end IS Mon/Fri
             }).length;
+
+            if (weeklyCount === 0) return; // Skip 0 sales
 
             let weeklyBonus = 0;
             let ruleName = "";
 
-            // 45k Tier (Weekly)
+            // Standard Targets (No Scaling needed now)
             if (salary >= 45000) {
               ruleName = "45k Wkly";
               if (weeklyCount >= 35) weeklyBonus = 10000;
@@ -2823,7 +2905,6 @@ const [selectedMonth, setSelectedMonth] = useState(() => {
               else if (weeklyCount >= 25) weeklyBonus = 6000;
               else if (weeklyCount >= 20) weeklyBonus = 5000;
             }
-            // 40k Tier (Weekly)
             else if (salary >= 40000) {
               ruleName = "40k Wkly";
               if (weeklyCount >= 32) weeklyBonus = 9000;
@@ -2831,7 +2912,6 @@ const [selectedMonth, setSelectedMonth] = useState(() => {
               else if (weeklyCount >= 22) weeklyBonus = 5000;
               else if (weeklyCount >= 17) weeklyBonus = 4000;
             }
-            // 35k Tier (Weekly)
             else if (salary >= 35000) {
               ruleName = "35k Wkly";
               if (weeklyCount >= 30) weeklyBonus = 9000;
@@ -2841,7 +2921,10 @@ const [selectedMonth, setSelectedMonth] = useState(() => {
             }
 
             if (weeklyBonus > 0) {
-              const weekId = `${week.name}`;
+              const weekId = `${week.name}`; // e.g., "Week 1"
+              
+              // We check using week.start to distinguish "Week 1" of Jan vs "Week 1" of Feb
+              // actually 'month' + 'period' is usually unique enough
               const alreadyExists = bonuses.some(b =>
                 b.agentName === agent.name &&
                 b.month === selectedMonth &&
@@ -2853,12 +2936,13 @@ const [selectedMonth, setSelectedMonth] = useState(() => {
                 newBonuses.push({
                   agentName: agent.name,
                   amount: weeklyBonus,
-                  reason: `Auto Weekly (${weeklyCount} Sales) - ${ruleName}`,
+                  reason: `Auto Weekly: ${weeklyCount} Sales (Target: 35) - ${ruleName} [${week.start} - ${week.end}]`,
                   date: new Date().toISOString().split('T')[0],
                   month: selectedMonth,
                   period: weekId,
                   type: 'Weekly',
-                  targetSales: 0, actualSales: weeklyCount
+                  targetSales: 35,
+                  actualSales: weeklyCount
                 });
               }
             }
@@ -5163,9 +5247,6 @@ const [selectedMonth, setSelectedMonth] = useState(() => {
             TAB: ATTENDANCE Tab (Fixed Time Calculation Logic)
            ===================================================================================== */}
         {activeTab === 'attendance' && (
-          <div className="space-y-6">
-
-            {attendanceSubTab === 'matrix' && (
               <div className="space-y-6">
 
                 {/* Header */}
@@ -5667,10 +5748,6 @@ const [selectedMonth, setSelectedMonth] = useState(() => {
                 </div>
               </div>
             )}
-          </div>
-        )}
-
-
 
         {/* --- FINES TAB (Modern Premium UI) --- */}
         {activeTab === 'fines' && (
@@ -5936,230 +6013,478 @@ const [selectedMonth, setSelectedMonth] = useState(() => {
           </div>
         )}
 
-        {/* Payroll Tab */}
 
         {activeTab === 'payroll' && (
-          <div className="space-y-6">
-
-            {/* [FIXED] Payroll Header & Action Bar */}
-            <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-slate-800 p-6 rounded-2xl border border-slate-700 mb-6">
-              <div>
-                <h2 className="text-2xl font-bold bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">
-                  Agent Payroll
-                </h2>
-                <p className="text-slate-400 text-sm mt-1">
-                  Salary Breakdown for {selectedMonth}
-                </p>
-              </div>
-
-              {/* RIGHT SIDE: Cycle Dates & Buttons */}
-              <div className="flex flex-col md:flex-row items-center gap-4">
-
-                {/* Cycle Text */}
-                <div className="text-xs text-slate-500 font-medium bg-slate-900/50 px-3 py-1.5 rounded border border-slate-700/50">
-                  Cycle: <span className="text-slate-300">{getPayrollRange(selectedMonth).start.toDateString()} - {getPayrollRange(selectedMonth).end.toDateString()}</span>
-                </div>
-
-                {['Admin', 'SuperAdmin', 'Finance'].includes(userRole) && (
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={() => setShowAddBonus(true)} // [FIXED] Matches your existing state
-                      className="flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-lg shadow-green-900/20"
-                    >
-                      <Plus className="w-4 h-4" /> Add Bonus
-                    </button>
-                    <button
-                      onClick={() => setShowAddFine(true)} // [FIXED] Matches your existing state
-                      className="flex items-center gap-2 bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-lg shadow-red-900/20"
-                    >
-                      <Plus className="w-4 h-4" /> Add Fine
-                    </button>
-
-                    <button
-                      onClick={exportToCSV}
-                      className="flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-lg shadow-green-900/20"
-                    >
-                      <Download className="w-4 h-4" />
-                      Export to CSV
-                    </button>
-
+              <div className="bg-slate-900 rounded-xl border border-slate-700 shadow-2xl overflow-hidden flex flex-col h-[80vh] animate-fade-in">
+                
+                {/* Header */}
+                <div className="p-4 border-b border-slate-700 bg-slate-800/50 flex justify-between items-center">
+                  <div className="flex items-center gap-2">
+                    <div className="bg-blue-600/20 p-2 rounded-lg text-blue-400">
+                      <FileText className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-white">Master Payroll Matrix</h3>
+                      <p className="text-xs text-slate-400">Accurate Salary • No Ghosts • Status Dates</p>
+                    </div>
                   </div>
-                )}
-              </div>
-            </div>
-
-            {/* SEARCH & FILTER Bar */}
-            <div className="bg-slate-800 rounded-xl shadow-sm border border-slate-600 p-4 mb-6">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <input
-                  type="text"
-                  placeholder="Search by agent name..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <select
-                  value={teamFilter}
-                  onChange={(e) => setTeamFilter(e.target.value)}
-                  className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="All">All Teams</option>
-                  {teams.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-                <select
-                  value={centerFilter}
-                  onChange={(e) => setCenterFilter(e.target.value)}
-                  className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="All">All Centers</option>
-                  {centers.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-                <select
-                  value={agentStatusFilter}
-                  onChange={(e) => setAgentStatusFilter(e.target.value)}
-                  className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="All">All Status</option>
-                  <option value="Active">Active Only</option>
-                  <option value="Left">Left Only</option>
-                </select>
-              </div>
-            </div>
-
-            {/* PAYROLL TABLE SECTION */}
-            {(() => {
-              // Define displayedPayroll here to filter the list based on dropdowns
-              const displayedPayroll = monthlyStats.filter(agent => {
-                const matchesSearch = agent.name.toLowerCase().includes(searchQuery.toLowerCase());
-                const matchesTeam = teamFilter === 'All' || agent.team === teamFilter;
-                const matchesCenter = centerFilter === 'All' || agent.center === centerFilter;
-                const matchesStatus = agentStatusFilter === 'All' || agent.status === agentStatusFilter;
-                return matchesSearch && matchesTeam && matchesCenter && matchesStatus;
-              });
-
-              return (
-                <div className="bg-slate-800/80 rounded-xl shadow-sm border border-slate-600 overflow-hidden">
-                  <table className="w-full">
-                    <thead className="bg-slate-900">
-                      <tr>
-                        <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">No.</th>
-                        <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">Agent</th>
-                        {/* [NEW] Bank Details Column */}
-                        <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">Bank Details</th>
-                        <th className="text-right py-3 px-4 text-sm font-medium text-slate-200">Full Base</th>
-                        {/* [NEW] Attendance Column */}
-                        <th className="text-center py-3 px-4 text-sm font-medium text-slate-200">Attendance</th>
-                        {/* [NEW] Earned Base Column */}
-                        <th className="text-right py-3 px-4 text-sm font-medium text-slate-200">Earned Base</th>
-                        <th className="text-right py-3 px-4 text-sm font-medium text-slate-200">Sales</th>
-                        <th className="text-right py-3 px-4 text-sm font-medium text-slate-200">Bonus</th>
-                        <th className="text-right py-3 px-4 text-sm font-medium text-slate-200">Fines</th>
-                        <th className="text-right py-3 px-4 text-sm font-medium text-slate-200 bg-slate-900">Net Salary</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {displayedPayroll.map((agent, idx) => (
-                        <tr
-                          key={agent.id}
-                          className={`transition-colors border-b border-slate-800 ${['Left', 'Terminated', 'NCNS'].includes(agent.status)
-                            ? 'bg-red-900/10 hover:bg-red-900/20'
-                            : 'hover:bg-slate-800/50'
-                            }`}
-                        >
-                          <td className="py-3 px-4 text-slate-300">{idx + 1}</td>
-                          <td className="py-3 px-4 font-medium text-white">
-                            {agent.name}
-
-                            {/* [UPDATED] Dynamic Status Label (Matches Matrix Style) */}
-                            {(() => {
-                              // Check if agent is inactive
-                              const isInactive = ['Left', 'Terminated', 'NCNS'].includes(agent.status);
-
-                              if (isInactive) {
-                                // Show RED label with Date for inactive agents
-                                return (
-                                  <div className="text-[9px] text-red-500 font-mono mt-0.5 font-bold uppercase">
-                                    {agent.status}: {agent.leftDate || agent.left_date || 'N/A'}
-                                  </div>
-                                );
-                              }
-
-                              // Show simple GREEN label for active agents
-                              return (
-                                <div className="text-[10px] text-green-400/60 mt-0.5">
-                                  Active
-                                </div>
-                              );
-                            })()}
-                          </td>
-
-                          {/* Bank Details Cell */}
-                          <td className="py-3 px-4">
-                            <div className="text-xs text-white">{agent.bankName}</div>
-                            <div className="text-[10px] font-mono text-slate-400">{agent.accountNo}</div>
-                          </td>
-
-                          {/* Full Base Salary */}
-                          <td className="py-3 px-4 text-right text-slate-400 text-xs">
-                            {agent.baseSalary.toLocaleString()}
-                          </td>
-
-                          {/* Attendance Ratio Cell */}
-                          <td className="py-3 px-4 text-center">
-                            <span className="px-2 py-1 bg-blue-500/10 text-blue-400 rounded text-xs font-bold">
-                              {agent.daysPresent} / {agent.totalWorkingDays}
-                            </span>
-                          </td>
-
-                          {/* Earned Base Salary Cell */}
-                          <td className="py-3 px-4 text-right text-slate-100 font-medium">
-                            {agent.earnedBase.toLocaleString()}
-                          </td>
-
-                          <td className="py-3 px-4 text-right font-semibold text-green-600">{agent.totalSales}</td>
-                          <td className="py-3 px-4 text-right text-green-600">+{agent.totalBonuses.toLocaleString()}</td>
-                          <td className="py-3 px-4 text-right text-red-600">-{agent.totalFines.toLocaleString()}</td>
-
-                          {/* Final Net Salary Cell */}
-                          <td className="py-3 px-4 text-right font-bold text-blue-400 bg-slate-900">
-                            {agent.netSalary.toLocaleString()} PKR
-                          </td>
-                        </tr>
-                      ))}
-
-                      {/* TOTAL ROW */}
-                      <tr className="bg-slate-900 font-semibold border-t-2 border-slate-600">
-                        <td className="py-4 px-4 text-white"></td>
-                        <td className="py-4 px-4 text-white">TOTAL</td>
-                        <td className="py-4 px-4 text-white"></td>
-                        <td className="py-4 px-4 text-right text-slate-400">
-                          {displayedPayroll.reduce((s, a) => s + (a.baseSalary || 0), 0).toLocaleString()}
-                        </td>
-                        <td className="py-4 px-4 text-center text-slate-400">-</td>
-                        <td className="py-4 px-4 text-right text-white">
-                          {displayedPayroll.reduce((s, a) => s + (a.earnedBase || 0), 0).toLocaleString()}
-                        </td>
-                        <td className="py-4 px-4 text-right text-green-400">
-                          {displayedPayroll.reduce((s, a) => s + (a.totalSales || 0), 0)}
-                        </td>
-                        <td className="py-4 px-4 text-right text-green-400">
-                          +{displayedPayroll.reduce((s, a) => s + (a.totalBonuses || 0), 0).toLocaleString()}
-                        </td>
-                        <td className="py-4 px-4 text-right text-red-400">
-                          -{displayedPayroll.reduce((s, a) => s + (a.totalFines || 0), 0).toLocaleString()}
-                        </td>
-                        <td className="py-4 px-4 text-right font-bold text-blue-400 bg-slate-900">
-                          {displayedPayroll.reduce((s, a) => s + (a.netSalary || 0), 0).toLocaleString()} PKR
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
+                  <div className="text-sm font-mono text-slate-300 bg-slate-950 px-3 py-1 rounded border border-slate-700">
+                    {getPayrollRange(selectedMonth).start.toDateString()} - {getPayrollRange(selectedMonth).end.toDateString()}
+                  </div>
                 </div>
-              );
-            })()}
+
+                {/* TABLE */}
+                <div className="overflow-auto relative flex-1">
+                  {(() => {
+                    const { start, end } = getPayrollRange(selectedMonth);
+                    const dateArray = getDaysArray(start, end);
+
+                    // 1. CALCULATE TARGET BUSINESS DAYS (Denominator)
+                    // Count only Mon-Fri in the cycle. This is the standard divider.
+                    const targetBusinessDays = dateArray.filter(dateStr => {
+                      const d = new Date(dateStr);
+                      const day = d.getDay();
+                      return day !== 0 && day !== 6; // Exclude Sun(0) & Sat(6)
+                    }).length || 1;
+
+                    // --- TIME FORMATTER HELPER ---
+                    const formatTime = (timeStr) => {
+                      if (!timeStr) return null;
+                      // If it's a full ISO string (2023-01-01T09:00:00), extract time
+                      if (timeStr.includes('T')) {
+                         return new Date(timeStr).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+                      }
+                      // If it's already HH:mm:ss (09:30:00)
+                      const [h, m] = timeStr.split(':');
+                      if (h && m) {
+                         const hours = parseInt(h);
+                         const ampm = hours >= 12 ? 'PM' : 'AM';
+                         const h12 = hours % 12 || 12;
+                         return `${h12}:${m} ${ampm}`;
+                      }
+                      return timeStr;
+                    };
+
+                    // 2. RAW FILTER (Remove Agents strictly outside date range)
+                    const filteredAgents = agents.filter(agent => {
+                      const targetName = agent.name?.toString().trim().toLowerCase();
+                      const hrRec = hrRecords.find(h => (agent.cnic && h.cnic === agent.cnic) || (h.agent_name?.toString().trim().toLowerCase() === targetName)) || {};
+                      
+                      const joinDateStr = hrRec.joining_date || agent.activeDate || agent.active_date;
+                      const joinDate = joinDateStr ? new Date(joinDateStr) : null;
+                      const leftDate = agent.leftDate ? new Date(agent.leftDate) : null;
+
+                      // Joined AFTER cycle ended? Hide.
+                      if (joinDate && joinDate > end) return false;
+                      
+                      // Left BEFORE cycle started? Hide.
+                      if (['Left', 'Terminated', 'Resigned', 'NCNS', 'Absconded'].includes(agent.status) && leftDate) {
+                         if (leftDate < start) return false;
+                      }
+                      return true;
+                    });
+
+                    // 3. PREPARE MAPS (String Key Matching)
+                    const salesMap = {};
+                    sales.forEach(s => {
+                      if (s.status === 'Sale' || ['HW- Xfer', 'HW-IBXfer', 'HW-Xfer-CDR'].includes(s.disposition)) {
+                         const dateKey = typeof s.date === 'string' ? s.date.substring(0, 10) : '';
+                         const key = `${s.agentName?.toString().trim().toLowerCase()}-${dateKey}`;
+                         salesMap[key] = (salesMap[key] || 0) + 1;
+                      }
+                    });
+
+                    const attMap = {};
+                    attendance.forEach(a => {
+                      // Safety: Handle both ISO dates and simple dates
+                      const dateKey = typeof a.date === 'string' ? a.date.substring(0, 10) : '';
+                      const key = `${a.agentName?.toString().trim().toLowerCase()}-${dateKey}`;
+                      attMap[key] = a; // We store the whole object to access 'loginTime'
+                    });
+
+                    const bonusMap = {};
+                    bonuses.forEach(b => {
+                      if (b.month === selectedMonth) {
+                        const name = b.agentName?.toString().trim().toLowerCase();
+                        bonusMap[name] = (bonusMap[name] || 0) + (parseInt(b.amount) || 0);
+                      }
+                    });
+
+                    const fineMap = {};
+                    fines.forEach(f => {
+                      if (f.month === selectedMonth) {
+                        const name = f.agentName?.toString().trim().toLowerCase();
+                        fineMap[name] = (fineMap[name] || 0) + (parseInt(f.amount) || 0);
+                      }
+                    });
+
+                    // 4. PROCESS ROWS & CALCULATE PAY
+                   // 5. BUILD ROWS & SUMMARY STATS
+                    // [FIX] Added tracking for monthly summary columns
+                    const grandTotals = { 
+                        baseSalary: 0, bonus: 0, fine: 0, earned: 0, 
+                        dailySales: {}, weeklyStats: {},
+                        monthSales: 0, monthPresent: 0, monthLate: 0, monthAbsent: 0
+                    };
+
+                    let processedAgents = filteredAgents.map(agent => {
+                      const targetName = agent.name?.toString().trim().toLowerCase();
+                      const hrRec = hrRecords.find(h => h.agent_name?.toString().trim().toLowerCase() === targetName) || {};
+                      
+                      let baseSalary = agent.baseSalary || hrRec.base_salary || 0;
+                      if (typeof baseSalary === 'string') baseSalary = parseInt(baseSalary.replace(/,/g, '')) || 0;
+                      
+                      // UI Fields
+                      const bankName = hrRec.bank_name || '-';
+                      const accountNo = hrRec.account_number || '-';
+                      const joinDateDisplay = hrRec.joining_date || agent.activeDate || '-';
+                      const leftDateDisplay = agent.leftDate || hrRec.left_date; 
+                      
+                      // Status Checking
+                      const isBadStatus = ['Left', 'Terminated', 'Resigned', 'NCNS', 'Absconded'].includes(agent.status);
+
+                      let totalSales = 0;
+                      let paidDays = 0;      
+                      let physicalDays = 0;  
+                      
+                      // [NEW] Monthly Counters
+                      let countPresent = 0;
+                      let countLate = 0;
+                      let countAbsent = 0;
+
+                      const dailyData = {};
+
+                      dateArray.forEach(dateStr => {
+                        const daySalesCount = salesMap[`${targetName}-${dateStr}`] || 0;
+                        const attRecord = attMap[`${targetName}-${dateStr}`];
+                        
+                        const d = new Date(dateStr);
+                        const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+                        const isHoliday = holidays.some(h => h.date === dateStr);
+
+                        // Physically Present Check
+                        const isPresent = (attRecord && (attRecord.status === 'Present' || attRecord.status === 'Late')) || daySalesCount > 0;
+                        
+                        // [NEW] Increment Stats
+                        if (isPresent) {
+                            physicalDays++;
+                            countPresent++;
+                            // Check DB for late status
+                            if (attRecord && attRecord.late) countLate++; 
+                        }
+
+                        // [NEW] Absent Logic: Not Present AND Not Holiday AND Not Weekend AND Not Future
+                        if (!isPresent && !isHoliday && !isWeekend && d <= new Date()) {
+                            countAbsent++;
+                        }
+
+                        // Payable Counter (Used for Money)
+                        if (isPresent || (isHoliday && !isWeekend)) {
+                            paidDays++;
+                        }
+                        
+                        totalSales += daySalesCount;
+
+                        // Time Formatting
+                        let displayTime = null;
+                        if (attRecord && attRecord.status === 'Present') {
+                            displayTime = formatTime(attRecord.loginTime || attRecord.timeIn); 
+                        }
+
+                        dailyData[dateStr] = {
+                          sales: daySalesCount,
+                          time: displayTime, 
+                          status: isPresent ? 'P' : 'A',
+                          isGhostPresent: !attRecord && daySalesCount > 0,
+                          isHoliday: isHoliday 
+                        };
+
+                        grandTotals.dailySales[dateStr] = (grandTotals.dailySales[dateStr] || 0) + daySalesCount;
+                      });
+
+                      const totalBonus = bonusMap[targetName] || 0;
+                      const totalFine = fineMap[targetName] || 0;
+                      
+                      // --- SALARY FORMULA ---
+                      const perDaySalary = baseSalary / targetBusinessDays;
+                      let earnedSalary = Math.round((perDaySalary * paidDays) + totalBonus - totalFine);
+                      
+                      if (paidDays >= targetBusinessDays && totalBonus === 0 && totalFine === 0) {
+                          earnedSalary = baseSalary;
+                      }
+                      if (earnedSalary < 0) earnedSalary = 0;
+
+                      // [NEW] LPD (Leads Per Day) Calculation
+                      const lpd = paidDays > 0 ? (totalSales / paidDays).toFixed(2) : "0.00";
+
+                      return {
+                        ...agent, 
+                        baseSalary, paidDays, physicalDays, totalSales, totalBonus, totalFine, earnedSalary, dailyData, 
+                        bankName, accountNo, team: agent.team || 'Unassigned',
+                        joinDateDisplay, leftDateDisplay, isBadStatus, targetBusinessDays,
+                        // [NEW] Return new stats
+                        countPresent, countLate, countAbsent, lpd
+                      };
+                    });
+
+                    // 5. GHOST FILTER
+                    processedAgents = processedAgents.filter(a => a.totalSales > 0 || a.physicalDays > 0);
+
+                    // 6. UPDATE GRAND TOTALS
+                    processedAgents.forEach(a => {
+                        grandTotals.baseSalary += a.baseSalary;
+                        grandTotals.bonus += a.totalBonus;
+                        grandTotals.fine += a.totalFine;
+                        grandTotals.earned += a.earnedSalary;
+                        // [NEW] Accumulate Summary Totals
+                        grandTotals.monthSales += a.totalSales;
+                        grandTotals.monthPresent += a.countPresent;
+                        grandTotals.monthLate += a.countLate;
+                        grandTotals.monthAbsent += a.countAbsent;
+                    });
+
+                    // 7. SORT & GROUP
+                    const uniqueTeams = [...new Set(processedAgents.map(a => a.team))].sort();
+
+                    return (
+                      <table className="w-full text-left border-collapse table-fixed min-w-[5000px]">
+                        
+                        {/* --- HEADER --- */}
+                        <thead className="sticky top-0 z-50 shadow-lg text-xs uppercase font-bold text-slate-400 bg-slate-950">
+                          <tr>
+                            <th rowSpan={2} className="p-3 sticky left-0 z-50 bg-slate-950 border-b border-r border-slate-700 w-10 text-center align-middle">#</th>
+                            <th rowSpan={2} className="p-3 sticky left-10 z-50 bg-slate-950 border-b border-r border-slate-700 w-48 align-middle">Agent Details</th>
+                            <th rowSpan={2} className="p-3 sticky left-[232px] z-50 bg-slate-950 border-b border-r border-slate-700 w-24 text-right align-middle text-blue-300">Salary</th>
+                            <th rowSpan={2} className="p-3 border-b border-r border-slate-700 w-24 text-right align-middle text-green-400">M. Bonus</th>
+                            <th rowSpan={2} className="p-3 border-b border-r border-slate-700 w-24 text-right align-middle text-red-400">M. Fine</th>
+                            <th rowSpan={2} className="p-3 border-b border-r border-slate-700 w-28 text-right align-middle text-emerald-300 font-black">Earned</th>
+                            <th rowSpan={2} className="p-3 border-b border-r border-slate-700 w-32 text-left align-middle text-slate-300">Bank Name</th>
+                            <th rowSpan={2} className="p-3 border-b border-r border-slate-700 w-40 text-left align-middle text-slate-300">Account No</th>
+                            <th rowSpan={2} className="p-3 border-b border-r border-slate-700 w-16 text-center align-middle text-white">Days</th>
+
+                            {dateArray.map(dateStr => {
+                              const d = new Date(dateStr);
+                              const isFri = d.getDay() === 5;
+                              const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+                              const isHoliday = holidays.some(h => h.date === dateStr);
+                              
+                              return (
+                                <React.Fragment key={dateStr}>
+                                  <th colSpan={2} className={`p-1 border-b border-r border-slate-700 text-center ${isHoliday ? 'bg-purple-900/40' : (isWeekend ? 'bg-slate-800/50' : 'bg-slate-900')}`}>
+                                    <div className={`text-[9px] ${isHoliday ? 'text-purple-300' : 'text-slate-500'}`}>{d.toLocaleDateString('en-US', { weekday: 'short' })}</div>
+                                    <div className={`text-sm ${isHoliday ? 'text-purple-200 font-bold' : 'text-white'}`}>{d.getDate()}</div>
+                                  </th>
+                                  {isFri && (
+                                    <th colSpan={3} className="p-1 border-b border-r border-l border-yellow-600/50 bg-yellow-900/20 text-center">
+                                      <div className="text-[10px] text-yellow-400 tracking-widest">WEEKLY</div>
+                                    </th>
+                                  )}
+                                </React.Fragment>
+                              );
+                            })}
+
+{/* [NEW] SUMMARY COLUMNS HEADERS */}
+                            <th rowSpan={2} className="p-2 border-b border-l-2 border-slate-600 bg-slate-900 text-center text-green-400 w-20">Total Sales</th>
+                            <th rowSpan={2} className="p-2 border-b border-slate-700 bg-slate-900 text-center text-blue-300 w-16">LPD</th>
+                            <th rowSpan={2} className="p-2 border-b border-slate-700 bg-slate-900 text-center text-emerald-400 w-16">Pres</th>
+                            <th rowSpan={2} className="p-2 border-b border-slate-700 bg-slate-900 text-center text-yellow-400 w-16">Late</th>
+                            <th rowSpan={2} className="p-2 border-b border-r border-slate-700 bg-slate-900 text-center text-red-400 w-16">Abs</th>
+
+                          </tr>
+
+                          <tr className="bg-slate-900 text-[9px]">
+                             {dateArray.map(dateStr => {
+                               const isFri = new Date(dateStr).getDay() === 5;
+                               return (
+                                 <React.Fragment key={dateStr + '-sub'}>
+                                   <th className="p-1 border-b border-r border-slate-800 text-center text-green-400 w-8">Sale</th>
+                                   <th className="p-1 border-b border-r border-slate-700 text-center text-blue-300 w-12">Time</th>
+                                   {isFri && (
+                                     <>
+                                      <th className="p-1 border-b border-r border-slate-800 bg-yellow-900/10 text-center text-green-400 w-10">Sale</th>
+                                      <th className="p-1 border-b border-r border-slate-800 bg-yellow-900/10 text-center text-blue-300 w-12">Bns</th>
+                                      <th className="p-1 border-b border-r border-l border-slate-600 bg-yellow-900/10 text-center text-red-300 w-12">Fine</th>
+                                     </>
+                                   )}
+                                 </React.Fragment>
+                               )
+                             })}
+                          </tr>
+                        </thead>
+                        
+                        {/* --- BODY --- */}
+                        <tbody className="divide-y divide-slate-800 text-xs text-slate-300">
+                          {uniqueTeams.map(teamName => {
+                            const teamAgents = processedAgents.filter(a => a.team === teamName);
+                            if (teamAgents.length === 0) return null;
+
+                            return (
+                              <React.Fragment key={teamName}>
+                                <tr className="bg-slate-800/80">
+                                  <td colSpan={9} className="p-2 px-4 sticky left-0 z-40 bg-slate-800 border-r border-slate-700 font-bold text-blue-400 uppercase tracking-widest text-sm shadow-md">
+                                    {teamName}
+                                  </td>
+                                  <td colSpan={dateArray.length * 2 + (Math.floor(dateArray.length / 5) * 3)} className="bg-slate-800"></td>
+                                </tr>
+
+                                {teamAgents.map((agent, idx) => (
+                                  <tr key={agent.id} className="hover:bg-slate-800/50 transition-colors group">
+                                    <td className="p-2 sticky left-0 z-40 bg-slate-900 border-r border-slate-700 text-center font-mono text-slate-500">{idx + 1}</td>
+                                    
+                                    <td className="p-2 sticky left-10 z-40 bg-slate-900 border-r border-slate-700">
+                                      <div className={`font-medium truncate ${agent.isBadStatus ? 'text-red-500 font-bold' : 'text-white'}`}>
+                                        {agent.name}
+                                      </div>
+                                      <div className="flex flex-col text-[9px] text-slate-500 mt-0.5">
+                                        <span>Joined: {agent.joinDateDisplay}</span>
+                                        {/* Show Date for ANY Bad Status */}
+                                        {agent.isBadStatus && agent.leftDateDisplay && (
+                                          <span className="text-red-400 font-bold bg-red-900/10 px-1 rounded w-fit mt-0.5">
+                                            {agent.status}: {agent.leftDateDisplay}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </td>
+
+                                    <td className="p-2 sticky left-[232px] z-40 bg-slate-900 border-r border-slate-700 text-right font-mono">{agent.baseSalary.toLocaleString()}</td>
+                                    <td className="p-2 border-r border-slate-700 text-right font-mono text-green-400">{agent.totalBonus > 0 ? '+' : ''}{agent.totalBonus.toLocaleString()}</td>
+                                    <td className="p-2 border-r border-slate-700 text-right font-mono text-red-400">{agent.totalFine > 0 ? '-' : ''}{agent.totalFine.toLocaleString()}</td>
+                                    <td className="p-2 border-r border-slate-700 text-right font-mono font-bold text-emerald-400">{agent.earnedSalary.toLocaleString()}</td>
+                                    <td className="p-2 border-r border-slate-700 text-left text-slate-400 truncate text-[10px]">{agent.bankName}</td>
+                                    <td className="p-2 border-r border-slate-700 text-left text-slate-400 font-mono text-[10px]">{agent.accountNo}</td>
+                                    <td className="p-2 border-r border-slate-700 text-center font-bold text-white bg-blue-900/10">
+                                      {agent.paidDays}<span className="text-[9px] text-slate-500 font-normal">/{agent.targetBusinessDays}</span>
+                                    </td>
+
+                                    {dateArray.map(dateStr => {
+                                      const data = agent.dailyData[dateStr];
+                                      const d = new Date(dateStr);
+                                      const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+                                      const isFri = d.getDay() === 5;
+                                      const isHoliday = data.isHoliday; 
+
+                                      let bgClass = isWeekend ? "bg-slate-800/30" : "";
+                                      if (data.isGhostPresent) bgClass = "bg-orange-900/20";
+                                      else if (isHoliday) bgClass = "bg-purple-900/10"; 
+                                      else if (data.status === 'A' && !isWeekend) bgClass = "bg-red-900/10";
+
+                                      return (
+                                        <React.Fragment key={dateStr}>
+                                          <td className={`p-1 border-r border-slate-800 text-center align-middle font-mono ${bgClass}`}>
+                                            {data.sales > 0 ? <span className="text-green-400 font-bold">{data.sales}</span> : <span className="text-slate-700">-</span>}
+                                          </td>
+
+                                          <td className={`p-1 border-r border-slate-700 text-center align-middle font-mono text-[10px] ${bgClass}`}>
+                                            {data.time ? <span className="text-slate-300">{data.time}</span> : 
+                                              (isHoliday ? <span className="text-purple-400 font-bold">HOL</span> :
+                                              (isWeekend ? <span className="text-slate-700">-</span> : <span className="text-red-900 font-bold">ABS</span>))
+                                            }
+                                          </td>
+
+                                          {isFri && (() => {
+                                            let wkSales = 0, wkBonus = 0, wkFine = 0;
+                                            const weekStart = new Date(d); weekStart.setDate(d.getDate() - 4);
+                                            const weekStartStr = weekStart.toISOString().split('T')[0];
+                                            const weekEndStr = dateStr;
+                                            const targetName = agent.name?.toString().trim().toLowerCase();
+
+                                            for(let i=0; i<=4; i++) {
+                                                const tempD = new Date(d); 
+                                                tempD.setDate(d.getDate() - i);
+                                                const k = `${targetName}-${tempD.toISOString().split('T')[0]}`;
+                                                wkSales += (salesMap[k] || 0);
+                                            }
+                                            bonuses.forEach(b => {
+                                              if(b.agentName?.toString().trim().toLowerCase() === targetName && b.date >= weekStartStr && b.date <= weekEndStr) wkBonus += parseInt(b.amount);
+                                            });
+                                            fines.forEach(f => {
+                                              if(f.agentName?.toString().trim().toLowerCase() === targetName && f.date >= weekStartStr && f.date <= weekEndStr) wkFine += parseInt(f.amount);
+                                            });
+                                            
+                                            // Aggregate Weekly
+                                            if (!grandTotals.weeklyStats[dateStr]) grandTotals.weeklyStats[dateStr] = { sales: 0, bonus: 0, fine: 0 };
+                                            grandTotals.weeklyStats[dateStr].sales += wkSales;
+                                            grandTotals.weeklyStats[dateStr].bonus += wkBonus;
+                                            grandTotals.weeklyStats[dateStr].fine += wkFine;
+
+                                            return (
+                                              <>
+                                                <td className="p-1 border-r border-slate-800 bg-yellow-900/10 text-center font-bold text-green-400">{wkSales}</td>
+                                                <td className="p-1 border-r border-slate-800 bg-yellow-900/10 text-center text-[10px] text-blue-300">{wkBonus > 0 ? (wkBonus/1000).toFixed(1)+'k' : '-'}</td>
+                                                <td className="p-1 border-r border-l border-slate-600 bg-yellow-900/10 text-center text-[10px] text-red-300">{wkFine > 0 ? (wkFine/1000).toFixed(1)+'k' : '-'}</td>
+                                              </>
+                                            );
+                                          })()}
+                                        </React.Fragment>
+                                      );
+                                    })}
+
+{/* ... existing date loop ... */}
+
+                                    {/* [NEW] SUMMARY COLUMNS DATA */}
+                                    <td className="p-2 border-b border-l-2 border-slate-600 bg-slate-900/50 text-center font-black text-green-400">{agent.totalSales}</td>
+                                    <td className="p-2 border-b border-slate-700 bg-slate-900/30 text-center font-mono text-blue-300">{agent.lpd}</td>
+                                    <td className="p-2 border-b border-slate-700 bg-slate-900/30 text-center font-bold text-emerald-400">{agent.countPresent}</td>
+                                    <td className="p-2 border-b border-slate-700 bg-slate-900/30 text-center font-bold text-yellow-400">{agent.countLate}</td>
+                                    <td className="p-2 border-b border-r border-slate-700 bg-slate-900/30 text-center font-bold text-red-400">{agent.countAbsent}</td>
+
+                                  </tr>
+                                ))}
+                              </React.Fragment>
+                            );
+                          })}
+                        </tbody>
+
+                        {/* --- FOOTER --- */}
+                        <tfoot className="sticky bottom-0 z-50 bg-slate-950 shadow-[0_-5px_15px_rgba(0,0,0,0.5)] font-bold text-xs uppercase text-slate-300 border-t-2 border-blue-500">
+                          <tr>
+                            <td colSpan={2} className="p-3 border-r border-slate-800 text-center bg-slate-950">Grand Total</td>
+                            <td className="p-3 border-r border-slate-800 text-right bg-slate-950 text-blue-300">{grandTotals.baseSalary.toLocaleString()}</td>
+                            <td className="p-3 border-r border-slate-800 text-right bg-slate-950 text-green-400">{grandTotals.bonus.toLocaleString()}</td>
+                            <td className="p-3 border-r border-slate-800 text-right bg-slate-950 text-red-400">{grandTotals.fine.toLocaleString()}</td>
+                            <td className="p-3 border-r border-slate-800 text-right bg-slate-950 text-emerald-400 font-black">{grandTotals.earned.toLocaleString()}</td>
+                            <td colSpan={3} className="p-3 border-r border-slate-800 bg-slate-950"></td>
+                            
+                            {dateArray.map(dateStr => {
+                               const isFri = new Date(dateStr).getDay() === 5;
+                               return (
+                                 <React.Fragment key={dateStr}>
+                                    <td colSpan={2} className="p-1 border-r border-slate-800 text-center text-green-400 bg-slate-950">
+                                       {grandTotals.dailySales[dateStr] || 0}
+                                    </td>
+                                    {isFri && (
+                                       <>
+                                         <td className="p-1 border-r border-slate-800 bg-yellow-900/20 text-center text-green-400">
+                                            {grandTotals.weeklyStats[dateStr]?.sales || 0}
+                                         </td>
+                                         <td className="p-1 border-r border-slate-800 bg-yellow-900/20 text-center text-blue-300">
+                                            {(grandTotals.weeklyStats[dateStr]?.bonus / 1000).toFixed(0)}k
+                                         </td>
+                                         <td className="p-1 border-r border-l border-slate-600 bg-yellow-900/20 text-center text-red-300">
+                                            {(grandTotals.weeklyStats[dateStr]?.fine / 1000).toFixed(0)}k
+                                         </td>
+                                       </>
+                                    )}
+                                 </React.Fragment>
+                               );
+                            })}
+
+{/* [NEW] SUMMARY GRAND TOTALS */}
+                            <td className="p-2 border-r border-l-2 border-slate-600 bg-slate-950 text-center font-black text-green-400">{grandTotals.monthSales}</td>
+                            <td className="p-2 border-r border-slate-800 bg-slate-950 text-center text-slate-500">-</td>
+                            <td className="p-2 border-r border-slate-800 bg-slate-950 text-center font-bold text-emerald-400">{grandTotals.monthPresent}</td>
+                            <td className="p-2 border-r border-slate-800 bg-slate-950 text-center font-bold text-yellow-400">{grandTotals.monthLate}</td>
+                            <td className="p-2 border-r border-slate-800 bg-slate-950 text-center font-bold text-red-400">{grandTotals.monthAbsent}</td>
+
+                          </tr>
+                        </tfoot>
+                      </table>
+                    );
+                  })()}
+                </div>
+              </div>
+            )}
           </div>
-        )}
-      </div>
 
       {/* Modals */}
       {/* Add this with the other modals */}
