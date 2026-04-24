@@ -4,6 +4,8 @@ import { getPayrollRange, getDaysArray, formatTime, getStandardMonthRange } from
 // --- Imports for UI Components ---
 import StatCard from './components/StatCard';
 
+import SuperControls from './HW_Pages/SuperControls';
+
 // --- Imports for Modals ---
 import SaleModal from './components/modals/SaleModal';
 import FineModal from './components/modals/FineModal';
@@ -29,16 +31,16 @@ import {
 
 // Custom Shark Icon Component (Lucide Style)
 const SharkIcon = ({ className }) => (
-  <svg 
-    xmlns="http://www.w3.org/2000/svg" 
-    width="24" 
-    height="24" 
-    viewBox="0 0 24 24" 
-    fill="none" 
-    stroke="currentColor" 
-    strokeWidth="2" 
-    strokeLinecap="round" 
-    strokeLinejoin="round" 
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="24"
+    height="24"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
     className={className}
   >
     {/* Shark Body & Fin */}
@@ -170,6 +172,10 @@ const AgentPayrollSystem = () => {
   const [activeTab, setActiveTab] = useState(() => {
     return localStorage.getItem('ams_active_tab') || 'dashboard';
   });
+
+
+  const [activeMajorTab, setActiveMajorTab] = useState('core_ops'); // 'core_ops' or 'new_module'
+
   const [agents, setAgents] = useState([]);
   const [sales, setSales] = useState([]);
   const [attendance, setAttendance] = useState([]);
@@ -187,7 +193,7 @@ const AgentPayrollSystem = () => {
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
   const [showMgmtAttendanceModal, setShowMgmtAttendanceModal] = useState(false);
   // Default to showing Salary Slips, but allow switching to 'master'
-const [payrollSubTab, setPayrollSubTab] = useState('slips');
+  const [payrollSubTab, setPayrollSubTab] = useState('slips');
 
   // --- GOAL SETTINGS STATE ---
   const [showGoalModal, setShowGoalModal] = useState(false);
@@ -200,7 +206,7 @@ const [payrollSubTab, setPayrollSubTab] = useState('slips');
   ]);
 
   // [SMART DATE STATE] Automatically detects Jan 2026 cycle if today > Dec 20
-const [selectedMonth, setSelectedMonth] = useState(() => {
+  const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();
     const currentDay = now.getDate(); // Capture "30" before we change the date
 
@@ -2717,90 +2723,90 @@ const [selectedMonth, setSelectedMonth] = useState(() => {
   };
 
   // Helper: Generates Mon-Fri weeks strictly between two dates
-const getCycleWeeks = (startDate, endDate) => {
-  const weeks = [];
-  let current = new Date(startDate);
-  const end = new Date(endDate);
-  
-  // Align start to the first day of that week (or keep as is if valid)
-  // We want to group by standard weeks, but filter strictly by the range
-  
-  let weekIndex = 1;
-  let currentWeekStart = new Date(current);
-  let currentWeekEnd = new Date(current);
-  
-  // Iterate through every day of the cycle
-  while (current <= end) {
-    const dayNum = current.getDay();
-    
-    // If it's Monday (1), start a new week buffer
-    if (dayNum === 1 && current > new Date(startDate)) {
-       weeks.push({
-         name: `Week ${weekIndex}`,
-         start: currentWeekStart.toISOString().split('T')[0],
-         end: currentWeekEnd.toISOString().split('T')[0]
-       });
-       weekIndex++;
-       currentWeekStart = new Date(current);
+  const getCycleWeeks = (startDate, endDate) => {
+    const weeks = [];
+    let current = new Date(startDate);
+    const end = new Date(endDate);
+
+    // Align start to the first day of that week (or keep as is if valid)
+    // We want to group by standard weeks, but filter strictly by the range
+
+    let weekIndex = 1;
+    let currentWeekStart = new Date(current);
+    let currentWeekEnd = new Date(current);
+
+    // Iterate through every day of the cycle
+    while (current <= end) {
+      const dayNum = current.getDay();
+
+      // If it's Monday (1), start a new week buffer
+      if (dayNum === 1 && current > new Date(startDate)) {
+        weeks.push({
+          name: `Week ${weekIndex}`,
+          start: currentWeekStart.toISOString().split('T')[0],
+          end: currentWeekEnd.toISOString().split('T')[0]
+        });
+        weekIndex++;
+        currentWeekStart = new Date(current);
+      }
+
+      // Update the end of the current week
+      currentWeekEnd = new Date(current);
+
+      // Move to next day
+      current.setDate(current.getDate() + 1);
     }
-    
-    // Update the end of the current week
-    currentWeekEnd = new Date(current);
-    
-    // Move to next day
-    current.setDate(current.getDate() + 1);
-  }
 
-  // Push the final partial week
-  weeks.push({
-    name: `Week ${weekIndex}`,
-    start: currentWeekStart.toISOString().split('T')[0],
-    end: currentWeekEnd.toISOString().split('T')[0]
-  });
-
-  return weeks;
-};
-
-
-// SMART WEEK GENERATOR (Carry-Over Logic)
-const getSmartWeeks = (cycleStartStr, cycleEndStr) => {
-  const weeks = [];
-  const cycleEnd = new Date(cycleEndStr);
-  
-  // 1. Find the Monday of the week where the cycle STARTS
-  // e.g. If Cycle starts Wed 21st, we snap back to Mon 19th
-  let current = new Date(cycleStartStr);
-  const day = current.getDay();
-  // Calculate difference to get to previous Monday (1)
-  // If day is 0 (Sun), go back 6 days. Else go back (day - 1)
-  const diff = current.getDate() - day + (day === 0 ? -6 : 1);
-  current.setDate(diff); // 'current' is now the Monday of the first week
-  
-  // 2. Loop through weeks
-  while (true) {
-    const monday = new Date(current);
-    const friday = new Date(current);
-    friday.setDate(monday.getDate() + 4); // Add 4 days to get Friday
-    
-    // STOPPING CONDITION:
-    // If the Friday of this week falls AFTER the cycle end date (the 20th),
-    // we DROP this entire week. It will be picked up as "Week 1" of the NEXT month.
-    if (friday > cycleEnd) break;
-    
+    // Push the final partial week
     weeks.push({
-      name: `Week ${weeks.length + 1}`,
-      start: monday.toISOString().split('T')[0],
-      end: friday.toISOString().split('T')[0]
+      name: `Week ${weekIndex}`,
+      start: currentWeekStart.toISOString().split('T')[0],
+      end: currentWeekEnd.toISOString().split('T')[0]
     });
-    
-    // Jump to next Monday
-    current.setDate(current.getDate() + 7);
-  }
-  
-  return weeks;
-};
 
-// --- AUTO GENERATE BONUSES (SMART CARRY-OVER) ---
+    return weeks;
+  };
+
+
+  // SMART WEEK GENERATOR (Carry-Over Logic)
+  const getSmartWeeks = (cycleStartStr, cycleEndStr) => {
+    const weeks = [];
+    const cycleEnd = new Date(cycleEndStr);
+
+    // 1. Find the Monday of the week where the cycle STARTS
+    // e.g. If Cycle starts Wed 21st, we snap back to Mon 19th
+    let current = new Date(cycleStartStr);
+    const day = current.getDay();
+    // Calculate difference to get to previous Monday (1)
+    // If day is 0 (Sun), go back 6 days. Else go back (day - 1)
+    const diff = current.getDate() - day + (day === 0 ? -6 : 1);
+    current.setDate(diff); // 'current' is now the Monday of the first week
+
+    // 2. Loop through weeks
+    while (true) {
+      const monday = new Date(current);
+      const friday = new Date(current);
+      friday.setDate(monday.getDate() + 4); // Add 4 days to get Friday
+
+      // STOPPING CONDITION:
+      // If the Friday of this week falls AFTER the cycle end date (the 20th),
+      // we DROP this entire week. It will be picked up as "Week 1" of the NEXT month.
+      if (friday > cycleEnd) break;
+
+      weeks.push({
+        name: `Week ${weeks.length + 1}`,
+        start: monday.toISOString().split('T')[0],
+        end: friday.toISOString().split('T')[0]
+      });
+
+      // Jump to next Monday
+      current.setDate(current.getDate() + 7);
+    }
+
+    return weeks;
+  };
+
+  // --- AUTO GENERATE BONUSES (SMART CARRY-OVER) ---
   const handleGenerateAutoBonuses = async () => {
     const confirmGen = window.confirm("Generating Bonuses with Carry-Over Logic:\n\n- Partial weeks at month-end are SKIPPED.\n- They will appear as 'Week 1' in the NEXT month.\n\nProceed?");
     if (!confirmGen) return;
@@ -2832,7 +2838,7 @@ const getSmartWeeks = (cycleStartStr, cycleEndStr) => {
         // --- LOGIC A: MONTHLY (>50k) ---
         // (This part remains unchanged - it uses the strict 21-20 dates)
         if (salary >= 50000) {
-           const count = sales.filter(s => {
+          const count = sales.filter(s => {
             const saleName = s.agentName?.toString().trim().toLowerCase();
             return saleName === targetName &&
               (s.status === 'Sale' || ['HW- Xfer', 'HW-IBXfer', 'HW-Xfer-CDR'].includes(s.disposition)) &&
@@ -2888,8 +2894,8 @@ const getSmartWeeks = (cycleStartStr, cycleEndStr) => {
               const saleName = s.agentName?.toString().trim().toLowerCase();
               return saleName === targetName &&
                 (s.status === 'Sale' || ['HW- Xfer', 'HW-IBXfer', 'HW-Xfer-CDR'].includes(s.disposition)) &&
-                (s.date >= week.start && s.date <= week.end); 
-                // No need to check "isWeekday" because week.start/end IS Mon/Fri
+                (s.date >= week.start && s.date <= week.end);
+              // No need to check "isWeekday" because week.start/end IS Mon/Fri
             }).length;
 
             if (weeklyCount === 0) return; // Skip 0 sales
@@ -2922,7 +2928,7 @@ const getSmartWeeks = (cycleStartStr, cycleEndStr) => {
 
             if (weeklyBonus > 0) {
               const weekId = `${week.name}`; // e.g., "Week 1"
-              
+
               // We check using week.start to distinguish "Week 1" of Jan vs "Week 1" of Feb
               // actually 'month' + 'period' is usually unique enough
               const alreadyExists = bonuses.some(b =>
@@ -3097,15 +3103,16 @@ const getSmartWeeks = (cycleStartStr, cycleEndStr) => {
   // Reusable Sub-Navigation Component
   const SubTabBar = ({ tabs, activeSubTab, setActiveSubTab }) => {
     return (
-      <div className="bg-slate-800/50 border-b border-slate-700 mb-6">
-        <div className="flex gap-2 px-6">
+      // Added -mt-6 and -mx-6 to pull it up and stretch it to the edges
+      <div className="bg-[#0f172a] border-b border-slate-800">
+        <div className="flex gap-1 px-6 py-2 overflow-x-auto custom-scrollbar">
           {tabs.map(tab => (
             <button
               key={tab.id}
               onClick={() => setActiveSubTab(tab.id)}
-              className={`px-4 py-2 text-sm font-medium transition-colors ${activeSubTab === tab.id
-                ? 'border-b-2 border-green-400 text-green-400'
-                : 'text-slate-400 hover:text-white'
+              className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-all duration-200 whitespace-nowrap ${activeSubTab === tab.id
+                  ? 'bg-slate-700 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
                 }`}
             >
               {tab.label}
@@ -3126,6 +3133,7 @@ const getSmartWeeks = (cycleStartStr, cycleEndStr) => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
 
+    {/* --- TOP HEADER (Shark Management System) GOES HERE --- */}
       {/* Header */}
       <div className="bg-slate-800 border-b border-slate-700 shadow-sm sticky top-0 z-20">
         <div className="max-w-7xl mx-auto px-6 py-4">
@@ -3140,11 +3148,11 @@ const getSmartWeeks = (cycleStartStr, cycleEndStr) => {
                 <h1 className="text-xl font-bold text-white">Shark Management System</h1>
                 <div className="flex items-center gap-2 text-xs text-slate-400 mt-0.5">
                   <span className={`px-2 py-0.5 rounded-full font-medium ${userRole === 'SuperAdmin' ? 'bg-red-100 text-red-700 border border-red-200' :
-                      userRole === 'Admin' ? 'bg-purple-100 text-purple-700' :
-                        userRole === 'IT' ? 'bg-indigo-100 text-indigo-700' :
-                          userRole === 'TL' ? 'bg-yellow-100 text-yellow-800' :
-                            userRole === 'QA' ? 'bg-orange-100 text-orange-700' :
-                              'bg-green-100 text-green-700'
+                    userRole === 'Admin' ? 'bg-purple-100 text-purple-700' :
+                      userRole === 'IT' ? 'bg-indigo-100 text-indigo-700' :
+                        userRole === 'TL' ? 'bg-yellow-100 text-yellow-800' :
+                          userRole === 'QA' ? 'bg-orange-100 text-orange-700' :
+                            'bg-green-100 text-green-700'
                     }`}>
                     {userRole}
                   </span>
@@ -3203,1807 +3211,1273 @@ const getSmartWeeks = (cycleStartStr, cycleEndStr) => {
         </div>
       </div>
 
+      {/* ======================================================= */}
+      {/* 1. SEAMLESS MAJOR TABS (Clean & Merged)                 */}
+      {/* ======================================================= */}
+      <div className="bg-[#0f172a] border-b border-slate-800 px-6 py-2 flex items-center gap-1 z-30 relative shadow-sm">
+        <button
+          onClick={() => setActiveMajorTab('core_ops')}
+          className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-all duration-200 ${activeMajorTab === 'core_ops'
+              ? 'bg-slate-700 text-white shadow-sm'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+            }`}
+        >
+          Home Warranty Operations
+        </button>
 
-      {/* Navigation Tabs - Main Header Buttons */}
-      <div className="bg-slate-800 border-b border-slate-700">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="flex gap-1 overflow-x-auto pb-2 scrollbar-hide">
-            {[
-              'dashboard',
-              'sales',
-              'attendance',
-              'payroll',
-              'employees',
-              'bonuses',
-              'fines',
-              'management',
-              'super_controls' // <--- Use lowercase ID here
-            ].map(tab => {
-
-              // 1. SUPER ADMIN: Sees everything
-              if (userRole === 'SuperAdmin') {
-                // Pass (show all)
-              }
-
-              // 2. AGENT: Restricted View
-              else if (userRole === 'Agent') {
-                if (['payroll', 'employees', 'management', 'super_controls', 'bonuses', 'fines'].includes(tab)) return null;
-              }
-
-              // 3. TL (Team Lead): Operational View
-              else if (userRole === 'TL') {
-                // TLs don't see Payroll, HR Records, Management, or Super Controls
-                if (['payroll', 'employees', 'super_controls', 'management', 'bonuses', 'fines'].includes(tab)) return null;
-              }
-
-              // 4. IT Support: System View
-              else if (userRole === 'IT') {
-                // IT mainly needs Management (Access) and Dashboard. Hide operations.
-                if (['sales', 'employees', 'bonuses', 'super_controls'].includes(tab)) return null;
-              }
-
-              else if (userRole === 'Finance') {
-                if (!['dashboard', 'management', 'bonuses', 'fines', 'sales', 'attendance', 'payroll'].includes(tab)) return null;
-              }
-
-              // 5. ADMIN / HR / QA: Existing Logic
-              else {
-                if (tab === 'super_controls') return null; // Only SuperAdmin sees this
-
-                // QA restrictions
-                if (userRole === 'QA' && ['payroll', 'employees', 'management'].includes(tab)) return null;
-              }
-
-              return (
-                <button
-                  key={tab}
-                  onClick={() => handleTabChange(tab)}
-                  className={`px-6 py-3 text-sm font-medium capitalize transition-colors whitespace-nowrap ${activeTab === tab
-                    ? tab === 'super_controls'
-                      ? 'border-b-2 border-purple-500 text-purple-400' // Special color for Super Tab
-                      : 'border-b-2 border-blue-400 text-blue-400'
-                    : 'text-slate-400 hover:text-white'
-                    }`}
-                >
-                  {/* Display Name Logic */}
-                  {tab === 'super_controls' ? 'Super Controls' : tab}
-                </button>
-              );
-            })}
-
-            {/* --- MANUAL BUTTONS REMOVED --- */}
-            {/* The manual blocks for Employees, Bonuses, Fines, Management are deleted */}
-            {/* because the loop above now creates them for you. */}
-
-          </div>
-        </div>
+        <button
+          onClick={() => setActiveMajorTab('new_module')}
+          className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-all duration-200 ${activeMajorTab === 'new_module'
+              ? 'bg-slate-700 text-white shadow-sm'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+            }`}
+        >
+          MATW Operations
+        </button>
       </div>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        {/* Dashboard */}
-        {activeTab === 'dashboard' && (
-          <div className="space-y-6">
-            {/* Filter Bar */}
-            <DateFilterBar
-              filterType={filterType}
-              setFilterType={setFilterType}
-              dateVal={customStartDate}
-              setDateVal={setCustomStartDate}
-              endVal={customEndDate}
-              setEndVal={setCustomEndDate}
-              selectedMonth={selectedMonth}
-              handleMonthChange={handleMonthChange}
-            />
 
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {/* [UPDATED] Visible to all Management/Ops Roles */}
-              {['Admin', 'SuperAdmin', 'HR', 'TL', 'IT'].includes(userRole) && (
-                <StatCard
-                  icon={<Users className="w-6 h-6" />}
-                  label="Active Agents"
-                  value={dashboardStats.totalAgents}
-                  color="blue"
-                />
-              )}
 
-              <StatCard
-                icon={<TrendingUp className="w-6 h-6" />}
-                label="Total Sales"
-                value={dashboardStats.totalSalesCount}
-                color="green"
-              />
+      {/* ======================================================= */}
+      {/* MAJOR TAB 1: CORE OPERATIONS (Your current app)         */}
+      {/* ======================================================= */}
+      {activeMajorTab === 'core_ops' && (
+        <div className="flex-1 flex flex-col h-full">
 
-              {/* [CHANGED] Display Total Bonus */}
-              <StatCard
-                icon={<DollarSign className="w-6 h-6" />}
-                label="Total Bonus"
-                value={`${(dashboardStats.totalBonusPayout).toLocaleString()} PKR`}
-                color="purple"
-              />
+          {/* Navigation Tabs - Main Header Buttons */}
+          <div className="bg-[#0f172a] border-b border-slate-800">
+            <div className="max-w-7xl mx-auto px-6 py-2">
+              <div className="flex gap-1 items-center overflow-x-auto custom-scrollbar">
+                {[
+                  'dashboard',
+                  'sales',
+                  'attendance',
+                  'payroll',
+                  'employees',
+                  'bonuses',
+                  'fines',
+                  'management',
+                  'super_controls' // <--- Use lowercase ID here
+                ].map(tab => {
 
-              {/* [UPDATED] Financials - Only for Admin, SuperAdmin, HR */}
-              {['Admin', 'SuperAdmin', 'HR', 'Finance'].includes(userRole) && (
-                <StatCard
-                  icon={<Calendar className="w-6 h-6" />}
-                  label="Total Payroll"
-                  value={`${(dashboardStats.totalPayroll / 1000).toFixed(0)}K PKR`}
-                  color="orange"
-                />
-              )}
-            </div>
+                  // 1. SUPER ADMIN: Sees everything
+                  if (userRole === 'SuperAdmin') {
+                    // Pass (show all)
+                  }
 
-            {/* Top Performers Table */}
-            <div className="bg-slate-800 rounded-xl shadow-sm border border-slate-600 p-4">
-              <h2 className="text-lg font-semibold text-white mb-4">
-                {userRole === 'Agent' ? 'My Performance' : 'Top Performers'} - {selectedMonth}
-              </h2>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-slate-700">
-                      {userRole !== 'Agent' && <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">Rank</th>}
-                      <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">Agent</th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">Team</th>
-                      <th className="text-right py-3 px-4 text-sm font-medium text-slate-200">Sales</th>
+                  // 2. AGENT: Restricted View
+                  else if (userRole === 'Agent') {
+                    if (['payroll', 'employees', 'management', 'super_controls', 'bonuses', 'fines'].includes(tab)) return null;
+                  }
 
-                      {/* [CHANGED] Header: Bonus */}
-                      <th className="text-right py-3 px-4 text-sm font-medium text-slate-200">Bonus</th>
+                  // 3. TL (Team Lead): Operational View
+                  else if (userRole === 'TL') {
+                    // TLs don't see Payroll, HR Records, Management, or Super Controls
+                    if (['payroll', 'employees', 'super_controls', 'management', 'bonuses', 'fines'].includes(tab)) return null;
+                  }
 
-                      {userRole !== 'Agent' && <th className="text-right py-3 px-4 text-sm font-medium text-slate-200">Net Salary</th>}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredPerformerStats.slice(0, userRole === 'Agent' ? 1 : 10).map((agent, idx) => (
-                      <tr key={agent.id || idx} className="border-b border-slate-700 hover:bg-slate-700">
-                        {userRole !== 'Agent' && (
-                          <td className="py-3 px-4">
-                            <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold ${idx === 0 ? 'bg-yellow-100 text-yellow-700' :
-                              idx === 1 ? 'bg-slate-100 text-slate-700' :
-                                idx === 2 ? 'bg-orange-100 text-orange-700' :
-                                  'bg-slate-50 text-slate-600'
-                              }`}>
-                              {idx + 1}
-                            </span>
-                          </td>
-                        )}
-                        <td className="py-3 px-4 font-medium text-white">{agent.name}</td>
-                        <td className="py-3 px-4 text-slate-300">{agent.team}</td>
-                        <td className="py-3 px-4 text-right font-semibold text-white">{agent.totalSales}</td>
+                  // 4. IT Support: System View
+                  else if (userRole === 'IT') {
+                    // IT mainly needs Management (Access) and Dashboard. Hide operations.
+                    if (['sales', 'employees', 'bonuses', 'super_controls'].includes(tab)) return null;
+                  }
 
-                        {/* [CHANGED] Display Bonus Amount */}
-                        <td className="py-3 px-4 text-right text-green-400 font-medium">
-                          {agent.totalBonuses > 0 ? `+${agent.totalBonuses.toLocaleString()}` : '-'}
-                        </td>
+                  else if (userRole === 'Finance') {
+                    if (!['dashboard', 'management', 'bonuses', 'fines', 'sales', 'attendance', 'payroll'].includes(tab)) return null;
+                  }
 
-                        {userRole !== 'Agent' && (
-                          <td className="py-3 px-4 text-right font-bold text-blue-400">
-                            {agent.netSalary.toLocaleString()} PKR
-                          </td>
-                        )}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                  // 5. ADMIN / HR / QA: Existing Logic
+                  else {
+                    
+
+                    // QA restrictions
+                    if (userRole === 'QA' && ['payroll', 'employees', 'management'].includes(tab)) return null;
+                  }
+
+                  return (
+                    <button
+                      key={tab}
+                      onClick={() => handleTabChange(tab)}
+                      className={`px-4 py-1.5 rounded-md text-sm font-semibold capitalize transition-all duration-200 whitespace-nowrap ${activeTab === tab
+                          ? tab === 'super_controls'
+                            ? 'bg-purple-900/40 text-purple-300 shadow-sm ring-1 ring-purple-500/50' // Special rounded look for Super Tab
+                            : 'bg-slate-700 text-white shadow-sm' // Standard active rounded look
+                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60' // Inactive look
+                        }`}
+                    >
+                      {/* Display Name Logic */}
+                      {tab === 'super_controls' ? 'Super Controls Home Warranty' : tab}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>
-        )}
 
+          {/*All Main Content Under First Major Tab*/}
+          <div className="max-w-7xl mx-auto space-y-6 w-full">
 
-
-        {/* Agent Management */}
-
-        {activeTab === 'employees' && (
-          <div className="space-y-6">
-
-
-            <SubTabBar
-              tabs={[
-                { id: 'agents', label: 'Agents' },
-                { id: 'hr', label: 'HR Records' }
-              ]}
-              activeSubTab={employeesSubTab}
-              setActiveSubTab={setEmployeesSubTab}
-            />
-
-            {employeesSubTab === 'agents' && (
+            {/* Dashboard */}
+            {activeTab === 'dashboard' && (
               <div className="space-y-6">
+                {/* Filter Bar */}
+                <DateFilterBar
+                  filterType={filterType}
+                  setFilterType={setFilterType}
+                  dateVal={customStartDate}
+                  setDateVal={setCustomStartDate}
+                  endVal={customEndDate}
+                  setEndVal={setCustomEndDate}
+                  selectedMonth={selectedMonth}
+                  handleMonthChange={handleMonthChange}
+                />
 
-                {/* Header & Buttons */}
-                <div className="flex justify-between items-center">
-                  <h2 className="text-xl font-semibold text-white">Agent Management</h2>
-                  <div className="flex gap-3">
-                    {['Admin', 'SuperAdmin'].includes(userRole) && (
-                      <>
-                        <button onClick={() => setShowAddCenterModal(true)} className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium">
-                          <Plus className="w-4 h-4" /> Add Center
-                        </button>
-                        <button onClick={() => setShowAddTeamModal(true)} className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm font-medium">
-                          <Plus className="w-4 h-4" /> Add Team
-                        </button>
-                        <button onClick={() => { setImportType('agents'); setShowImportModal(true); }} className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium">
-                          <Upload className="w-4 h-4" /> Import CSV
-                        </button>
-                        <button onClick={() => {
-                          setEditingAgent({});
-                          setShowEditAgent(false);
-                          setShowAddAgent(true);
-                        }} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
-                          <Plus className="w-4 h-4" /> Add Agent
-                        </button>
-                      </>
-                    )}
-                  </div>
+                {/* Stats Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  {/* [UPDATED] Visible to all Management/Ops Roles */}
+                  {['Admin', 'SuperAdmin', 'HR', 'TL', 'IT'].includes(userRole) && (
+                    <StatCard
+                      icon={<Users className="w-6 h-6" />}
+                      label="Active Agents"
+                      value={dashboardStats.totalAgents}
+                      color="blue"
+                    />
+                  )}
+
+                  <StatCard
+                    icon={<TrendingUp className="w-6 h-6" />}
+                    label="Total Sales"
+                    value={dashboardStats.totalSalesCount}
+                    color="green"
+                  />
+
+                  {/* [CHANGED] Display Total Bonus */}
+                  <StatCard
+                    icon={<DollarSign className="w-6 h-6" />}
+                    label="Total Bonus"
+                    value={`${(dashboardStats.totalBonusPayout).toLocaleString()} PKR`}
+                    color="purple"
+                  />
+
+                  {/* [UPDATED] Financials - Only for Admin, SuperAdmin, HR */}
+                  {['Admin', 'SuperAdmin', 'HR', 'Finance'].includes(userRole) && (
+                    <StatCard
+                      icon={<Calendar className="w-6 h-6" />}
+                      label="Total Payroll"
+                      value={`${(dashboardStats.totalPayroll / 1000).toFixed(0)}K PKR`}
+                      color="orange"
+                    />
+                  )}
                 </div>
 
-                {/* Filters */}
+                {/* Top Performers Table */}
                 <div className="bg-slate-800 rounded-xl shadow-sm border border-slate-600 p-4">
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <input type="text" placeholder="Search agents..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                    <select value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                      <option value="All">All Teams</option>
-                      {teams.map(t => <option key={t} value={t}>{t}</option>)}
-                    </select>
-                    <select value={centerFilter} onChange={(e) => setCenterFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                      <option value="All">All Centers</option>
-                      {centers.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                    <select value={agentStatusFilter} onChange={(e) => setAgentStatusFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                      <option value="All">All Status</option>
-                      <option value="Active">Active</option>
-                      <option value="Left">Inactive/Left</option>
-                    </select>
-                  </div>
-                </div>
+                  <h2 className="text-lg font-semibold text-white mb-4">
+                    {userRole === 'Agent' ? 'My Performance' : 'Top Performers'} - {selectedMonth}
+                  </h2>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-slate-700">
+                          {userRole !== 'Agent' && <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">Rank</th>}
+                          <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">Agent</th>
+                          <th className="text-left py-3 px-4 text-sm font-medium text-slate-200">Team</th>
+                          <th className="text-right py-3 px-4 text-sm font-medium text-slate-200">Sales</th>
 
-                {/* Scrollable Table Container */}
-                <div className="w-full overflow-x-auto rounded-lg shadow-md border border-slate-700">
-                  <table className="w-full text-left border-collapse">
-                    <thead className="bg-slate-900">
-                      <tr>
-                        <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[50px]">No.</th>
-                        <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[200px]">Agent</th>
-                        <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[180px]">Father Name</th>
-                        <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[200px]">Bank Details</th>
-                        <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[140px]">CNIC</th>
-                        <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[140px]">Team</th>
-                        <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[140px]">Center</th>
-                        <th className="py-3 px-4 text-sm font-medium text-slate-200 text-right min-w-[100px]">Salary</th>
+                          {/* [CHANGED] Header: Bonus */}
+                          <th className="text-right py-3 px-4 text-sm font-medium text-slate-200">Bonus</th>
 
-                        {/* [CHANGED] Renamed from "Active Date" to "Joining Date" */}
-                        <th className="py-3 px-4 text-sm font-medium text-slate-200 text-center min-w-[120px]">Joining Date</th>
-
-                        {['Admin', 'SuperAdmin'].includes(userRole) && <th className="py-3 px-4 text-sm font-medium text-slate-200 text-center min-w-[140px]">Actions</th>}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredAgents.map((agent, idx) => {
-                        // Fetch linked HR Data
-                        const linkedHR = hrRecords.find(h => h.cnic === agent.cnic) || {};
-                        const displayFatherName = linkedHR.father_name || agent.father_name || '-';
-
-                        return (
-                          <tr key={agent.cnic || idx} className="border-b border-slate-700 hover:bg-slate-700">
-                            <td className="py-3 px-4 text-slate-300">{idx + 1}</td>
-
-                            {/* 1. Name & Status Combined */}
-                            <td className="py-3 px-4">
-                              <div className="font-medium text-white text-sm">{agent.name}</div>
-                              <div className={`text-[11px] mt-0.5 font-medium ${agent.status === 'Active' ? 'text-green-400' : 'text-red-400'}`}>
-                                {agent.status}
-                              </div>
-                            </td>
-
-                            {/* Father Name */}
-                            <td className="py-3 px-4 text-slate-300 text-sm">{displayFatherName}</td>
-
-                            {/* 2. Bank Details Combined */}
-                            <td className="py-3 px-4">
-                              <div className="text-sm text-slate-200">{linkedHR.bank_name || '-'}</div>
-                              <div className="text-xs text-slate-500 font-mono">{linkedHR.account_number || '-'}</div>
-                            </td>
-
-                            <td className="py-3 px-4 text-slate-400 text-xs font-mono">{agent.cnic || '-'}</td>
-                            <td className="py-3 px-4 text-slate-300 text-sm">{agent.team}</td>
-                            <td className="py-3 px-4 text-slate-300 text-xs">{agent.center || '-'}</td>
-                            <td className="py-3 px-4 text-right text-slate-100 font-mono">{agent.baseSalary ? agent.baseSalary.toLocaleString() : 0}</td>
-
-                            {/* [FIXED] Joining Date & Left Date Display */}
-                            <td className="py-3 px-4 text-center">
-                              <div className="text-slate-300 text-xs">{linkedHR.joining_date || '-'}</div>
-
-                              {/* Only show Left Date if Status is NOT Active */}
-                              {agent.status !== 'Active' && (
-                                <div className="text-[8.5px] text-red-400 font-bold mt-1 bg-red-500/10 px-1 rounded inline-block">
-                                  Left: {agent.leftDate || agent.left_date || 'N/A'}
-                                </div>
-                              )}
-                            </td>
-
-                            {['Admin', 'SuperAdmin'].includes(userRole) && (
+                          {userRole !== 'Agent' && <th className="text-right py-3 px-4 text-sm font-medium text-slate-200">Net Salary</th>}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredPerformerStats.slice(0, userRole === 'Agent' ? 1 : 10).map((agent, idx) => (
+                          <tr key={agent.id || idx} className="border-b border-slate-700 hover:bg-slate-700">
+                            {userRole !== 'Agent' && (
                               <td className="py-3 px-4">
-                                <div className="flex items-center justify-center gap-2">
+                                <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold ${idx === 0 ? 'bg-yellow-100 text-yellow-700' :
+                                  idx === 1 ? 'bg-slate-100 text-slate-700' :
+                                    idx === 2 ? 'bg-orange-100 text-orange-700' :
+                                      'bg-slate-50 text-slate-600'
+                                  }`}>
+                                  {idx + 1}
+                                </span>
+                              </td>
+                            )}
+                            <td className="py-3 px-4 font-medium text-white">{agent.name}</td>
+                            <td className="py-3 px-4 text-slate-300">{agent.team}</td>
+                            <td className="py-3 px-4 text-right font-semibold text-white">{agent.totalSales}</td>
 
-                                  {/* 1. Edit Button (Always Visible) */}
-                                  <button onClick={() => {
-                                    const hrInfo = hrRecords.find(h => h.cnic === agent.cnic) || {};
-                                    setEditingAgent({
-                                      ...agent,
-                                      ...hrInfo,
-                                      contact_number: agent.Phone || hrInfo.Phone,
-                                      active_date: hrInfo.joining_date || agent.activeDate,
-                                      original_cnic: agent.cnic
-                                    });
-                                    setShowEditAgent(true);
-                                    setShowAddAgent(true);
-                                  }} className="p-1.5 bg-blue-500/10 text-blue-400 rounded hover:bg-blue-500/20 transition-colors" title="Edit">
-                                    <Pencil className="w-4 h-4" />
-                                  </button>
+                            {/* [CHANGED] Display Bonus Amount */}
+                            <td className="py-3 px-4 text-right text-green-400 font-medium">
+                              {agent.totalBonuses > 0 ? `+${agent.totalBonuses.toLocaleString()}` : '-'}
+                            </td>
 
-                                  {/* 2. CONDITIONAL: Terminate vs Reactivate */}
-                                  {agent.status === 'Active' ? (
-                                    // IF ACTIVE: Show "Mark as Left" Button
-                                    <button
-                                      onClick={() => handleOpenLeaveModal(agent)}
-                                      className="text-red-400 hover:text-red-300 p-1.5 bg-red-500/10 hover:bg-red-500/20 rounded transition-colors"
-                                      title="Mark as Left / Terminated"
-                                    >
-                                      <UserX className="w-4 h-4" />
-                                    </button>
-                                  ) : (
-                                    // IF INACTIVE: Show "Reactivate" Button
-                                    <button
-                                      onClick={() => handleReactivateAgent(agent.cnic)}
-                                      className="text-green-400 hover:text-green-300 p-1.5 bg-green-500/10 hover:bg-green-500/20 rounded transition-colors"
-                                      title="Reactivate Agent"
-                                    >
-                                      <RotateCcw className="w-4 h-4" />
-                                    </button>
-                                  )}
-
-                                  {/* 3. Delete Button (Always Visible) */}
-                                  <button onClick={() => handleDeleteAgent(agent.cnic)} className="p-1.5 bg-red-500/10 text-red-400 rounded hover:bg-red-500/20 transition-colors" title="Delete Permanently">
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                </div>
+                            {userRole !== 'Agent' && (
+                              <td className="py-3 px-4 text-right font-bold text-blue-400">
+                                {agent.netSalary.toLocaleString()} PKR
                               </td>
                             )}
                           </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {employeesSubTab === 'hr' && (
-              <div className="space-y-6">
-
-              
-                {/* HR Team Management */}
-                <div className="flex justify-between items-center">
-                  <h2 className="text-xl font-semibold text-white">HR - Employment Data</h2>
-                  <button
-                    onClick={() => {
-                      setEditingHR({
-                        id: null,
-                        agent_name: '',
-                        father_name: '',
-                        designation: 'Agent',
-                        payroll_cycle_type: 'Agent Cycle',
-                        contact_number: '',
-                        email: '',
-                        address: '',
-                        cnic: '',
-                        joining_date: new Date().toISOString().split('T')[0],
-                        team: '',
-                        center: '',
-                        baseSalary: '',
-                        bank_name: '',
-                        account_number: '',
-                        original_cnic: null
-                      });
-                      setShowAddEmployee(true);
-                    }}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                  >
-                    <Plus className="w-4 h-4" /> Add Employee
-                  </button>
-                </div>
-
-                {/* Filter Grid */}
-                <div className="bg-slate-800 rounded-xl shadow-sm border border-slate-600 p-4 mb-6">
-                  <div className="grid grid-cols-1 md:grid-cols-5 gap-4"> {/* Changed cols-4 to cols-5 */}
-
-                    {/* Existing Search Input */}
-                    <input type="text" placeholder="Search by name or CNIC..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-
-                    {/* Existing Team Filter */}
-                    <select value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                      <option value="All">All Teams</option>
-                      {teams.map(t => <option key={t} value={t}>{t}</option>)}
-                    </select>
-
-                    {/* Existing Center Filter */}
-                    <select value={centerFilter} onChange={(e) => setCenterFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                      <option value="All">All Centers</option>
-                      {centers.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-
-                    {/* Designation Filter */}
-                    <select
-                      value={designationFilter}
-                      onChange={(e) => setDesignationFilter(e.target.value)}
-                      className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="All">All Designations</option>
-
-                      {/* [NEW] Add this option */}
-                      <option value="All Management">All Management</option>
-
-                      {/* Dynamically list unique designations from DB */}
-                      {[...new Set(hrRecords.map(h => h.designation))].filter(Boolean).sort().map(d => (
-                        <option key={d} value={d}>{d}</option>
-                      ))}
-                    </select>
-
-                    {/* Existing Status Filter */}
-                    <select value={agentStatusFilter} onChange={(e) => setAgentStatusFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                      <option value="All">All Status</option>
-                      <option value="Active">Active Only</option>
-                      <option value="Left">Left / Ex-Employees</option>
-                    </select>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
-
-                {/* --- HR TABLE --- */}
-                <div className="w-full overflow-x-auto rounded-lg shadow-md border border-slate-700">
-                  <table className="w-full text-left border-collapse">
-                    <thead className="bg-slate-900">
-                      <tr>
-                        <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[50px]">No.</th>
-                        <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[220px]">Agent</th>
-                        <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[180px]">Father Name</th>
-                        <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[200px]">Bank Details</th>
-                        <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[140px]">Contact No</th>
-                        <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[140px]">Designation</th>
-                        <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[120px]">Team</th>
-                        <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[120px]">Center</th>
-                        <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[100px]">Salary</th>
-                        <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[160px]">CNIC</th>
-                        <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[140px]">Joining Date</th>
-                        <th className="py-3 px-4 text-sm font-medium text-center text-slate-200 min-w-[140px]">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredHR.map((rec, idx) => {
-                        const agentProfile = agents.find(a => (a.cnic && a.cnic === rec.cnic) || (a.name.toLowerCase() === rec.agent_name.toLowerCase())) || {};
-
-                        return (
-                          <tr key={rec.id} className="border-b border-slate-700 hover:bg-slate-700">
-                            <td className="py-3 px-4 text-slate-300">{idx + 1}</td>
-
-                            {/* 1. Name & Status Combined */}
-                            <td className="py-3 px-4">
-                              <div className="font-medium text-white text-sm">{rec.agent_name}</div>
-                              <div className={`text-[11px] mt-0.5 font-medium ${rec.status === 'Active' ? 'text-green-400' : 'text-red-400'}`}>
-                                {rec.status || 'Active'}
-                              </div>
-                            </td>
-
-                            <td className="py-3 px-4 text-slate-300 text-sm">{rec.father_name || '-'}</td>
-
-                            {/* 2. Bank Details Combined */}
-                            <td className="py-3 px-4">
-                              <div className="text-sm text-slate-200">{rec.bank_name || '-'}</div>
-                              <div className="text-xs text-slate-500 font-mono">{rec.account_number || '-'}</div>
-                            </td>
-
-                            <td className="py-3 px-4 text-slate-300 font-mono text-xs">{rec.Phone || '-'}</td>
-                            <td className="py-3 px-4 text-slate-300 text-sm">{rec.designation}</td>
-                            <td className="py-3 px-4 text-slate-300 text-sm">{agentProfile.team || '-'}</td>
-                            <td className="py-3 px-4 text-slate-300 text-xs">{agentProfile.center || '-'}</td>
-                            {/* [FIXED] Salary Display (Checks HR Record first for Management) */}
-                            <td className="py-3 px-4 text-right text-slate-100 font-mono">
-                              {rec.base_salary
-                                ? parseInt(rec.base_salary).toLocaleString()
-                                : (agentProfile.baseSalary ? agentProfile.baseSalary.toLocaleString() : 0)
-                              }
-                            </td>
-                            <td className="py-3 px-4 text-slate-400 text-xs font-mono">{rec.cnic}</td>
-
-                            {/* [FIXED] Joining Date + Left Date (Check both HR and Agent records) */}
-                            <td className="py-3 px-4">
-                              <div className="text-slate-300 text-sm">{rec.joining_date}</div>
-
-                              {/* Show Left Date if status is Left */}
-                              {rec.status === 'Left' && (
-                                <div className="text-[10px] text-red-400 font-medium mt-0.5">
-                                  {/* Check Agent Profile first, then fallback to HR Record */}
-                                  Left: {agentProfile.leftDate || rec.left_date || rec.leftDate || 'N/A'}
-                                </div>
-                              )}
-                            </td>
-
-                            <td className="py-3 px-4">
-                              <div className="flex items-center justify-center gap-2">
-
-                                {/* 1. Edit Button */}
-                                <button onClick={() => {
-                                  const linkedAgent = agents.find(a => (a.cnic && a.cnic === rec.cnic) || (a.name === rec.agent_name)) || {};
-                                  setEditingHR({
-                                    id: rec.id,
-                                    agent_name: rec.agent_name || '',
-                                    father_name: rec.father_name || '',
-                                    designation: rec.designation || '',
-                                    cnic: rec.cnic || '',
-                                    joining_date: rec.joining_date || '',
-                                    contact_number: rec.Phone || rec.contact_number || linkedAgent.Phone || '',
-                                    email: rec.email || linkedAgent.email || '',
-                                    address: rec.address || linkedAgent.address || '',
-                                    team: rec.team || linkedAgent.team || '',
-                                    center: rec.center || linkedAgent.center || '',
-                                    baseSalary: rec.base_salary || rec.baseSalary || linkedAgent.baseSalary || '',
-                                    bank_name: rec.bank_name || linkedAgent.bank_name || '',
-                                    account_number: rec.account_number || linkedAgent.account_number || '',
-                                    payroll_cycle_type: rec.payroll_cycle_type || 'Agent Cycle'
-                                  });
-                                  setShowAddEmployee(true);
-                                }} className="p-1.5 bg-blue-500/10 text-blue-400 rounded hover:bg-blue-500/20 transition-colors" title="Edit">
-                                  <Pencil className="w-4 h-4" />
-                                </button>
-
-                                {/* 2. CONDITIONAL: Terminate vs Reactivate */}
-                                {/* 2. CONDITIONAL: Terminate vs Reactivate */}
-                                {rec.status === 'Active' ? (
-                                  // IF ACTIVE: Open the Leave Modal (to choose Status)
-                                  <button
-                                    onClick={() => {
-                                      // Create a unified object so the modal can read the name/id correctly
-                                      const agentObj = {
-                                        ...rec,
-                                        name: rec.agent_name, // Map agent_name to name for the modal
-                                        id: rec.id,
-                                        cnic: rec.cnic
-                                      };
-                                      handleOpenLeaveModal(agentObj);
-                                    }}
-                                    className="p-1.5 bg-red-500/10 text-red-400 rounded hover:bg-red-500/20 transition-colors"
-                                    title="Mark as Left / Terminate"
-                                  >
-                                    <UserX className="w-4 h-4" />
-                                  </button>
-                                ) : (
-                                  // IF INACTIVE: Show "Reactivate"
-                                  <button
-                                    onClick={() => handleReactivateAgent(rec.cnic)}
-                                    className="p-1.5 bg-green-500/10 text-green-400 rounded hover:bg-green-500/20 transition-colors"
-                                    title="Reactivate Employee"
-                                  >
-                                    <RotateCcw className="w-4 h-4" />
-                                  </button>
-                                )}
-
-                                {/* 3. Delete Button */}
-                                <button
-                                  onClick={() => handleDeleteHR(rec.id, rec.cnic, rec.agent_name)}
-                                  className="p-1.5 bg-red-500/10 text-red-400 rounded hover:bg-red-500/20 transition-colors"
-                                  title="Delete Permanently"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
               </div>
             )}
-          </div>
-        )}
 
-        {/* Sales TAB */}
-
-        {activeTab === 'sales' && (
-          <div className="space-y-6">
-
-            <SubTabBar
-              tabs={[
-                ...(!['HR', 'Finance'].includes(userRole) ? [{ id: 'list', label: 'Sales List' }] : []),
-                { id: 'matrix', label: 'Monthly Matrix' }
-              ]}
-              activeSubTab={salesSubTab}
-              setActiveSubTab={setSalesSubTab}
-            />
-
-            {salesSubTab === 'list' && (
+            {/* Agent Management */}
+            {activeTab === 'employees' && (
               <div className="space-y-6">
 
-                {/* Header Section */}
-                <div className="flex justify-between items-center">
-                  <h2 className="text-xl font-semibold text-white">Sales Management</h2>
-                  <div className="flex gap-3">
-                    {['Admin', 'SuperAdmin'].includes(userRole) && (
-                      <>
-                        <button
-                          onClick={() => { setImportType('sales'); setShowImportModal(true); }}
-                          className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                        >
-                          <Upload className="w-4 h-4" /> Import CSV
-                        </button>
-                        <button
-                          onClick={() => {
-                            const name = window.prompt('Enter evaluator name:');
-                            if (name && name.trim()) setEvaluators(prev => [...prev, name.trim()]);
-                          }}
-                          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                        >
-                          <Plus className="w-4 h-4" /> Add Evaluator
-                        </button>
-                      </>
-                    )}
-                    {(userRole === 'Admin' || userRole === 'Agent') && (
+
+                <SubTabBar
+                  tabs={[
+                    { id: 'agents', label: 'Agents' },
+                    { id: 'hr', label: 'HR Records' }
+                  ]}
+                  activeSubTab={employeesSubTab}
+                  setActiveSubTab={setEmployeesSubTab}
+                />
+
+                {employeesSubTab === 'agents' && (
+                  <div className="space-y-6">
+
+                    {/* Header & Buttons */}
+                    <div className="flex justify-between items-center">
+                      <h2 className="text-xl font-semibold text-white">Agent Management</h2>
+                      <div className="flex gap-3">
+                        {['Admin', 'SuperAdmin'].includes(userRole) && (
+                          <>
+                            <button onClick={() => setShowAddCenterModal(true)} className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium">
+                              <Plus className="w-4 h-4" /> Add Center
+                            </button>
+                            <button onClick={() => setShowAddTeamModal(true)} className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm font-medium">
+                              <Plus className="w-4 h-4" /> Add Team
+                            </button>
+                            <button onClick={() => { setImportType('agents'); setShowImportModal(true); }} className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium">
+                              <Upload className="w-4 h-4" /> Import CSV
+                            </button>
+                            <button onClick={() => {
+                              setEditingAgent({});
+                              setShowEditAgent(false);
+                              setShowAddAgent(true);
+                            }} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
+                              <Plus className="w-4 h-4" /> Add Agent
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Filters */}
+                    <div className="bg-slate-800 rounded-xl shadow-sm border border-slate-600 p-4">
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <input type="text" placeholder="Search agents..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                        <select value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                          <option value="All">All Teams</option>
+                          {teams.map(t => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                        <select value={centerFilter} onChange={(e) => setCenterFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                          <option value="All">All Centers</option>
+                          {centers.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                        <select value={agentStatusFilter} onChange={(e) => setAgentStatusFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                          <option value="All">All Status</option>
+                          <option value="Active">Active</option>
+                          <option value="Left">Inactive/Left</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Scrollable Table Container */}
+                    <div className="w-full overflow-x-auto rounded-lg shadow-md border border-slate-700">
+                      <table className="w-full text-left border-collapse">
+                        <thead className="bg-slate-900">
+                          <tr>
+                            <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[50px]">No.</th>
+                            <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[200px]">Agent</th>
+                            <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[180px]">Father Name</th>
+                            <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[200px]">Bank Details</th>
+                            <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[140px]">CNIC</th>
+                            <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[140px]">Team</th>
+                            <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[140px]">Center</th>
+                            <th className="py-3 px-4 text-sm font-medium text-slate-200 text-right min-w-[100px]">Salary</th>
+
+                            {/* [CHANGED] Renamed from "Active Date" to "Joining Date" */}
+                            <th className="py-3 px-4 text-sm font-medium text-slate-200 text-center min-w-[120px]">Joining Date</th>
+
+                            {['Admin', 'SuperAdmin'].includes(userRole) && <th className="py-3 px-4 text-sm font-medium text-slate-200 text-center min-w-[140px]">Actions</th>}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredAgents.map((agent, idx) => {
+                            // Fetch linked HR Data
+                            const linkedHR = hrRecords.find(h => h.cnic === agent.cnic) || {};
+                            const displayFatherName = linkedHR.father_name || agent.father_name || '-';
+
+                            return (
+                              <tr key={agent.cnic || idx} className="border-b border-slate-700 hover:bg-slate-700">
+                                <td className="py-3 px-4 text-slate-300">{idx + 1}</td>
+
+                                {/* 1. Name & Status Combined */}
+                                <td className="py-3 px-4">
+                                  <div className="font-medium text-white text-sm">{agent.name}</div>
+                                  <div className={`text-[11px] mt-0.5 font-medium ${agent.status === 'Active' ? 'text-green-400' : 'text-red-400'}`}>
+                                    {agent.status}
+                                  </div>
+                                </td>
+
+                                {/* Father Name */}
+                                <td className="py-3 px-4 text-slate-300 text-sm">{displayFatherName}</td>
+
+                                {/* 2. Bank Details Combined */}
+                                <td className="py-3 px-4">
+                                  <div className="text-sm text-slate-200">{linkedHR.bank_name || '-'}</div>
+                                  <div className="text-xs text-slate-500 font-mono">{linkedHR.account_number || '-'}</div>
+                                </td>
+
+                                <td className="py-3 px-4 text-slate-400 text-xs font-mono">{agent.cnic || '-'}</td>
+                                <td className="py-3 px-4 text-slate-300 text-sm">{agent.team}</td>
+                                <td className="py-3 px-4 text-slate-300 text-xs">{agent.center || '-'}</td>
+                                <td className="py-3 px-4 text-right text-slate-100 font-mono">{agent.baseSalary ? agent.baseSalary.toLocaleString() : 0}</td>
+
+                                {/* [FIXED] Joining Date & Left Date Display */}
+                                <td className="py-3 px-4 text-center">
+                                  <div className="text-slate-300 text-xs">{linkedHR.joining_date || '-'}</div>
+
+                                  {/* Only show Left Date if Status is NOT Active */}
+                                  {agent.status !== 'Active' && (
+                                    <div className="text-[8.5px] text-red-400 font-bold mt-1 bg-red-500/10 px-1 rounded inline-block">
+                                      Left: {agent.leftDate || agent.left_date || 'N/A'}
+                                    </div>
+                                  )}
+                                </td>
+
+                                {['Admin', 'SuperAdmin'].includes(userRole) && (
+                                  <td className="py-3 px-4">
+                                    <div className="flex items-center justify-center gap-2">
+
+                                      {/* 1. Edit Button (Always Visible) */}
+                                      <button onClick={() => {
+                                        const hrInfo = hrRecords.find(h => h.cnic === agent.cnic) || {};
+                                        setEditingAgent({
+                                          ...agent,
+                                          ...hrInfo,
+                                          contact_number: agent.Phone || hrInfo.Phone,
+                                          active_date: hrInfo.joining_date || agent.activeDate,
+                                          original_cnic: agent.cnic
+                                        });
+                                        setShowEditAgent(true);
+                                        setShowAddAgent(true);
+                                      }} className="p-1.5 bg-blue-500/10 text-blue-400 rounded hover:bg-blue-500/20 transition-colors" title="Edit">
+                                        <Pencil className="w-4 h-4" />
+                                      </button>
+
+                                      {/* 2. CONDITIONAL: Terminate vs Reactivate */}
+                                      {agent.status === 'Active' ? (
+                                        // IF ACTIVE: Show "Mark as Left" Button
+                                        <button
+                                          onClick={() => handleOpenLeaveModal(agent)}
+                                          className="text-red-400 hover:text-red-300 p-1.5 bg-red-500/10 hover:bg-red-500/20 rounded transition-colors"
+                                          title="Mark as Left / Terminated"
+                                        >
+                                          <UserX className="w-4 h-4" />
+                                        </button>
+                                      ) : (
+                                        // IF INACTIVE: Show "Reactivate" Button
+                                        <button
+                                          onClick={() => handleReactivateAgent(agent.cnic)}
+                                          className="text-green-400 hover:text-green-300 p-1.5 bg-green-500/10 hover:bg-green-500/20 rounded transition-colors"
+                                          title="Reactivate Agent"
+                                        >
+                                          <RotateCcw className="w-4 h-4" />
+                                        </button>
+                                      )}
+
+                                      {/* 3. Delete Button (Always Visible) */}
+                                      <button onClick={() => handleDeleteAgent(agent.cnic)} className="p-1.5 bg-red-500/10 text-red-400 rounded hover:bg-red-500/20 transition-colors" title="Delete Permanently">
+                                        <Trash2 className="w-4 h-4" />
+                                      </button>
+                                    </div>
+                                  </td>
+                                )}
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {employeesSubTab === 'hr' && (
+                  <div className="space-y-6">
+
+
+                    {/* HR Team Management */}
+                    <div className="flex justify-between items-center">
+                      <h2 className="text-xl font-semibold text-white">HR - Employment Data</h2>
                       <button
-                        onClick={() => setShowAddSale(true)}
+                        onClick={() => {
+                          setEditingHR({
+                            id: null,
+                            agent_name: '',
+                            father_name: '',
+                            designation: 'Agent',
+                            payroll_cycle_type: 'Agent Cycle',
+                            contact_number: '',
+                            email: '',
+                            address: '',
+                            cnic: '',
+                            joining_date: new Date().toISOString().split('T')[0],
+                            team: '',
+                            center: '',
+                            baseSalary: '',
+                            bank_name: '',
+                            account_number: '',
+                            original_cnic: null
+                          });
+                          setShowAddEmployee(true);
+                        }}
                         className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                       >
-                        <Plus className="w-4 h-4" /> Submit Sale
+                        <Plus className="w-4 h-4" /> Add Employee
                       </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* DISPOSITION DASHBOARD CARDS (RESTORED) */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="bg-green-500/10 border border-green-500/20 p-4 rounded-xl">
-                    <p className="text-xs text-green-400 font-bold uppercase">Success Sales</p>
-                    <p className="text-2xl font-black text-green-500">{salesStats.sales}</p>
-                  </div>
-                  <div className="bg-yellow-500/10 border border-yellow-500/20 p-4 rounded-xl">
-                    <p className="text-xs text-yellow-400 font-bold uppercase">Unsuccessful</p>
-                    <p className="text-2xl font-black text-yellow-500">{salesStats.unsuccessful}</p>
-                  </div>
-                  <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-xl">
-                    <p className="text-xs text-red-400 font-bold uppercase">DNC / DNQ</p>
-                    <p className="text-2xl font-black text-red-500">{salesStats.dncDnq}</p>
-                  </div>
-                  <div className="bg-orange-500/10 border border-orange-500/20 p-4 rounded-xl">
-                    <p className="text-xs text-orange-400 font-bold uppercase">Pending Review</p>
-                    <p className="text-2xl font-black text-orange-500">{salesStats.pending}</p>
-                  </div>
-                </div>
-
-                {/* Date Filter Bar */}
-                <DateFilterBar
-                  filterType={filterType} setFilterType={setFilterType}
-                  dateVal={customStartDate} setDateVal={setCustomStartDate}
-                  endVal={customEndDate} setEndVal={setCustomEndDate}
-                  selectedMonth={selectedMonth} handleMonthChange={handleMonthChange}
-                />
-
-                {/* Filters Section */}
-                {userRole !== 'Agent' && (
-                  <div className="bg-slate-800 rounded-xl shadow-sm border border-slate-600 p-4">
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                      <input
-                        type="text"
-                        placeholder="Search agent, customer, phone..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                      <select value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
-                        <option value="All">All Teams</option>
-                        {teams.map(t => <option key={t} value={t}>{t}</option>)}
-                      </select>
-                      <select value={centerFilter} onChange={(e) => setCenterFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
-                        <option value="All">All Centers</option>
-                        {centers.map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
-                      <select value={salesStatusFilter} onChange={(e) => setSalesStatusFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
-                        <option value="All">All Dispositions</option>
-                        <optgroup label="Success">
-                          <option value="HW- Xfer">HW- Xfer</option>
-                          <option value="HW-IBXfer">HW-IBXfer</option>
-                          <option value="HW-Xfer-CDR">HW-Xfer-CDR</option>
-                        </optgroup>
-                        <optgroup label="Unsuccessful">
-                          <option value="Unsuccessful">Unsuccessful</option>
-                          <option value="DNC">DNC</option>
-                          <option value="DNQ">DNQ</option>
-                          <option value="DNQ-Webform">DNQ-Webform</option>
-                          <option value="Review Pending">Review Pending</option>
-                        </optgroup>
-                      </select>
                     </div>
-                  </div>
-                )}
 
-                {/* DATA TABLE (FULL COLUMNS & EDITABLE) */}
-                <div className="bg-slate-800/80 rounded-xl border border-slate-600 overflow-auto max-h-[70vh]">
-                  <table className="w-full min-w-max border-collapse">
-                    <thead className="sticky top-0 z-20">
-                      <tr className="bg-slate-900 border-b border-slate-700">
-                        <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">No.</th>
-                        <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Timestamp</th>
-                        <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase sticky left-0 bg-slate-900">Agent Name</th>
-                        <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Customer Name</th>
+                    {/* Filter Grid */}
+                    <div className="bg-slate-800 rounded-xl shadow-sm border border-slate-600 p-4 mb-6">
+                      <div className="grid grid-cols-1 md:grid-cols-5 gap-4"> {/* Changed cols-4 to cols-5 */}
 
-                        {/* [FIX] Show Phone Header ONLY for Admin/SuperAdmin/QA */}
-                        {['Admin', 'SuperAdmin', 'QA'].includes(userRole) && (
-                          <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Phone Number</th>
-                        )}
+                        {/* Existing Search Input */}
+                        <input type="text" placeholder="Search by name or CNIC..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500" />
 
-                        <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">State</th>
-                        <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Zip</th>
-                        <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Address</th>
-                        <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase text-center">Campaign</th>
-                        <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Center</th>
-                        <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Team Lead</th>
-                        <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Comments</th>
-                        <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">List ID</th>
-                        <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase min-w-[150px]">Disposition</th>
-                        <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Duration</th>
-                        <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Xfer Time</th>
-                        <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Xfer Attempts</th>
-                        <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase min-w-[250px]">Feedback (Before)</th>
-                        <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Feedback (After)</th>
-                        <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Grading</th>
-                        <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Dock Details</th>
-                        <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Dock Reason</th> {/* NEW HEADER */}
-                        <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Evaluator</th>
-                        {(userRole === 'Admin' || userRole === 'QA' || userRole === 'SuperAdmin') && <th className="text-center py-4 px-3 text-xs font-bold text-slate-400 uppercase">Actions</th>}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-700">
-                      {filteredSales.map((sale, idx) => {
-                        const disp = sale.disposition;
-                        let rowColor = "hover:bg-slate-700";
-                        if (['HW- Xfer', 'HW-IBXfer', 'HW-Xfer-CDR'].includes(disp)) rowColor = "bg-green-900/10 hover:bg-green-900/20";
-                        else if (['DNC', 'DNQ', 'DNQ-Dup', 'DNQ-Webform'].includes(disp)) rowColor = "bg-red-900/10 hover:bg-red-900/20";
-                        else if (['Review Pending', 'Pending Review'].includes(disp)) rowColor = "bg-orange-900/10 hover:bg-orange-900/20";
-                        else if (disp === 'Unsuccessful') rowColor = "bg-yellow-900/10 hover:bg-yellow-900/20";
+                        {/* Existing Team Filter */}
+                        <select value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                          <option value="All">All Teams</option>
+                          {teams.map(t => <option key={t} value={t}>{t}</option>)}
+                        </select>
 
-                        return (
-                          <tr key={sale.id} className={`${rowColor} transition-colors`}>
-                            <td className="py-3 px-3 text-xs text-slate-400 font-mono">{idx + 1}</td>
-                            <td className="py-3 px-3 text-xs text-slate-300 whitespace-nowrap">{sale.timestamp || sale.date}</td>
-                            <td className="py-3 px-3 text-xs font-bold text-white sticky left-0 bg-inherit">{sale.agentName}</td>
-                            <td className="py-3 px-3 text-xs text-slate-300">{sale.customerName || '-'}</td>
-                            {['Admin', 'SuperAdmin', 'QA'].includes(userRole) && (
-                              <td className="py-3 px-3 text-xs text-slate-300 font-mono">{sale.phoneNumber || '-'}</td>
-                            )}
-                            <td className="py-3 px-3 text-xs text-slate-400">{sale.state || '-'}</td>
-                            <td className="py-3 px-3 text-xs text-slate-400">{sale.zip || '-'}</td>
-                            <td className="py-3 px-3 text-xs text-slate-400">{sale.address || '-'}</td>
-                            <td className="py-3 px-3 text-xs text-slate-400 text-center">{sale.campaignType || '-'}</td>
-                            <td className="py-3 px-3 text-xs text-slate-400">{sale.center || '-'}</td>
-                            <td className="py-3 px-3 text-xs text-slate-400">{sale.teamLead || '-'}</td>
-                            <td className="py-3 px-3 text-xs text-slate-400">{sale.comments || '-'}</td>
-                            <td className="py-3 px-3 text-xs text-slate-400">{sale.listId || '-'}</td>
+                        {/* Existing Center Filter */}
+                        <select value={centerFilter} onChange={(e) => setCenterFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                          <option value="All">All Centers</option>
+                          {centers.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
 
-                            {/* Editable Disposition */}
-                            <td className="py-3 px-3">
-                              {(userRole === 'Admin' || userRole === 'QA') ? (
-                                <select
-                                  value={sale.disposition || ''}
-                                  onChange={(e) => updateSaleDisposition(sale.id, e.target.value)}
-                                  className="w-full px-2 py-1 text-xs bg-slate-900 text-white border border-slate-600 rounded outline-none focus:ring-1 focus:ring-blue-500"
-                                >
-                                  <option value="">Select...</option>
-                                  <optgroup label="Success">
-                                    <option value="HW- Xfer">HW- Xfer</option>
-                                    <option value="HW-IBXfer">HW-IBXfer</option>
-                                    <option value="HW-Xfer-CDR">HW-Xfer-CDR</option>
-                                  </optgroup>
-                                  <optgroup label="Unsuccessful">
-                                    <option value="Unsuccessful">Unsuccessful</option>
-                                    <option value="HUWT">HUWT</option>
-                                    <option value="DNC">DNC</option>
-                                    <option value="DNQ">DNQ</option>
-                                    <option value="DNQ-Dup">DNQ-Dup</option>
-                                    <option value="DNQ-Webform">DNQ-Webform</option>
-                                    <option value="Review Pending">Review Pending</option>
-                                  </optgroup>
-                                </select>
-                              ) : (
-                                <span className={`text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wide
-                              ${['HW- Xfer', 'HW-IBXfer', 'HW-Xfer-CDR'].includes(sale.disposition) ? 'bg-green-500/20 text-green-400' :
-                                    ['Unsuccessful', 'HUWT'].includes(sale.disposition) ? 'bg-yellow-500/20 text-yellow-400' :
-                                      ['Review Pending', 'Pending Review'].includes(sale.disposition) ? 'bg-orange-500/20 text-orange-400' :
-                                        'bg-red-500/20 text-red-400'}`}>
-                                  {sale.disposition || '-'}
-                                </span>
-                              )}
-                            </td>
+                        {/* Designation Filter */}
+                        <select
+                          value={designationFilter}
+                          onChange={(e) => setDesignationFilter(e.target.value)}
+                          className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="All">All Designations</option>
 
-                            {/* Editable Duration */}
-                            <td className="py-2 px-2">
-                              {(userRole === 'Admin' || userRole === 'QA') ? (
-                                <input
-                                  type="text"
-                                  // 1. Use defaultValue (Fast typing)
-                                  defaultValue={sale.duration || ''}
+                          {/* [NEW] Add this option */}
+                          <option value="All Management">All Management</option>
 
-                                  // 2. Save only when leaving the box
-                                  onBlur={(e) => {
-                                    if (e.target.value !== (sale.duration || '')) {
-                                      updateSaleField(sale.id, 'duration', e.target.value);
-                                    }
-                                  }}
-                                  // 3. Save on Enter
-                                  onKeyDown={(e) => e.key === 'Enter' && e.target.blur()}
-                                  className="w-full px-1 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded"
-                                />
-                              ) : (
-                                <span className="text-xs text-slate-300">{sale.duration || '-'}</span>
-                              )}
-                            </td>
+                          {/* Dynamically list unique designations from DB */}
+                          {[...new Set(hrRecords.map(h => h.designation))].filter(Boolean).sort().map(d => (
+                            <option key={d} value={d}>{d}</option>
+                          ))}
+                        </select>
 
-                            {/* Editable Xfer Time */}
-                            <td className="py-2 px-2">
-                              {(userRole === 'Admin' || userRole === 'QA') ? (
-                                <input
-                                  type="text"
-                                  defaultValue={sale.xferTime || ''}
-                                  onBlur={(e) => {
-                                    if (e.target.value !== (sale.xferTime || '')) {
-                                      updateSaleField(sale.id, 'xferTime', e.target.value);
-                                    }
-                                  }}
-                                  onKeyDown={(e) => e.key === 'Enter' && e.target.blur()}
-                                  className="w-full px-1 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded"
-                                />
-                              ) : (
-                                <span className="text-xs text-slate-300">{sale.xferTime || '-'}</span>
-                              )}
-                            </td>
+                        {/* Existing Status Filter */}
+                        <select value={agentStatusFilter} onChange={(e) => setAgentStatusFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                          <option value="All">All Status</option>
+                          <option value="Active">Active Only</option>
+                          <option value="Left">Left / Ex-Employees</option>
+                        </select>
+                      </div>
+                    </div>
 
-                            {/* Editable Xfer Attempts */}
-                            <td className="py-2 px-2">
-                              {(userRole === 'Admin' || userRole === 'QA') ? (
-                                <select value={sale.xferAttempts || ''} onChange={(e) => updateSaleField(sale.id, 'xferAttempts', e.target.value)} className="w-full px-1 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded">
-                                  <option value="">-</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option>
-                                </select>
-                              ) : (
-                                <span className="text-xs text-slate-300">{sale.xferAttempts || '-'}</span>
-                              )}
-                            </td>
-
-                            {/* Editable Feedback (Before) Paragraph Box */}
-                            <td className="py-3 px-3">
-                              {(userRole === 'Admin' || userRole === 'QA') ? (
-                                <textarea
-                                  // 1. Use defaultValue
-                                  defaultValue={sale.feedbackBeforeXfer || ''}
-
-                                  // 2. Save only when clicking away (Blur)
-                                  onBlur={(e) => {
-                                    // Only save if text actually changed
-                                    if (e.target.value !== (sale.feedbackBeforeXfer || '')) {
-                                      updateSaleField(sale.id, 'feedbackBeforeXfer', e.target.value);
-                                    }
-                                  }}
-                                  rows={3}
-                                  className="w-full min-w-[250px] px-2 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded resize-y placeholder-slate-500"
-                                />
-                              ) : (
-                                <div className="text-xs text-slate-300 whitespace-pre-wrap min-w-[250px]">{sale.feedbackBeforeXfer || '-'}</div>
-                              )}
-                            </td>
-
-                            {/* Editable Feedback (After) */}
-                            <td className="py-2 px-2">
-                              {(userRole === 'Admin' || userRole === 'QA') ? (
-                                <input
-                                  type="text"
-                                  defaultValue={sale.feedbackAfterXfer || ''}
-                                  onBlur={(e) => {
-                                    if (e.target.value !== (sale.feedbackAfterXfer || '')) {
-                                      updateSaleField(sale.id, 'feedbackAfterXfer', e.target.value);
-                                    }
-                                  }}
-                                  onKeyDown={(e) => e.key === 'Enter' && e.target.blur()}
-                                  className="w-full px-1 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded"
-                                />
-                              ) : (
-                                <span className="text-xs text-slate-300">{sale.feedbackAfterXfer || '-'}</span>
-                              )}
-                            </td>
-
-                            {/* Editable Grading */}
-                            <td className="py-3 px-3">
-                              {(userRole === 'Admin' || userRole === 'QA') ? (
-                                <select value={sale.grading || ''} onChange={(e) => updateSaleField(sale.id, 'grading', e.target.value)} className="w-full px-1 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded">
-                                  <option value="">-</option><option value="Good">Good</option><option value="Bad">Bad</option><option value="Worst">Worst</option>
-                                </select>
-                              ) : (
-                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${sale.grading === 'Good' ? 'bg-green-500/20 text-green-400' : sale.grading === 'Bad' ? 'bg-red-500/20 text-red-400' : 'text-slate-500'}`}>
-                                  {sale.grading || '-'}
-                                </span>
-                              )}
-                            </td>
-
-                            {/* Editable Dock Details (FINE AMOUNT) */}
-                            <td className="py-2 px-2">
-                              <input
-                                type="text"
-                                inputMode="numeric"
-                                placeholder="Fine"
-                                defaultValue={sale.dockDetails || ''}
-
-                                // --- 1. RESTRICTION: Disable if not Admin/QA ---
-                                disabled={!['Admin', 'QA', 'SuperAdmin'].includes(userRole)}
-
-                                onInput={(e) => {
-                                  e.target.value = e.target.value.replace(/\D/g, '');
-                                }}
-
-                                onBlur={(e) => {
-                                  const val = e.target.value;
-                                  if (val !== sale.dockDetails) {
-                                    updateSaleField(sale.id, 'dockDetails', val);
-                                  }
-                                }}
-
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
-                                    e.target.blur();
-                                  }
-                                }}
-
-                                // --- 2. STYLING: Dim text if disabled ---
-                                className={`w-full px-1 py-1 text-xs border border-slate-600 rounded text-center font-mono outline-none transition-colors
-                              ${userRole !== 'Admin' && userRole !== 'QA'
-                                    ? 'bg-slate-800/50 text-slate-500 cursor-not-allowed' // Disabled Style
-                                    : 'bg-slate-700 text-white placeholder-slate-400 focus:ring-1 focus:ring-blue-500' // Enabled Style
-                                  }`}
-                              />
-                            </td>
-
-                            {/* DOCK REASON (Fine Reason) */}
-                            <td className="py-2 px-2 align-middle">
-                              <input
-                                type="text"
-                                placeholder="Reason..."
-                                defaultValue={sale.dockReason || sale.dockreason || ''}
-
-                                // --- 1. RESTRICTION: Disable if not Admin/QA ---
-                                disabled={!['Admin', 'QA', 'SuperAdmin'].includes(userRole)}
-
-                                onBlur={(e) => {
-                                  const val = e.target.value;
-                                  updateSaleField(sale.id, 'dockreason', val);
-                                }}
-
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') e.target.blur();
-                                }}
-
-                                // --- 2. STYLING: Dim text if disabled ---
-                                className={`w-full px-1 py-1 text-xs border border-slate-600 rounded text-left transition-colors
-                              ${userRole !== 'Admin' && userRole !== 'QA'
-                                    ? 'bg-slate-800/50 text-slate-500 cursor-not-allowed' // Disabled Style
-                                    : 'bg-slate-700 text-white focus:ring-1 focus:ring-blue-500' // Enabled Style
-                                  }`}
-                              />
-                            </td>
-
-                            {/* Editable Evaluator */}
-                            <td className="py-2 px-2">
-                              {(userRole === 'Admin' || userRole === 'QA') ? (
-                                <select value={sale.evaluator || ''} onChange={(e) => updateSaleField(sale.id, 'evaluator', e.target.value)} className="w-full px-1 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded">
-                                  <option value="">-</option>
-                                  {evaluators.map(e => <option key={e} value={e}>{e}</option>)}
-                                </select>
-                              ) : (
-                                <span className="text-xs text-slate-300">{sale.evaluator || '-'}</span>
-                              )}
-                            </td>
-
-                            {(userRole === 'Admin' || userRole === 'QA') && (
-                              <td className="py-3 px-3 text-center">
-                                {/* [FIX] Added 'gap-2' here to separate the buttons */}
-                                <div className="flex items-center justify-center gap-2">
-
-                                  {/* Edit Button */}
-                                  <button
-                                    onClick={() => setEditSale(sale)}
-                                    className="p-1.5 bg-blue-500/20 text-blue-400 rounded-lg hover:bg-blue-500/30 transition-colors"
-                                    title="Edit"
-                                  >
-                                    <Edit className="w-4 h-4" />
-                                  </button>
-
-                                  {/* Delete Button */}
-                                  <button
-                                    onClick={() => handleDeleteSale(sale.id)}
-                                    className="p-1.5 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors"
-                                    title="Delete"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-
-                                </div>
-                              </td>
-                            )}
+                    {/* --- HR TABLE --- */}
+                    <div className="w-full overflow-x-auto rounded-lg shadow-md border border-slate-700">
+                      <table className="w-full text-left border-collapse">
+                        <thead className="bg-slate-900">
+                          <tr>
+                            <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[50px]">No.</th>
+                            <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[220px]">Agent</th>
+                            <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[180px]">Father Name</th>
+                            <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[200px]">Bank Details</th>
+                            <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[140px]">Contact No</th>
+                            <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[140px]">Designation</th>
+                            <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[120px]">Team</th>
+                            <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[120px]">Center</th>
+                            <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[100px]">Salary</th>
+                            <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[160px]">CNIC</th>
+                            <th className="py-3 px-4 text-sm font-medium text-slate-200 min-w-[140px]">Joining Date</th>
+                            <th className="py-3 px-4 text-sm font-medium text-center text-slate-200 min-w-[140px]">Actions</th>
                           </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
+                        </thead>
+                        <tbody>
+                          {filteredHR.map((rec, idx) => {
+                            const agentProfile = agents.find(a => (a.cnic && a.cnic === rec.cnic) || (a.name.toLowerCase() === rec.agent_name.toLowerCase())) || {};
 
-            {/* Sales matrix */}
+                            return (
+                              <tr key={rec.id} className="border-b border-slate-700 hover:bg-slate-700">
+                                <td className="py-3 px-4 text-slate-300">{idx + 1}</td>
 
-            {salesSubTab === 'matrix' && (
-              <div className="space-y-6">
-                <div className="flex justify-between items-center">
+                                {/* 1. Name & Status Combined */}
+                                <td className="py-3 px-4">
+                                  <div className="font-medium text-white text-sm">{rec.agent_name}</div>
+                                  <div className={`text-[11px] mt-0.5 font-medium ${rec.status === 'Active' ? 'text-green-400' : 'text-red-400'}`}>
+                                    {rec.status || 'Active'}
+                                  </div>
+                                </td>
 
-                  {/* [FIXED] Sales Matrix Header - Added 'w-full' */}
-                  <div className="w-full flex flex-col md:flex-row justify-between items-center gap-4 bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-sm mb-2">
+                                <td className="py-3 px-4 text-slate-300 text-sm">{rec.father_name || '-'}</td>
 
-                    {/* LEFT SIDE: Title & Subtitle */}
-                    <div>
-                      <h2 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
-                        Sales Performance Matrix
-                      </h2>
-                      <p className="text-slate-400 text-xs mt-0.5">
-                        Daily Breakdown for {selectedMonth}
-                      </p>
-                    </div>
+                                {/* 2. Bank Details Combined */}
+                                <td className="py-3 px-4">
+                                  <div className="text-sm text-slate-200">{rec.bank_name || '-'}</div>
+                                  <div className="text-xs text-slate-500 font-mono">{rec.account_number || '-'}</div>
+                                </td>
 
-                    {/* RIGHT SIDE: Cycle Dates & Buttons */}
-                    <div className="flex flex-col md:flex-row items-center gap-4">
+                                <td className="py-3 px-4 text-slate-300 font-mono text-xs">{rec.Phone || '-'}</td>
+                                <td className="py-3 px-4 text-slate-300 text-sm">{rec.designation}</td>
+                                <td className="py-3 px-4 text-slate-300 text-sm">{agentProfile.team || '-'}</td>
+                                <td className="py-3 px-4 text-slate-300 text-xs">{agentProfile.center || '-'}</td>
+                                {/* [FIXED] Salary Display (Checks HR Record first for Management) */}
+                                <td className="py-3 px-4 text-right text-slate-100 font-mono">
+                                  {rec.base_salary
+                                    ? parseInt(rec.base_salary).toLocaleString()
+                                    : (agentProfile.baseSalary ? agentProfile.baseSalary.toLocaleString() : 0)
+                                  }
+                                </td>
+                                <td className="py-3 px-4 text-slate-400 text-xs font-mono">{rec.cnic}</td>
 
-                      {/* Cycle Text */}
-                      <div className="text-xs text-slate-500 font-medium bg-slate-900/50 px-3 py-1.5 rounded border border-slate-700/50">
-                        Cycle: <span className="text-slate-300">{getPayrollRange(selectedMonth).start.toDateString()} - {getPayrollRange(selectedMonth).end.toDateString()}</span>
-                      </div>
+                                {/* [FIXED] Joining Date + Left Date (Check both HR and Agent records) */}
+                                <td className="py-3 px-4">
+                                  <div className="text-slate-300 text-sm">{rec.joining_date}</div>
 
-                      {/* Action Buttons */}
-                      {['Admin', 'SuperAdmin', 'Finance'].includes(userRole) && (
-                        <div className="flex items-center gap-3">
-                          <button
-                            onClick={() => setShowAddBonus(true)}
-                            className="flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-all shadow-lg shadow-green-900/20"
-                          >
-                            <Plus className="w-4 h-4" /> Add Bonus
-                          </button>
-                          <button
-                            onClick={() => setShowAddFine(true)}
-                            className="flex items-center gap-2 bg-red-600 hover:bg-red-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-all shadow-lg shadow-red-900/20"
-                          >
-                            <Plus className="w-4 h-4" /> Add Fine
-                          </button>
+                                  {/* Show Left Date if status is Left */}
+                                  {rec.status === 'Left' && (
+                                    <div className="text-[10px] text-red-400 font-medium mt-0.5">
+                                      {/* Check Agent Profile first, then fallback to HR Record */}
+                                      Left: {agentProfile.leftDate || rec.left_date || rec.leftDate || 'N/A'}
+                                    </div>
+                                  )}
+                                </td>
 
-                        </div>
-                      )}
+                                <td className="py-3 px-4">
+                                  <div className="flex items-center justify-center gap-2">
 
-                      {['Admin', 'SuperAdmin'].includes(userRole) && (
-                        <div className="flex items-center gap-3">
+                                    {/* 1. Edit Button */}
+                                    <button onClick={() => {
+                                      const linkedAgent = agents.find(a => (a.cnic && a.cnic === rec.cnic) || (a.name === rec.agent_name)) || {};
+                                      setEditingHR({
+                                        id: rec.id,
+                                        agent_name: rec.agent_name || '',
+                                        father_name: rec.father_name || '',
+                                        designation: rec.designation || '',
+                                        cnic: rec.cnic || '',
+                                        joining_date: rec.joining_date || '',
+                                        contact_number: rec.Phone || rec.contact_number || linkedAgent.Phone || '',
+                                        email: rec.email || linkedAgent.email || '',
+                                        address: rec.address || linkedAgent.address || '',
+                                        team: rec.team || linkedAgent.team || '',
+                                        center: rec.center || linkedAgent.center || '',
+                                        baseSalary: rec.base_salary || rec.baseSalary || linkedAgent.baseSalary || '',
+                                        bank_name: rec.bank_name || linkedAgent.bank_name || '',
+                                        account_number: rec.account_number || linkedAgent.account_number || '',
+                                        payroll_cycle_type: rec.payroll_cycle_type || 'Agent Cycle'
+                                      });
+                                      setShowAddEmployee(true);
+                                    }} className="p-1.5 bg-blue-500/10 text-blue-400 rounded hover:bg-blue-500/20 transition-colors" title="Edit">
+                                      <Pencil className="w-4 h-4" />
+                                    </button>
 
-                          {/* [FIX] Update onClick to initialize Temp State */}
-                          <button
-                            onClick={() => setShowGoalModal(true)}
-                            className="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-all border border-slate-600 shadow-sm"
-                            title="Configure Goal Rules"
-                          >
-                            <Settings className="w-4 h-4" />
-                          </button>
-
-                        </div>
-                      )}
-
-                    </div>
-                  </div>
-                </div>
-
-                {/* --- FILTERS --- */}
-                {userRole !== 'Agent' && (
-                  <div className="bg-slate-800 rounded-xl shadow-sm border border-slate-600 p-4">
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                      <input
-                        type="text"
-                        placeholder="Search agent name..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                      <select value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
-                        <option value="All">All Teams</option>
-                        {teams.map(t => <option key={t} value={t}>{t}</option>)}
-                      </select>
-                      <select value={centerFilter} onChange={(e) => setCenterFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
-                        <option value="All">All Centers</option>
-                        {centers.map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
-                      <select value={agentStatusFilter} onChange={(e) => setAgentStatusFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
-                        <option value="All">All Status</option>
-                        <option value="Active">Active</option>
-                        <option value="Left">Left / Ex-Employees</option>
-                      </select>
-                    </div>
-                  </div>
-                )}
-
-                {/* --- MATRIX LOGIC STARTS HERE --- */}
-                {/* --- OPTIMIZED MATRIX LOGIC --- */}
-              {/* --- OPTIMIZED MATRIX LOGIC --- */}
-                {(() => {
-                  // 1. Prepare Dates
-                  const { start, end } = getPayrollRange(selectedMonth);
-                  const dateArray = getDaysArray(start, end);
-
-                  // 2. Filter Displayed Agents
-                  const displayedStats = monthlyStats.filter(stat => {
-                    const query = searchQuery.toLowerCase();
-                    const nameMatch = stat.name && stat.name.toLowerCase().includes(query);
-                    const phoneMatch = stat.phone && stat.phone.toString().includes(query);
-                    const matchesSearch = !searchQuery || nameMatch || phoneMatch;
-                    const matchesStatus = agentStatusFilter === 'All' || stat.status === agentStatusFilter;
-                    const matchesTeam = teamFilter === 'All' || stat.team === teamFilter;
-                    const matchesCenter = centerFilter === 'All' || stat.center === centerFilter;
-                    return matchesSearch && matchesStatus && matchesTeam && matchesCenter;
-                  });
-
-                  const uniqueTeams = [...new Set(displayedStats.map(s => s.team))].filter(Boolean).sort();
-
-                  // =================================================================================
-                  // ⚡ PERFORMANCE OPTIMIZATION: Pre-Calculate Data Maps
-                  // =================================================================================
-
-                  // Maps to store counts: Map[Key][Date] = Count
-                  const agentDailyMap = {};
-                  const teamDailyMap = {};
-                  const grandDailyMap = {};
-
-                  // Maps to store Weekly Totals (Key = Friday Date String)
-                  const agentWeeklyMap = {};
-                  const teamWeeklyMap = {};
-                  const grandWeeklyMap = {};
-
-                  // A. Single Loop through Sales to fill Daily Maps
-                  sales.forEach(s => {
-                    if (s.status === 'Sale' || ['HW- Xfer', 'HW-IBXfer', 'HW-Xfer-CDR'].includes(s.disposition)) {
-                      const sDate = s.date; // "YYYY-MM-DD"
-                      
-                      // [FIX 1] Normalize Sales Agent Name (Lowercase + Trim)
-                      // This ensures "Asif Ali" matches "asif ali"
-                      const sAgentRaw = s.agentName?.toString() || '';
-                      const sAgentClean = sAgentRaw.trim().toLowerCase(); 
-
-                      // [FIX 2] Find Agent using Case-Insensitive Match
-                      const agentStat = displayedStats.find(a => a.name.toLowerCase().trim() === sAgentClean);
-                      const sTeam = agentStat ? agentStat.team : null;
-
-                      if (!sDate) return;
-
-                      // Agent Count (Use Clean Name as Key)
-                      if (sAgentClean) {
-                        if (!agentDailyMap[sAgentClean]) agentDailyMap[sAgentClean] = {};
-                        agentDailyMap[sAgentClean][sDate] = (agentDailyMap[sAgentClean][sDate] || 0) + 1;
-                      }
-
-                      // Team Count
-                      if (sTeam) {
-                        if (!teamDailyMap[sTeam]) teamDailyMap[sTeam] = {};
-                        teamDailyMap[sTeam][sDate] = (teamDailyMap[sTeam][sDate] || 0) + 1;
-                      }
-
-                      // Grand Total Count (Only if agent is currently visible in filter)
-                      if (agentStat) {
-                        grandDailyMap[sDate] = (grandDailyMap[sDate] || 0) + 1;
-                      }
-                    }
-                  });
-
-                  // B. Calculate Weekly Summaries (Mon-Fri)
-                  dateArray.forEach(dateStr => {
-                    const d = new Date(dateStr);
-                    if (d.getDay() === 5) { // If Friday
-                      // Generate Mon-Fri dates for this week
-                      const weekDates = [];
-                      for (let i = 4; i >= 0; i--) {
-                        const past = new Date(d);
-                        past.setDate(d.getDate() - i);
-                        weekDates.push(past.toISOString().split('T')[0]);
-                      }
-
-                      // Agent Weekly Sums
-                      displayedStats.forEach(agent => {
-                        // [FIX 3] Use Lowercase Key for Lookup
-                        const agentKey = agent.name.toLowerCase().trim();
-                        const sum = weekDates.reduce((acc, currDate) => acc + (agentDailyMap[agentKey]?.[currDate] || 0), 0);
-                        if (!agentWeeklyMap[agentKey]) agentWeeklyMap[agentKey] = {};
-                        agentWeeklyMap[agentKey][dateStr] = sum;
-                      });
-
-                      // Team Weekly Sums
-                      uniqueTeams.forEach(team => {
-                        const sum = weekDates.reduce((acc, currDate) => acc + (teamDailyMap[team]?.[currDate] || 0), 0);
-                        if (!teamWeeklyMap[team]) teamWeeklyMap[team] = {};
-                        teamWeeklyMap[team][dateStr] = sum;
-                      });
-
-                      // Grand Weekly Sums
-                      const sum = weekDates.reduce((acc, currDate) => acc + (grandDailyMap[currDate] || 0), 0);
-                      grandWeeklyMap[dateStr] = sum;
-                    }
-                  });
-
-                  // =================================================================================
-                  // RENDER TABLE
-                  // =================================================================================
-
-                  return (
-                    <div className="bg-slate-900 rounded-xl border border-slate-700 shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
-                      <div className="overflow-auto relative">
-                        <table className="w-full text-slate-300 border-collapse table-fixed">
-
-                          {/* --- HEADER --- */}
-                          <thead className="sticky top-0 z-40 shadow-md">
-                            <tr className="bg-slate-950">
-                              <th className="p-3 text-center border-b border-r border-slate-800 sticky left-0 z-50 bg-slate-950 w-12">No.</th>
-                              <th className="p-3 text-left border-b border-r border-slate-800 sticky left-12 z-50 bg-slate-950 w-44">Agent Name</th>
-
-                              <th className="p-2 text-center border-b border-r border-slate-800 bg-slate-900 text-slate-300 text-[10px] font-bold w-20">SALARY</th>
-                              <th className="p-2 text-center border-b border-r border-slate-800 bg-slate-900 text-slate-300 text-[10px] font-bold w-16">GOAL</th>
-
-                              <th className="p-2 text-center border-b border-r border-slate-800 bg-blue-900/40 text-blue-400 text-[10px] font-bold w-14">LPD</th>
-                              <th className="p-2 text-center border-b border-r border-slate-800 bg-slate-800 text-slate-400 text-[10px] w-12">DAYS</th>
-                              <th className="p-2 text-center border-b border-slate-800 bg-red-900/20 text-red-400 text-[10px] w-10">0s</th>
-                              <th className="p-2 text-center border-b border-slate-800 bg-orange-900/20 text-orange-400 text-[10px] w-10">1s</th>
-                              <th className="p-2 text-center border-b border-slate-800 bg-yellow-900/20 text-yellow-400 text-[10px] w-10">2s</th>
-                              <th className="p-2 text-center border-b border-r border-slate-800 bg-green-900/20 text-green-400 text-[10px] w-10">3s</th>
-
-                              {dateArray.map(dateStr => {
-                                const d = new Date(dateStr);
-                                const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-                                const isFriday = d.getDay() === 5;
-
-                                return (
-                                  <React.Fragment key={dateStr}>
-                                    <th className={`p-2 text-center border-b border-slate-800 w-10 ${isWeekend ? 'bg-slate-800' : 'bg-slate-900'}`}>
-                                      <div className="text-[10px] text-slate-500 uppercase">{d.toLocaleDateString('en-US', { weekday: 'narrow' })}</div>
-                                      <div className={`text-xs font-bold ${isWeekend ? 'text-slate-500' : 'text-white'}`}>{d.getDate()}</div>
-                                    </th>
-
-                                    {/* [INJECT] Weekly Total Header */}
-                                    {isFriday && (
-                                      <th className="p-1 text-center border-b border-r border-l border-slate-800 bg-emerald-950/50 w-10">
-                                        <div className="text-[8px] font-bold text-emerald-500 uppercase">WK</div>
-                                        <div className="text-[9px] font-black text-emerald-400">TOT</div>
-                                      </th>
+                                    {/* 2. CONDITIONAL: Terminate vs Reactivate */}
+                                    {/* 2. CONDITIONAL: Terminate vs Reactivate */}
+                                    {rec.status === 'Active' ? (
+                                      // IF ACTIVE: Open the Leave Modal (to choose Status)
+                                      <button
+                                        onClick={() => {
+                                          // Create a unified object so the modal can read the name/id correctly
+                                          const agentObj = {
+                                            ...rec,
+                                            name: rec.agent_name, // Map agent_name to name for the modal
+                                            id: rec.id,
+                                            cnic: rec.cnic
+                                          };
+                                          handleOpenLeaveModal(agentObj);
+                                        }}
+                                        className="p-1.5 bg-red-500/10 text-red-400 rounded hover:bg-red-500/20 transition-colors"
+                                        title="Mark as Left / Terminate"
+                                      >
+                                        <UserX className="w-4 h-4" />
+                                      </button>
+                                    ) : (
+                                      // IF INACTIVE: Show "Reactivate"
+                                      <button
+                                        onClick={() => handleReactivateAgent(rec.cnic)}
+                                        className="p-1.5 bg-green-500/10 text-green-400 rounded hover:bg-green-500/20 transition-colors"
+                                        title="Reactivate Employee"
+                                      >
+                                        <RotateCcw className="w-4 h-4" />
+                                      </button>
                                     )}
-                                  </React.Fragment>
-                                );
-                              })}
-                              <th className="p-3 text-center bg-slate-950 border-b border-l border-slate-800 font-bold text-green-400 sticky right-0 z-40 w-16 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">TOTAL</th>
-                            </tr>
-                          </thead>
 
-                          {/* --- BODY --- */}
-                          <tbody className="divide-y divide-slate-800">
-                            {uniqueTeams.map(teamName => {
-                              const teamAgents = displayedStats
-                                .filter(s => s.team === teamName)
-                                .sort((a, b) => a.name.localeCompare(b.name));
-
-                              if (teamAgents.length === 0) return null;
-
-                              const teamTotalSales = teamAgents.reduce((sum, a) => sum + a.totalSales, 0);
-                              const teamTotalDays = teamAgents.reduce((sum, a) => sum + a.dialingDays, 0);
-                              const teamAvgLPD = teamTotalDays > 0 ? (teamTotalSales / teamTotalDays).toFixed(2) : "0.00";
-
-                              return (
-                                <React.Fragment key={teamName}>
-                                  {/* Team Header Row */}
-                                  <tr className="bg-slate-800/80 sticky top-[53px] z-30">
-                                    <td colSpan={2} className="p-2 px-4 border-r border-slate-700 font-black text-blue-400 uppercase tracking-widest text-sm sticky left-0 z-30 bg-slate-800">
-                                      {teamName}
-                                    </td>
-                                    <td className="p-1 border-r border-slate-800 bg-slate-800"></td>
-                                    <td className="p-1 border-r border-slate-800 bg-slate-800"></td>
-                                    <td className="text-center font-bold text-blue-300 border-r border-slate-700 bg-slate-800">{teamAvgLPD}</td>
-                                    <td className="text-center text-slate-400 border-r border-slate-700 bg-slate-800">{teamTotalDays}</td>
-                                    <td colSpan={4} className="bg-slate-800 border-r border-slate-700"></td>
-
-                                    {dateArray.map(d => {
-                                      // ⚡ FAST LOOKUP: O(1) Access
-                                      const dailyCount = teamDailyMap[teamName]?.[d] || 0;
-                                      const isFriday = new Date(d).getDay() === 5;
-
-                                      return (
-                                        <React.Fragment key={d}>
-                                          <td className={`text-center text-[10px] border-b border-slate-700 font-bold ${dailyCount > 0 ? 'text-blue-300 bg-blue-500/10' : 'text-slate-600 bg-slate-800/30'}`}>
-                                            {dailyCount > 0 ? dailyCount : '-'}
-                                          </td>
-
-                                          {/* [INJECT] Team Weekly Total */}
-                                          {isFriday && (
-                                            <td className="text-center text-[10px] border-b border-r border-l border-slate-700 font-black text-emerald-400 bg-emerald-900/20">
-                                              {teamWeeklyMap[teamName]?.[d] || 0}
-                                            </td>
-                                          )}
-                                        </React.Fragment>
-                                      );
-                                    })}
-
-                                    <td className="text-center font-black text-green-400 sticky right-0 z-30 bg-slate-800 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
-                                      {teamTotalSales}
-                                    </td>
-                                  </tr>
-
-                                  {/* Agent Rows */}
-                                  {teamAgents.map((stat, idx) => {
-                                    // Join Date Logic
-                                    const hrRec = hrRecords.find(h => h.cnic === stat.cnic) || {};
-                                    const joinDateStr = hrRec.joining_date || stat.activeDate || stat.active_date;
-                                    const joinDate = joinDateStr ? new Date(joinDateStr) : null;
-                                    if (joinDate) joinDate.setHours(0, 0, 0, 0);
-
-                                    // Status Logic
-                                    const isInactive = stat.status !== 'Active' && stat.status !== 'Promoted';
-                                    const rowClass = isInactive ? 'bg-red-900/10 hover:bg-red-900/20' : 'hover:bg-blue-900/10';
-                                    const nameClass = isInactive ? 'text-red-400' : 'text-slate-200';
-
-                                    // [FIX 4] Create Normalized Key for this Row (Lowercase)
-                                    const agentKey = stat.name.toLowerCase().trim();
-
-                                    return (
-                                      <tr key={stat.id} className={`${rowClass} transition-colors group`}>
-                                        <td className="p-2 text-center border-r border-slate-800 bg-slate-900 text-slate-600 font-mono text-[10px] sticky left-0 z-10 group-hover:text-white">{idx + 1}</td>
-
-                                        <td className="p-2 px-3 font-medium border-r border-slate-800 bg-slate-900 sticky left-12 z-10 truncate text-xs">
-                                          <div className={nameClass}>{stat.name}</div>
-                                          {stat.isPromoted ? (
-                                            <div className="text-[9px] text-red-500 font-bold uppercase mt-0.5 tracking-tighter">
-                                              PROMOTED TO {stat.designation.toUpperCase()}
-                                            </div>
-                                          ) : (
-                                            isInactive && (
-                                              <div className="text-[9px] text-red-500/80 font-mono mt-0.5 font-bold">
-                                                {stat.status.toUpperCase()}: {stat.leftDate || 'N/A'}
-                                              </div>
-                                            )
-                                          )}
-                                        </td>
-
-                                        <td className="p-1 text-center border-r border-slate-800 text-slate-300 font-mono text-[10px]">
-                                          {stat.baseSalary ? parseInt(stat.baseSalary).toLocaleString() : '0'}
-                                        </td>
-                                        <td className="p-1 text-center border-r border-slate-800 text-slate-300 font-mono text-[10px]">
-                                          {stat.target || '-'}
-                                        </td>
-
-                                        <td className="p-1 text-center border-r border-slate-800 bg-blue-500/5 font-bold text-blue-400 text-xs">{stat.lpd}</td>
-                                        <td className="p-1 text-center border-r border-slate-800 text-slate-400 text-[10px]">{stat.dialingDays}</td>
-                                        <td className="p-1 text-center text-red-400 text-[10px]">{stat.daysOn0}</td>
-                                        <td className="p-1 text-center text-orange-300/80 text-[10px]">{stat.daysOn1}</td>
-                                        <td className="p-1 text-center text-yellow-300/80 text-[10px]">{stat.daysOn2}</td>
-                                        <td className="p-1 text-center border-r border-slate-800 text-green-400 font-bold text-[10px]">{stat.daysOn3}</td>
-
-                                        {/* Agent Date Loop */}
-                                        {dateArray.map(dateStr => {
-                                          const currentDate = new Date(dateStr);
-                                          currentDate.setHours(0, 0, 0, 0);
-                                          const isFriday = currentDate.getDay() === 5;
-
-                                          // [FIX 5] Case-Insensitive Lookup (O(1))
-                                          const dailyCount = agentDailyMap[agentKey]?.[dateStr] || 0;
-
-                                          // Checks
-                                          const isHoliday = holidays.some(h => h.date === dateStr);
-                                          const isBeforeJoining = joinDate && currentDate < joinDate;
-                                          
-                                          // [FIX 6] Case-Insensitive Attendance Check
-                                          const hasAttendance = attendance.some(a =>
-                                            a.date === dateStr &&
-                                            a.agentName?.toString().trim().toLowerCase() === agentKey &&
-                                            (a.status === 'Present' || a.status === 'Late')
-                                          );
-                                          const isWorkingDay = grandDailyMap[dateStr] > 0; // Check if *anyone* made a sale
-
-                                          let cellContent = '-';
-                                          let cellClass = 'text-slate-700';
-
-                                          if (dailyCount > 0) {
-                                            cellContent = dailyCount;
-                                            cellClass = 'bg-green-500/10 text-green-400 font-bold';
-                                          } else if (isHoliday) {
-                                            cellContent = 'H';
-                                            cellClass = 'text-purple-400 font-bold bg-purple-900/20';
-                                          } else if (!isBeforeJoining) {
-                                            if (hasAttendance) {
-                                              cellContent = '0';
-                                              cellClass = 'bg-red-500/20 text-red-400 font-bold';
-                                            } else if (isWorkingDay) {
-                                              cellContent = 'A';
-                                              cellClass = 'text-red-500 font-black';
-                                            }
-                                          }
-
-                                          return (
-                                            <React.Fragment key={dateStr}>
-                                              <td className={`p-1 text-center border-b border-slate-800 text-[11px] ${cellClass}`}>
-                                                {cellContent}
-                                              </td>
-
-                                              {/* [INJECT] Agent Weekly Total */}
-                                              {isFriday && (
-                                                <td className="p-1 text-center border-b border-r border-l border-slate-800 text-[11px] font-bold text-emerald-300 bg-emerald-900/10">
-                                                  {agentWeeklyMap[agentKey]?.[dateStr] || 0}
-                                                </td>
-                                              )}
-                                            </React.Fragment>
-                                          );
-                                        })}
-
-                                        <td className="p-2 text-center font-bold text-white bg-slate-900 sticky right-0 z-10 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
-                                          {stat.totalSales}
-                                        </td>
-                                      </tr>
-                                    );
-                                  })}
-                                </React.Fragment>
-                              );
-                            })}
-                          </tbody>
-
-                          {/* --- FOOTER (Grand Totals) --- */}
-                          <tfoot className="sticky bottom-0 z-40 shadow-[0_-4px_10px_rgba(0,0,0,0.5)]">
-                            <tr className="bg-slate-950 border-t-2 border-blue-500 font-black text-white">
-                              <td colSpan={2} className="p-3 text-left sticky left-0 bg-slate-950 z-50 uppercase tracking-tighter">Grand Total</td>
-                              <td className="bg-slate-950"></td>
-                              <td className="bg-slate-950"></td>
-                              <td className="text-center text-blue-400 bg-slate-950">
-                                {(displayedStats.reduce((s, a) => s + a.totalSales, 0) / (displayedStats.reduce((s, a) => s + a.dialingDays, 0) || 1)).toFixed(2)}
-                              </td>
-                              <td className="text-center text-slate-400 bg-slate-950">
-                                {displayedStats.reduce((s, a) => s + a.dialingDays, 0)}
-                              </td>
-                              <td colSpan={4} className="bg-slate-950"></td>
-
-                              {/* Footer Date Loop */}
-                              {dateArray.map(d => {
-                                // ⚡ FAST LOOKUP
-                                const dailyGrandTotal = grandDailyMap[d] || 0;
-                                const isFriday = new Date(d).getDay() === 5;
-
-                                return (
-                                  <React.Fragment key={d}>
-                                    <td className="bg-slate-950 text-center text-xs font-bold text-green-400">
-                                      {dailyGrandTotal > 0 ? dailyGrandTotal : ''}
-                                    </td>
-
-                                    {/* [INJECT] Grand Weekly Total */}
-                                    {isFriday && (
-                                      <td className="bg-slate-950 border-r border-l border-slate-800 text-center text-xs font-black text-emerald-400">
-                                        {grandWeeklyMap[d] || 0}
-                                      </td>
-                                    )}
-                                  </React.Fragment>
-                                );
-                              })}
-
-                              <td className="p-3 text-center text-green-400 text-lg sticky right-0 bg-slate-950 z-50 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
-                                {displayedStats.reduce((s, a) => s + a.totalSales, 0)}
-                              </td>
-                            </tr>
-                          </tfoot>
-                        </table>
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-            )}
-
-          </div>
-        )}
-
-
-        {/* =====================================================================================
-            TAB: MANAGEMENT PAYROLL (Buttons Added + Data Fixed)
-           ===================================================================================== */}
-        {activeTab === 'management' && (
-
-          <div className="space-y-6">
-            <SubTabBar
-              tabs={[
-                // [FIX] Show Payroll tab ONLY to HR, Admin, SuperAdmin
-                ...(['HR', 'Admin', 'SuperAdmin', 'Finance'].includes(userRole) ? [{ id: 'payroll', label: 'Payroll' }] : []),
-
-                ...(userRole !== 'Finance' ? [{ id: 'attendance', label: 'Attendance' }] : [])
-              ]}
-              activeSubTab={managementSubTab}
-              setActiveSubTab={setManagementSubTab}
-            />
-
-            {managementSubTab === 'payroll' && ['HR', 'Admin', 'SuperAdmin', 'Finance'].includes(userRole) && (
-              <div className="space-y-8 animate-in fade-in duration-300">
-
-                {/* Header Section */}
-                <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-slate-800 p-6 rounded-2xl border border-slate-700">
-                  <div>
-                    <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
-                      Management Payroll
-                    </h2>
-                    <p className="text-slate-400 text-sm mt-1">
-                      Payroll Breakdown for {selectedMonth}
-                    </p>
-                  </div>
-
-                  {/* [NEW] Action Buttons for Management */}
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={() => setShowMgmtBonus(true)} // Opens NEW Modal
-                      className="flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-lg shadow-green-900/20"
-                    >
-                      <Plus className="w-4 h-4" /> Add Bonus
-                    </button>
-                    <button
-                      onClick={() => setShowMgmtFine(true)} // Opens NEW Modal
-                      className="flex items-center gap-2 bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-lg shadow-red-900/20"
-                    >
-                      <Plus className="w-4 h-4" /> Add Fine
-                    </button>
-                  </div>
-                </div>
-
-                {/* --- RENDER TABLES --- */}
-                {(() => {
-                  const { standard, agentCycle } = managementPayrollStats;
-
-                  const renderPayrollTable = (title, staffList, badgeColor) => (
-                    <div className="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden mb-8 shadow-xl">
-                      <div className="p-5 border-b border-slate-700 flex items-center gap-3">
-                        <h3 className="text-lg font-semibold text-white">{title}</h3>
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${badgeColor} text-white font-medium`}>
-                          {staffList.length} Employees
-                        </span>
-                      </div>
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
-                          <thead>
-                            <tr className="bg-slate-900 text-slate-400 text-xs uppercase tracking-wider">
-                              <th className="p-4 font-medium border-b border-slate-700">Employee</th>
-                              <th className="p-4 font-medium border-b border-slate-700">Designation</th>
-                              <th className="p-4 font-medium border-b border-slate-700 text-center">Attendance</th>
-                              <th className="p-4 font-medium border-b border-slate-700 text-right">Base Salary</th>
-                              <th className="p-4 font-medium border-b border-slate-700 text-right">Earned Base</th>
-                              <th className="p-4 font-medium border-b border-slate-700 text-right text-green-400">Bonus</th>
-                              <th className="p-4 font-medium border-b border-slate-700 text-right text-red-400">Fine</th>
-                              <th className="p-4 font-medium border-b border-slate-700 text-right text-blue-400">Net Salary</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-700">
-                            {staffList.length > 0 ? (
-                              staffList.map((emp, idx) => (
-                                <tr key={idx} className="hover:bg-slate-700/20 text-sm group">
-                                  <td className="p-4 font-medium text-white">{emp.agent_name}</td>
-                                  <td className="p-4 text-slate-400">{emp.designation}</td>
-                                  <td className="p-4 text-center">
-                                    <span className={`px-2 py-1 rounded text-xs font-mono ${emp.daysPresent === emp.totalWorkingDays ? 'bg-green-500/20 text-green-400' : 'bg-slate-700 text-blue-300'}`}>
-                                      {emp.daysPresent} / {emp.totalWorkingDays}
-                                    </span>
-                                  </td>
-                                  <td className="p-4 text-right text-slate-400 font-mono text-xs">
-                                    {emp.baseSalary?.toLocaleString()}
-                                  </td>
-                                  <td className="p-4 text-right text-slate-200 font-mono">
-                                    {emp.earnedBase?.toLocaleString()}
-                                  </td>
-                                  <td className="p-4 text-right font-mono text-green-400">
-                                    {emp.totalBonus > 0 ? `+${emp.totalBonus.toLocaleString()}` : '-'}
-                                  </td>
-                                  <td className="p-4 text-right font-mono text-red-400">
-                                    {emp.totalFine > 0 ? `-${emp.totalFine.toLocaleString()}` : '-'}
-                                  </td>
-                                  <td className="p-4 text-right font-bold font-mono text-blue-300 text-base bg-slate-800/30">
-                                    {emp.netSalary?.toLocaleString()} <span className="text-xs text-slate-500">PKR</span>
-                                  </td>
-                                </tr>
-                              ))
-                            ) : (
-                              <tr>
-                                <td colSpan="8" className="p-8 text-center text-slate-500 italic">
-                                  No employees found in this cycle.
+                                    {/* 3. Delete Button */}
+                                    <button
+                                      onClick={() => handleDeleteHR(rec.id, rec.cnic, rec.agent_name)}
+                                      className="p-1.5 bg-red-500/10 text-red-400 rounded hover:bg-red-500/20 transition-colors"
+                                      title="Delete Permanently"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </div>
                                 </td>
                               </tr>
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
+                            );
+                          })}
+                        </tbody>
+                      </table>
                     </div>
-                  );
-
-                  return (
-                    <>
-                      {renderPayrollTable("Standard Month Cycle (1st - 30th)", standard, "bg-purple-500/20 border border-purple-500/30")}
-                      {renderPayrollTable("Agent Cycle (21st - 20th)", agentCycle, "bg-orange-500/20 border border-orange-500/30")}
-                    </>
-                  );
-                })()}
+                  </div>
+                )}
               </div>
             )}
 
-            {managementSubTab === 'attendance' && (
+            {/* Sales TAB */}
+            {activeTab === 'sales' && (
               <div className="space-y-6">
-                {/* =====================================================================================
-    TAB: MANAGEMENT ATTENDANCE MATRIX (HR/QA/TL/IT Staff)
-   ===================================================================================== */}
 
-                <div className="space-y-6">
+                <SubTabBar
+                  tabs={[
+                    ...(!['HR', 'Finance'].includes(userRole) ? [{ id: 'list', label: 'Sales List' }] : []),
+                    { id: 'matrix', label: 'Monthly Matrix' }
+                  ]}
+                  activeSubTab={salesSubTab}
+                  setActiveSubTab={setSalesSubTab}
+                />
 
-                  {/* [FIXED] Attendance Matrix Header & Action Bar */}
-                  <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-slate-800 p-6 rounded-2xl border border-slate-700 mb-6">
-                    <div>
-                      <h2 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-                        Management Attendance Matrix
-                      </h2>
-                      <p className="text-slate-400 text-sm mt-1">
-                        Login Times • Late Tracking • Non-Agent Staff for {selectedMonth}
-                      </p>
-                    </div>
+                {salesSubTab === 'list' && (
+                  <div className="space-y-6">
 
-                    {/* RIGHT SIDE: Cycle Dates & Buttons */}
-                    <div className="flex flex-col md:flex-row items-center gap-4">
-
-                      {/* Cycle Text */}
-                      <div className="text-xs text-slate-500 font-medium bg-slate-900/50 px-3 py-1.5 rounded border border-slate-700/50">
-                        Cycle: <span className="text-slate-300">{getPayrollRange(selectedMonth).start.toDateString()} - {getPayrollRange(selectedMonth).end.toDateString()}</span>
+                    {/* Header Section */}
+                    <div className="flex justify-between items-center">
+                      <h2 className="text-xl font-semibold text-white">Sales Management</h2>
+                      <div className="flex gap-3">
+                        {['Admin', 'SuperAdmin'].includes(userRole) && (
+                          <>
+                            <button
+                              onClick={() => { setImportType('sales'); setShowImportModal(true); }}
+                              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                            >
+                              <Upload className="w-4 h-4" /> Import CSV
+                            </button>
+                            <button
+                              onClick={() => {
+                                const name = window.prompt('Enter evaluator name:');
+                                if (name && name.trim()) setEvaluators(prev => [...prev, name.trim()]);
+                              }}
+                              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                            >
+                              <Plus className="w-4 h-4" /> Add Evaluator
+                            </button>
+                          </>
+                        )}
+                        {(userRole === 'Admin' || userRole === 'Agent') && (
+                          <button
+                            onClick={() => setShowAddSale(true)}
+                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                          >
+                            <Plus className="w-4 h-4" /> Submit Sale
+                          </button>
+                        )}
                       </div>
+                    </div>
 
-                      {['Admin', 'SuperAdmin', 'QA', 'Finance'].includes(userRole) && (
-                        <div className="flex items-center gap-3">
-                          <button
-                            onClick={() => setShowMgmtBonus(true)} // [FIXED] Matches your existing state
-                            className="flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-lg shadow-green-900/20"
-                          >
-                            <Plus className="w-4 h-4" /> Add Bonus
-                          </button>
+                    {/* DISPOSITION DASHBOARD CARDS (RESTORED) */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="bg-green-500/10 border border-green-500/20 p-4 rounded-xl">
+                        <p className="text-xs text-green-400 font-bold uppercase">Success Sales</p>
+                        <p className="text-2xl font-black text-green-500">{salesStats.sales}</p>
+                      </div>
+                      <div className="bg-yellow-500/10 border border-yellow-500/20 p-4 rounded-xl">
+                        <p className="text-xs text-yellow-400 font-bold uppercase">Unsuccessful</p>
+                        <p className="text-2xl font-black text-yellow-500">{salesStats.unsuccessful}</p>
+                      </div>
+                      <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-xl">
+                        <p className="text-xs text-red-400 font-bold uppercase">DNC / DNQ</p>
+                        <p className="text-2xl font-black text-red-500">{salesStats.dncDnq}</p>
+                      </div>
+                      <div className="bg-orange-500/10 border border-orange-500/20 p-4 rounded-xl">
+                        <p className="text-xs text-orange-400 font-bold uppercase">Pending Review</p>
+                        <p className="text-2xl font-black text-orange-500">{salesStats.pending}</p>
+                      </div>
+                    </div>
+
+                    {/* Date Filter Bar */}
+                    <DateFilterBar
+                      filterType={filterType} setFilterType={setFilterType}
+                      dateVal={customStartDate} setDateVal={setCustomStartDate}
+                      endVal={customEndDate} setEndVal={setCustomEndDate}
+                      selectedMonth={selectedMonth} handleMonthChange={handleMonthChange}
+                    />
+
+                    {/* Filters Section */}
+                    {userRole !== 'Agent' && (
+                      <div className="bg-slate-800 rounded-xl shadow-sm border border-slate-600 p-4">
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                          <input
+                            type="text"
+                            placeholder="Search agent, customer, phone..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                          <select value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="All">All Teams</option>
+                            {teams.map(t => <option key={t} value={t}>{t}</option>)}
+                          </select>
+                          <select value={centerFilter} onChange={(e) => setCenterFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="All">All Centers</option>
+                            {centers.map(c => <option key={c} value={c}>{c}</option>)}
+                          </select>
+                          <select value={salesStatusFilter} onChange={(e) => setSalesStatusFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="All">All Dispositions</option>
+                            <optgroup label="Success">
+                              <option value="HW- Xfer">HW- Xfer</option>
+                              <option value="HW-IBXfer">HW-IBXfer</option>
+                              <option value="HW-Xfer-CDR">HW-Xfer-CDR</option>
+                            </optgroup>
+                            <optgroup label="Unsuccessful">
+                              <option value="Unsuccessful">Unsuccessful</option>
+                              <option value="DNC">DNC</option>
+                              <option value="DNQ">DNQ</option>
+                              <option value="DNQ-Webform">DNQ-Webform</option>
+                              <option value="Review Pending">Review Pending</option>
+                            </optgroup>
+                          </select>
                         </div>
-                      )}
+                      </div>
+                    )}
 
-                      {['Admin', 'SuperAdmin', 'QA', 'HR', 'IT'].includes(userRole) && (
-                        <div className="flex items-center gap-3">
-                          <button
-                            onClick={() => setShowMgmtFine(true)} // Opens NEW Modal
-                            className="flex items-center gap-2 bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-lg shadow-red-900/20"
-                          >
-                            <Plus className="w-4 h-4" /> Add Fine
-                          </button>
-                        </div>
-                      )}
+                    {/* DATA TABLE (FULL COLUMNS & EDITABLE) */}
+                    <div className="bg-slate-800/80 rounded-xl border border-slate-600 overflow-auto max-h-[70vh]">
+                      <table className="w-full min-w-max border-collapse">
+                        <thead className="sticky top-0 z-20">
+                          <tr className="bg-slate-900 border-b border-slate-700">
+                            <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">No.</th>
+                            <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Timestamp</th>
+                            <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase sticky left-0 bg-slate-900">Agent Name</th>
+                            <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Customer Name</th>
 
-                      {/* BUTTON: EDIT DAY ATTENDANCE (NEW) */}
-                      {['Admin', 'SuperAdmin', 'IT'].includes(userRole) && (
-                        <button
-                          onClick={() => setShowMgmtAttendanceModal(true)}
-                          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-lg shadow-blue-900/20"
-                        >
-                          <Calendar className="w-4 h-4" /> Edit Day Attendance
-                        </button>
-                      )}
+                            {/* [FIX] Show Phone Header ONLY for Admin/SuperAdmin/QA */}
+                            {['Admin', 'SuperAdmin', 'QA'].includes(userRole) && (
+                              <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Phone Number</th>
+                            )}
+
+                            <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">State</th>
+                            <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Zip</th>
+                            <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Address</th>
+                            <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase text-center">Campaign</th>
+                            <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Center</th>
+                            <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Team Lead</th>
+                            <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Comments</th>
+                            <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">List ID</th>
+                            <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase min-w-[150px]">Disposition</th>
+                            <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Duration</th>
+                            <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Xfer Time</th>
+                            <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Xfer Attempts</th>
+                            <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase min-w-[250px]">Feedback (Before)</th>
+                            <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Feedback (After)</th>
+                            <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Grading</th>
+                            <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Dock Details</th>
+                            <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Dock Reason</th> {/* NEW HEADER */}
+                            <th className="text-left py-4 px-3 text-xs font-bold text-slate-400 uppercase">Evaluator</th>
+                            {(userRole === 'Admin' || userRole === 'QA' || userRole === 'SuperAdmin') && <th className="text-center py-4 px-3 text-xs font-bold text-slate-400 uppercase">Actions</th>}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-700">
+                          {filteredSales.map((sale, idx) => {
+                            const disp = sale.disposition;
+                            let rowColor = "hover:bg-slate-700";
+                            if (['HW- Xfer', 'HW-IBXfer', 'HW-Xfer-CDR'].includes(disp)) rowColor = "bg-green-900/10 hover:bg-green-900/20";
+                            else if (['DNC', 'DNQ', 'DNQ-Dup', 'DNQ-Webform'].includes(disp)) rowColor = "bg-red-900/10 hover:bg-red-900/20";
+                            else if (['Review Pending', 'Pending Review'].includes(disp)) rowColor = "bg-orange-900/10 hover:bg-orange-900/20";
+                            else if (disp === 'Unsuccessful') rowColor = "bg-yellow-900/10 hover:bg-yellow-900/20";
+
+                            return (
+                              <tr key={sale.id} className={`${rowColor} transition-colors`}>
+                                <td className="py-3 px-3 text-xs text-slate-400 font-mono">{idx + 1}</td>
+                                <td className="py-3 px-3 text-xs text-slate-300 whitespace-nowrap">{sale.timestamp || sale.date}</td>
+                                <td className="py-3 px-3 text-xs font-bold text-white sticky left-0 bg-inherit">{sale.agentName}</td>
+                                <td className="py-3 px-3 text-xs text-slate-300">{sale.customerName || '-'}</td>
+                                {['Admin', 'SuperAdmin', 'QA'].includes(userRole) && (
+                                  <td className="py-3 px-3 text-xs text-slate-300 font-mono">{sale.phoneNumber || '-'}</td>
+                                )}
+                                <td className="py-3 px-3 text-xs text-slate-400">{sale.state || '-'}</td>
+                                <td className="py-3 px-3 text-xs text-slate-400">{sale.zip || '-'}</td>
+                                <td className="py-3 px-3 text-xs text-slate-400">{sale.address || '-'}</td>
+                                <td className="py-3 px-3 text-xs text-slate-400 text-center">{sale.campaignType || '-'}</td>
+                                <td className="py-3 px-3 text-xs text-slate-400">{sale.center || '-'}</td>
+                                <td className="py-3 px-3 text-xs text-slate-400">{sale.teamLead || '-'}</td>
+                                <td className="py-3 px-3 text-xs text-slate-400">{sale.comments || '-'}</td>
+                                <td className="py-3 px-3 text-xs text-slate-400">{sale.listId || '-'}</td>
+
+                                {/* Editable Disposition */}
+                                <td className="py-3 px-3">
+                                  {(userRole === 'Admin' || userRole === 'QA') ? (
+                                    <select
+                                      value={sale.disposition || ''}
+                                      onChange={(e) => updateSaleDisposition(sale.id, e.target.value)}
+                                      className="w-full px-2 py-1 text-xs bg-slate-900 text-white border border-slate-600 rounded outline-none focus:ring-1 focus:ring-blue-500"
+                                    >
+                                      <option value="">Select...</option>
+                                      <optgroup label="Success">
+                                        <option value="HW- Xfer">HW- Xfer</option>
+                                        <option value="HW-IBXfer">HW-IBXfer</option>
+                                        <option value="HW-Xfer-CDR">HW-Xfer-CDR</option>
+                                      </optgroup>
+                                      <optgroup label="Unsuccessful">
+                                        <option value="Unsuccessful">Unsuccessful</option>
+                                        <option value="HUWT">HUWT</option>
+                                        <option value="DNC">DNC</option>
+                                        <option value="DNQ">DNQ</option>
+                                        <option value="DNQ-Dup">DNQ-Dup</option>
+                                        <option value="DNQ-Webform">DNQ-Webform</option>
+                                        <option value="Review Pending">Review Pending</option>
+                                      </optgroup>
+                                    </select>
+                                  ) : (
+                                    <span className={`text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wide
+                              ${['HW- Xfer', 'HW-IBXfer', 'HW-Xfer-CDR'].includes(sale.disposition) ? 'bg-green-500/20 text-green-400' :
+                                        ['Unsuccessful', 'HUWT'].includes(sale.disposition) ? 'bg-yellow-500/20 text-yellow-400' :
+                                          ['Review Pending', 'Pending Review'].includes(sale.disposition) ? 'bg-orange-500/20 text-orange-400' :
+                                            'bg-red-500/20 text-red-400'}`}>
+                                      {sale.disposition || '-'}
+                                    </span>
+                                  )}
+                                </td>
+
+                                {/* Editable Duration */}
+                                <td className="py-2 px-2">
+                                  {(userRole === 'Admin' || userRole === 'QA') ? (
+                                    <input
+                                      type="text"
+                                      // 1. Use defaultValue (Fast typing)
+                                      defaultValue={sale.duration || ''}
+
+                                      // 2. Save only when leaving the box
+                                      onBlur={(e) => {
+                                        if (e.target.value !== (sale.duration || '')) {
+                                          updateSaleField(sale.id, 'duration', e.target.value);
+                                        }
+                                      }}
+                                      // 3. Save on Enter
+                                      onKeyDown={(e) => e.key === 'Enter' && e.target.blur()}
+                                      className="w-full px-1 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded"
+                                    />
+                                  ) : (
+                                    <span className="text-xs text-slate-300">{sale.duration || '-'}</span>
+                                  )}
+                                </td>
+
+                                {/* Editable Xfer Time */}
+                                <td className="py-2 px-2">
+                                  {(userRole === 'Admin' || userRole === 'QA') ? (
+                                    <input
+                                      type="text"
+                                      defaultValue={sale.xferTime || ''}
+                                      onBlur={(e) => {
+                                        if (e.target.value !== (sale.xferTime || '')) {
+                                          updateSaleField(sale.id, 'xferTime', e.target.value);
+                                        }
+                                      }}
+                                      onKeyDown={(e) => e.key === 'Enter' && e.target.blur()}
+                                      className="w-full px-1 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded"
+                                    />
+                                  ) : (
+                                    <span className="text-xs text-slate-300">{sale.xferTime || '-'}</span>
+                                  )}
+                                </td>
+
+                                {/* Editable Xfer Attempts */}
+                                <td className="py-2 px-2">
+                                  {(userRole === 'Admin' || userRole === 'QA') ? (
+                                    <select value={sale.xferAttempts || ''} onChange={(e) => updateSaleField(sale.id, 'xferAttempts', e.target.value)} className="w-full px-1 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded">
+                                      <option value="">-</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option>
+                                    </select>
+                                  ) : (
+                                    <span className="text-xs text-slate-300">{sale.xferAttempts || '-'}</span>
+                                  )}
+                                </td>
+
+                                {/* Editable Feedback (Before) Paragraph Box */}
+                                <td className="py-3 px-3">
+                                  {(userRole === 'Admin' || userRole === 'QA') ? (
+                                    <textarea
+                                      // 1. Use defaultValue
+                                      defaultValue={sale.feedbackBeforeXfer || ''}
+
+                                      // 2. Save only when clicking away (Blur)
+                                      onBlur={(e) => {
+                                        // Only save if text actually changed
+                                        if (e.target.value !== (sale.feedbackBeforeXfer || '')) {
+                                          updateSaleField(sale.id, 'feedbackBeforeXfer', e.target.value);
+                                        }
+                                      }}
+                                      rows={3}
+                                      className="w-full min-w-[250px] px-2 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded resize-y placeholder-slate-500"
+                                    />
+                                  ) : (
+                                    <div className="text-xs text-slate-300 whitespace-pre-wrap min-w-[250px]">{sale.feedbackBeforeXfer || '-'}</div>
+                                  )}
+                                </td>
+
+                                {/* Editable Feedback (After) */}
+                                <td className="py-2 px-2">
+                                  {(userRole === 'Admin' || userRole === 'QA') ? (
+                                    <input
+                                      type="text"
+                                      defaultValue={sale.feedbackAfterXfer || ''}
+                                      onBlur={(e) => {
+                                        if (e.target.value !== (sale.feedbackAfterXfer || '')) {
+                                          updateSaleField(sale.id, 'feedbackAfterXfer', e.target.value);
+                                        }
+                                      }}
+                                      onKeyDown={(e) => e.key === 'Enter' && e.target.blur()}
+                                      className="w-full px-1 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded"
+                                    />
+                                  ) : (
+                                    <span className="text-xs text-slate-300">{sale.feedbackAfterXfer || '-'}</span>
+                                  )}
+                                </td>
+
+                                {/* Editable Grading */}
+                                <td className="py-3 px-3">
+                                  {(userRole === 'Admin' || userRole === 'QA') ? (
+                                    <select value={sale.grading || ''} onChange={(e) => updateSaleField(sale.id, 'grading', e.target.value)} className="w-full px-1 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded">
+                                      <option value="">-</option><option value="Good">Good</option><option value="Bad">Bad</option><option value="Worst">Worst</option>
+                                    </select>
+                                  ) : (
+                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${sale.grading === 'Good' ? 'bg-green-500/20 text-green-400' : sale.grading === 'Bad' ? 'bg-red-500/20 text-red-400' : 'text-slate-500'}`}>
+                                      {sale.grading || '-'}
+                                    </span>
+                                  )}
+                                </td>
+
+                                {/* Editable Dock Details (FINE AMOUNT) */}
+                                <td className="py-2 px-2">
+                                  <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    placeholder="Fine"
+                                    defaultValue={sale.dockDetails || ''}
+
+                                    // --- 1. RESTRICTION: Disable if not Admin/QA ---
+                                    disabled={!['Admin', 'QA', 'SuperAdmin'].includes(userRole)}
+
+                                    onInput={(e) => {
+                                      e.target.value = e.target.value.replace(/\D/g, '');
+                                    }}
+
+                                    onBlur={(e) => {
+                                      const val = e.target.value;
+                                      if (val !== sale.dockDetails) {
+                                        updateSaleField(sale.id, 'dockDetails', val);
+                                      }
+                                    }}
+
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.target.blur();
+                                      }
+                                    }}
+
+                                    // --- 2. STYLING: Dim text if disabled ---
+                                    className={`w-full px-1 py-1 text-xs border border-slate-600 rounded text-center font-mono outline-none transition-colors
+                              ${userRole !== 'Admin' && userRole !== 'QA'
+                                        ? 'bg-slate-800/50 text-slate-500 cursor-not-allowed' // Disabled Style
+                                        : 'bg-slate-700 text-white placeholder-slate-400 focus:ring-1 focus:ring-blue-500' // Enabled Style
+                                      }`}
+                                  />
+                                </td>
+
+                                {/* DOCK REASON (Fine Reason) */}
+                                <td className="py-2 px-2 align-middle">
+                                  <input
+                                    type="text"
+                                    placeholder="Reason..."
+                                    defaultValue={sale.dockReason || sale.dockreason || ''}
+
+                                    // --- 1. RESTRICTION: Disable if not Admin/QA ---
+                                    disabled={!['Admin', 'QA', 'SuperAdmin'].includes(userRole)}
+
+                                    onBlur={(e) => {
+                                      const val = e.target.value;
+                                      updateSaleField(sale.id, 'dockreason', val);
+                                    }}
+
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') e.target.blur();
+                                    }}
+
+                                    // --- 2. STYLING: Dim text if disabled ---
+                                    className={`w-full px-1 py-1 text-xs border border-slate-600 rounded text-left transition-colors
+                              ${userRole !== 'Admin' && userRole !== 'QA'
+                                        ? 'bg-slate-800/50 text-slate-500 cursor-not-allowed' // Disabled Style
+                                        : 'bg-slate-700 text-white focus:ring-1 focus:ring-blue-500' // Enabled Style
+                                      }`}
+                                  />
+                                </td>
+
+                                {/* Editable Evaluator */}
+                                <td className="py-2 px-2">
+                                  {(userRole === 'Admin' || userRole === 'QA') ? (
+                                    <select value={sale.evaluator || ''} onChange={(e) => updateSaleField(sale.id, 'evaluator', e.target.value)} className="w-full px-1 py-1 text-xs bg-slate-700 text-white border border-slate-600 rounded">
+                                      <option value="">-</option>
+                                      {evaluators.map(e => <option key={e} value={e}>{e}</option>)}
+                                    </select>
+                                  ) : (
+                                    <span className="text-xs text-slate-300">{sale.evaluator || '-'}</span>
+                                  )}
+                                </td>
+
+                                {(userRole === 'Admin' || userRole === 'QA') && (
+                                  <td className="py-3 px-3 text-center">
+                                    {/* [FIX] Added 'gap-2' here to separate the buttons */}
+                                    <div className="flex items-center justify-center gap-2">
+
+                                      {/* Edit Button */}
+                                      <button
+                                        onClick={() => setEditSale(sale)}
+                                        className="p-1.5 bg-blue-500/20 text-blue-400 rounded-lg hover:bg-blue-500/30 transition-colors"
+                                        title="Edit"
+                                      >
+                                        <Edit className="w-4 h-4" />
+                                      </button>
+
+                                      {/* Delete Button */}
+                                      <button
+                                        onClick={() => handleDeleteSale(sale.id)}
+                                        className="p-1.5 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors"
+                                        title="Delete"
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                      </button>
+
+                                    </div>
+                                  </td>
+                                )}
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
+                )}
 
-                  {/* --- [ADDED] FILTER BAR --- */}
-                  <div className="bg-slate-800 rounded-xl shadow-sm border border-slate-600 p-4">
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                      <input
-                        type="text"
-                        placeholder="Search employee..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                      <select value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
-                        <option value="All">All Teams</option>
-                        {teams.map(t => <option key={t} value={t}>{t}</option>)}
-                      </select>
-                      <select value={centerFilter} onChange={(e) => setCenterFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
-                        <option value="All">All Centers</option>
-                        {centers.map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
-                      <select value={agentStatusFilter} onChange={(e) => setAgentStatusFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
-                        <option value="All">All Status</option>
-                        <option value="Active">Active</option>
-                        <option value="Left">Left / Ex-Employees</option>
-                      </select>
-                    </div>
-                  </div>
+                {/* Sales matrix */}
 
-                  {/* --- LOGIC STARTS --- */}
-                  {(() => {
-                    // Helper: Format time to 12-hour
-                    const formatTo12Hour = (timeStr) => {
-                      if (!timeStr) return '';
-                      const [h, m] = timeStr.toString().split(':');
-                      if (!h || !m) return timeStr;
-                      let hours = parseInt(h);
-                      const ampm = hours >= 12 ? 'PM' : 'AM';
-                      hours = hours % 12;
-                      hours = hours ? hours : 12;
-                      return `${hours}:${m} ${ampm}`;
-                    };
+                {salesSubTab === 'matrix' && (
+                  <div className="space-y-6">
+                    <div className="flex justify-between items-center">
 
-                    // Helper: Calculate late status
-                    const getLateStatus = (timeStr) => {
-                      if (!timeStr) return { isLate: false, color: 'text-green-400' };
-                      const [h, m] = timeStr.toString().split(':').map(Number);
-                      let loginMins = h * 60 + m;
-                      if (h < 12) loginMins += 1440;
-                      const shiftStartMins = 19 * 60;
-                      const diff = loginMins - shiftStartMins;
-                      if (diff <= 0) return { isLate: false, color: 'text-green-400' };
-                      else if (diff <= 10) return { isLate: true, color: 'text-yellow-400 font-bold' };
-                      else return { isLate: true, color: 'text-red-500 font-bold' };
-                    };
+                      {/* [FIXED] Sales Matrix Header - Added 'w-full' */}
+                      <div className="w-full flex flex-col md:flex-row justify-between items-center gap-4 bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-sm mb-2">
 
-                    // [FIXED] Filter Logic using Search/Team/Center/Status
-                    const allManagementStaff = hrRecords
-                      .filter(emp => {
-                        // 1. Must NOT be an Agent
-                        const designation = (emp.designation || '').toLowerCase().trim();
-                        if (designation === 'agent') return false;
+                        {/* LEFT SIDE: Title & Subtitle */}
+                        <div>
+                          <h2 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
+                            Sales Performance Matrix
+                          </h2>
+                          <p className="text-slate-400 text-xs mt-0.5">
+                            Daily Breakdown for {selectedMonth}
+                          </p>
+                        </div>
 
-                        // 2. Search Filter
-                        const matchesSearch = !searchQuery || (emp.agent_name && emp.agent_name.toLowerCase().includes(searchQuery.toLowerCase()));
+                        {/* RIGHT SIDE: Cycle Dates & Buttons */}
+                        <div className="flex flex-col md:flex-row items-center gap-4">
 
-                        // 3. Team Filter
-                        const matchesTeam = teamFilter === 'All' || emp.team === teamFilter;
-
-                        // 4. Center Filter
-                        const matchesCenter = centerFilter === 'All' || emp.center === centerFilter;
-
-                        // 5. Status Filter (Allows seeing Left employees)
-                        const matchesStatus = agentStatusFilter === 'All' || emp.status === agentStatusFilter;
-
-                        return matchesSearch && matchesTeam && matchesCenter && matchesStatus;
-                      })
-                      .sort((a, b) => a.agent_name.localeCompare(b.agent_name));
-
-                    // Split by cycle type
-                    const agentCycleStaff = allManagementStaff.filter(emp =>
-                      (emp.payroll_cycle_type || '').toLowerCase().includes('agent')
-                    );
-
-                    const standardCycleStaff = allManagementStaff.filter(emp =>
-                      !(emp.payroll_cycle_type || '').toLowerCase().includes('agent')
-                    );
-
-                    // Reusable table renderer
-                    const renderAttendanceTable = (staff, cycleType, themeColor) => {
-                      if (staff.length === 0) return null;
-
-                      const { start, end } = cycleType === 'agent'
-                        ? getPayrollRange(selectedMonth)
-                        : getStandardMonthRange(selectedMonth);
-
-                      const dateArray = getDaysArray(start, end);
-
-                      return (
-                        <div className="bg-slate-900 rounded-xl border border-slate-700 shadow-2xl overflow-hidden flex flex-col max-h-[70vh] mb-8">
-                          <div className="p-4 bg-slate-800 border-b border-slate-700">
-                            <h3 className={`text-lg font-bold ${themeColor === 'orange' ? 'text-orange-400' : 'text-purple-400'}`}>
-                              {cycleType === 'agent' ? 'Agent Cycle (21st - 20th)' : 'Standard Month Cycle (1st - End of Month)'}
-                            </h3>
-                            <p className="text-xs text-slate-400 mt-1">
-                              Cycle: {start.toDateString()} - {end.toDateString()}
-                            </p>
+                          {/* Cycle Text */}
+                          <div className="text-xs text-slate-500 font-medium bg-slate-900/50 px-3 py-1.5 rounded border border-slate-700/50">
+                            Cycle: <span className="text-slate-300">{getPayrollRange(selectedMonth).start.toDateString()} - {getPayrollRange(selectedMonth).end.toDateString()}</span>
                           </div>
 
+                          {/* Action Buttons */}
+                          {['Admin', 'SuperAdmin', 'Finance'].includes(userRole) && (
+                            <div className="flex items-center gap-3">
+                              <button
+                                onClick={() => setShowAddBonus(true)}
+                                className="flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-all shadow-lg shadow-green-900/20"
+                              >
+                                <Plus className="w-4 h-4" /> Add Bonus
+                              </button>
+                              <button
+                                onClick={() => setShowAddFine(true)}
+                                className="flex items-center gap-2 bg-red-600 hover:bg-red-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-all shadow-lg shadow-red-900/20"
+                              >
+                                <Plus className="w-4 h-4" /> Add Fine
+                              </button>
+
+                            </div>
+                          )}
+
+                          {['Admin', 'SuperAdmin'].includes(userRole) && (
+                            <div className="flex items-center gap-3">
+
+                              {/* [FIX] Update onClick to initialize Temp State */}
+                              <button
+                                onClick={() => setShowGoalModal(true)}
+                                className="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-all border border-slate-600 shadow-sm"
+                                title="Configure Goal Rules"
+                              >
+                                <Settings className="w-4 h-4" />
+                              </button>
+
+                            </div>
+                          )}
+
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* --- FILTERS --- */}
+                    {userRole !== 'Agent' && (
+                      <div className="bg-slate-800 rounded-xl shadow-sm border border-slate-600 p-4">
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                          <input
+                            type="text"
+                            placeholder="Search agent name..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                          <select value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="All">All Teams</option>
+                            {teams.map(t => <option key={t} value={t}>{t}</option>)}
+                          </select>
+                          <select value={centerFilter} onChange={(e) => setCenterFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="All">All Centers</option>
+                            {centers.map(c => <option key={c} value={c}>{c}</option>)}
+                          </select>
+                          <select value={agentStatusFilter} onChange={(e) => setAgentStatusFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="All">All Status</option>
+                            <option value="Active">Active</option>
+                            <option value="Left">Left / Ex-Employees</option>
+                          </select>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* --- MATRIX LOGIC STARTS HERE --- */}
+                    {/* --- OPTIMIZED MATRIX LOGIC --- */}
+                    {/* --- OPTIMIZED MATRIX LOGIC --- */}
+                    {(() => {
+                      // 1. Prepare Dates
+                      const { start, end } = getPayrollRange(selectedMonth);
+                      const dateArray = getDaysArray(start, end);
+
+                      // 2. Filter Displayed Agents
+                      const displayedStats = monthlyStats.filter(stat => {
+                        const query = searchQuery.toLowerCase();
+                        const nameMatch = stat.name && stat.name.toLowerCase().includes(query);
+                        const phoneMatch = stat.phone && stat.phone.toString().includes(query);
+                        const matchesSearch = !searchQuery || nameMatch || phoneMatch;
+                        const matchesStatus = agentStatusFilter === 'All' || stat.status === agentStatusFilter;
+                        const matchesTeam = teamFilter === 'All' || stat.team === teamFilter;
+                        const matchesCenter = centerFilter === 'All' || stat.center === centerFilter;
+                        return matchesSearch && matchesStatus && matchesTeam && matchesCenter;
+                      });
+
+                      const uniqueTeams = [...new Set(displayedStats.map(s => s.team))].filter(Boolean).sort();
+
+                      // =================================================================================
+                      // ⚡ PERFORMANCE OPTIMIZATION: Pre-Calculate Data Maps
+                      // =================================================================================
+
+                      // Maps to store counts: Map[Key][Date] = Count
+                      const agentDailyMap = {};
+                      const teamDailyMap = {};
+                      const grandDailyMap = {};
+
+                      // Maps to store Weekly Totals (Key = Friday Date String)
+                      const agentWeeklyMap = {};
+                      const teamWeeklyMap = {};
+                      const grandWeeklyMap = {};
+
+                      // A. Single Loop through Sales to fill Daily Maps
+                      sales.forEach(s => {
+                        if (s.status === 'Sale' || ['HW- Xfer', 'HW-IBXfer', 'HW-Xfer-CDR'].includes(s.disposition)) {
+                          const sDate = s.date; // "YYYY-MM-DD"
+
+                          // [FIX 1] Normalize Sales Agent Name (Lowercase + Trim)
+                          // This ensures "Asif Ali" matches "asif ali"
+                          const sAgentRaw = s.agentName?.toString() || '';
+                          const sAgentClean = sAgentRaw.trim().toLowerCase();
+
+                          // [FIX 2] Find Agent using Case-Insensitive Match
+                          const agentStat = displayedStats.find(a => a.name.toLowerCase().trim() === sAgentClean);
+                          const sTeam = agentStat ? agentStat.team : null;
+
+                          if (!sDate) return;
+
+                          // Agent Count (Use Clean Name as Key)
+                          if (sAgentClean) {
+                            if (!agentDailyMap[sAgentClean]) agentDailyMap[sAgentClean] = {};
+                            agentDailyMap[sAgentClean][sDate] = (agentDailyMap[sAgentClean][sDate] || 0) + 1;
+                          }
+
+                          // Team Count
+                          if (sTeam) {
+                            if (!teamDailyMap[sTeam]) teamDailyMap[sTeam] = {};
+                            teamDailyMap[sTeam][sDate] = (teamDailyMap[sTeam][sDate] || 0) + 1;
+                          }
+
+                          // Grand Total Count (Only if agent is currently visible in filter)
+                          if (agentStat) {
+                            grandDailyMap[sDate] = (grandDailyMap[sDate] || 0) + 1;
+                          }
+                        }
+                      });
+
+                      // B. Calculate Weekly Summaries (Mon-Fri)
+                      dateArray.forEach(dateStr => {
+                        const d = new Date(dateStr);
+                        if (d.getDay() === 5) { // If Friday
+                          // Generate Mon-Fri dates for this week
+                          const weekDates = [];
+                          for (let i = 4; i >= 0; i--) {
+                            const past = new Date(d);
+                            past.setDate(d.getDate() - i);
+                            weekDates.push(past.toISOString().split('T')[0]);
+                          }
+
+                          // Agent Weekly Sums
+                          displayedStats.forEach(agent => {
+                            // [FIX 3] Use Lowercase Key for Lookup
+                            const agentKey = agent.name.toLowerCase().trim();
+                            const sum = weekDates.reduce((acc, currDate) => acc + (agentDailyMap[agentKey]?.[currDate] || 0), 0);
+                            if (!agentWeeklyMap[agentKey]) agentWeeklyMap[agentKey] = {};
+                            agentWeeklyMap[agentKey][dateStr] = sum;
+                          });
+
+                          // Team Weekly Sums
+                          uniqueTeams.forEach(team => {
+                            const sum = weekDates.reduce((acc, currDate) => acc + (teamDailyMap[team]?.[currDate] || 0), 0);
+                            if (!teamWeeklyMap[team]) teamWeeklyMap[team] = {};
+                            teamWeeklyMap[team][dateStr] = sum;
+                          });
+
+                          // Grand Weekly Sums
+                          const sum = weekDates.reduce((acc, currDate) => acc + (grandDailyMap[currDate] || 0), 0);
+                          grandWeeklyMap[dateStr] = sum;
+                        }
+                      });
+
+                      // =================================================================================
+                      // RENDER TABLE
+                      // =================================================================================
+
+                      return (
+                        <div className="bg-slate-900 rounded-xl border border-slate-700 shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
                           <div className="overflow-auto relative">
                             <table className="w-full text-slate-300 border-collapse table-fixed">
 
@@ -5011,213 +4485,250 @@ const getSmartWeeks = (cycleStartStr, cycleEndStr) => {
                               <thead className="sticky top-0 z-40 shadow-md">
                                 <tr className="bg-slate-950">
                                   <th className="p-3 text-center border-b border-r border-slate-800 sticky left-0 z-50 bg-slate-950 w-12">No.</th>
-                                  <th className="p-3 text-left border-b border-r border-slate-800 sticky left-12 z-50 bg-slate-950 w-44">Employee Name</th>
-                                  <th className="p-3 text-left border-b border-r border-slate-800 bg-slate-950 w-32">Designation</th>
+                                  <th className="p-3 text-left border-b border-r border-slate-800 sticky left-12 z-50 bg-slate-950 w-44">Agent Name</th>
 
-                                  {/* Attendance Metrics */}
-                                  <th className="p-2 text-center border-b border-slate-800 bg-green-900/20 text-green-400 text-[10px] font-bold w-10" title="Days Present">P</th>
-                                  <th className="p-2 text-center border-b border-slate-800 bg-yellow-900/20 text-yellow-400 text-[10px] font-bold w-10" title="Days Late">L</th>
-                                  <th className="p-2 text-center border-b border-r border-slate-800 bg-red-900/20 text-red-400 text-[10px] font-bold w-10" title="Days Absent">A</th>
+                                  <th className="p-2 text-center border-b border-r border-slate-800 bg-slate-900 text-slate-300 text-[10px] font-bold w-20">SALARY</th>
+                                  <th className="p-2 text-center border-b border-r border-slate-800 bg-slate-900 text-slate-300 text-[10px] font-bold w-16">GOAL</th>
 
-                                  {/* Date Columns */}
+                                  <th className="p-2 text-center border-b border-r border-slate-800 bg-blue-900/40 text-blue-400 text-[10px] font-bold w-14">LPD</th>
+                                  <th className="p-2 text-center border-b border-r border-slate-800 bg-slate-800 text-slate-400 text-[10px] w-12">DAYS</th>
+                                  <th className="p-2 text-center border-b border-slate-800 bg-red-900/20 text-red-400 text-[10px] w-10">0s</th>
+                                  <th className="p-2 text-center border-b border-slate-800 bg-orange-900/20 text-orange-400 text-[10px] w-10">1s</th>
+                                  <th className="p-2 text-center border-b border-slate-800 bg-yellow-900/20 text-yellow-400 text-[10px] w-10">2s</th>
+                                  <th className="p-2 text-center border-b border-r border-slate-800 bg-green-900/20 text-green-400 text-[10px] w-10">3s</th>
+
                                   {dateArray.map(dateStr => {
                                     const d = new Date(dateStr);
                                     const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+                                    const isFriday = d.getDay() === 5;
+
                                     return (
-                                      <th key={dateStr} className={`p-2 text-center border-b border-slate-800 w-16 ${isWeekend ? 'bg-slate-800' : 'bg-slate-900'}`}>
-                                        <div className="text-[10px] text-slate-500 uppercase">{d.toLocaleDateString('en-US', { weekday: 'narrow' })}</div>
-                                        <div className={`text-xs font-bold ${isWeekend ? 'text-slate-500' : 'text-white'}`}>{d.getDate()}</div>
-                                      </th>
+                                      <React.Fragment key={dateStr}>
+                                        <th className={`p-2 text-center border-b border-slate-800 w-10 ${isWeekend ? 'bg-slate-800' : 'bg-slate-900'}`}>
+                                          <div className="text-[10px] text-slate-500 uppercase">{d.toLocaleDateString('en-US', { weekday: 'narrow' })}</div>
+                                          <div className={`text-xs font-bold ${isWeekend ? 'text-slate-500' : 'text-white'}`}>{d.getDate()}</div>
+                                        </th>
+
+                                        {/* [INJECT] Weekly Total Header */}
+                                        {isFriday && (
+                                          <th className="p-1 text-center border-b border-r border-l border-slate-800 bg-emerald-950/50 w-10">
+                                            <div className="text-[8px] font-bold text-emerald-500 uppercase">WK</div>
+                                            <div className="text-[9px] font-black text-emerald-400">TOT</div>
+                                          </th>
+                                        )}
+                                      </React.Fragment>
                                     );
                                   })}
-
-                                  {/* Summary Column */}
-                                  <th className="p-3 text-center bg-slate-950 border-b border-l border-slate-800 font-bold text-yellow-400 sticky right-0 z-40 w-20 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
-                                    LATE %
-                                  </th>
+                                  <th className="p-3 text-center bg-slate-950 border-b border-l border-slate-800 font-bold text-green-400 sticky right-0 z-40 w-16 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">TOTAL</th>
                                 </tr>
                               </thead>
 
+                              {/* --- BODY --- */}
                               <tbody className="divide-y divide-slate-800">
-                                {staff.map((emp, idx) => {
-                                  const joinDate = emp.joining_date ? new Date(emp.joining_date) : null;
-                                  if (joinDate) joinDate.setHours(0, 0, 0, 0);
+                                {uniqueTeams.map(teamName => {
+                                  const teamAgents = displayedStats
+                                    .filter(s => s.team === teamName)
+                                    .sort((a, b) => a.name.localeCompare(b.name));
 
-                                  const empRecords = attendance.filter(a => a.agentName === emp.agent_name);
-                                  // 1. Calculate Scanned Presents
-                                  const scannedPresent = empRecords.filter(a => a.status === 'Present').length;
+                                  if (teamAgents.length === 0) return null;
 
-                                  // 2. [NEW] Calculate Valid Holidays (Add to Present count)
-                                  let validHolidays = 0;
-                                  holidays.forEach(h => {
-                                    // Must be in current view
-                                    if (!dateArray.includes(h.date)) return;
-
-                                    // Must be after joining
-                                    const hDate = new Date(h.date); hDate.setHours(0, 0, 0, 0);
-                                    if (joinDate && hDate < joinDate) return;
-
-                                    // Don't double count if they actually worked on the holiday
-                                    const hasScan = empRecords.some(a => a.date === h.date && a.status === 'Present');
-                                    if (!hasScan) {
-                                      validHolidays++;
-                                    }
-                                  });
-
-                                  // [FINAL P COUNT] = Scans + Holidays
-                                  const presentCount = scannedPresent + validHolidays;
-
-                                  const lateCount = empRecords.filter(a =>
-                                    a.status === 'Present' && getLateStatus(a.loginTime).isLate
-                                  ).length;
-
-                                  let absentCount = 0;
-                                  dateArray.forEach(dStr => {
-                                    const dObj = new Date(dStr);
-                                    dObj.setHours(0, 0, 0, 0);
-                                    if (dObj.getDay() === 0 || dObj.getDay() === 6) return;
-                                    if (dObj > new Date()) return;
-                                    if (joinDate && dObj < joinDate) return;
-
-                                    // [FIX] Check for Holiday to prevent false Absents
-                                    const isHoliday = holidays.some(h => h.date === dStr);
-                                    const hasRec = empRecords.some(a => a.date === dStr);
-
-                                    if (!hasRec) {
-                                      // Only increment Absent if it is NOT a holiday
-                                      if (!isHoliday) absentCount++;
-                                    }
-                                    else if (empRecords.find(a => a.date === dStr).status === 'Absent') {
-                                      absentCount++;
-                                    }
-                                  });
-
-                                  const latePercentage = presentCount > 0 ? Math.round((lateCount / presentCount) * 100) : 0;
-
-                                  // Visual for Left Employees
-                                  const isLeft = emp.status === 'Left';
-                                  const rowClass = isLeft ? 'hover:bg-red-900/10' : `hover:${themeColor === 'orange' ? 'bg-orange-900/10' : 'bg-purple-900/10'}`;
-                                  const nameClass = isLeft ? 'text-red-400' : 'text-slate-200';
+                                  const teamTotalSales = teamAgents.reduce((sum, a) => sum + a.totalSales, 0);
+                                  const teamTotalDays = teamAgents.reduce((sum, a) => sum + a.dialingDays, 0);
+                                  const teamAvgLPD = teamTotalDays > 0 ? (teamTotalSales / teamTotalDays).toFixed(2) : "0.00";
 
                                   return (
-                                    <tr key={emp.id} className={`${rowClass} transition-colors group`}>
-                                      <td className="p-2 text-center border-r border-slate-800 bg-slate-900 text-slate-600 font-mono text-[10px] sticky left-0 z-10 group-hover:text-white">{idx + 1}</td>
-                                      <td className="p-2 px-3 font-medium border-r border-slate-800 bg-slate-900 sticky left-12 z-10 truncate text-xs">
-                                        <div className={nameClass}>{emp.agent_name}</div>
-                                        {isLeft && <div className="text-[9px] text-red-500 font-mono mt-0.5">LEFT</div>}
-                                      </td>
-                                      <td className="p-2 px-3 text-xs text-slate-400 border-r border-slate-800 bg-slate-900">{emp.designation}</td>
+                                    <React.Fragment key={teamName}>
+                                      {/* Team Header Row */}
+                                      <tr className="bg-slate-800/80 sticky top-[53px] z-30">
+                                        <td colSpan={2} className="p-2 px-4 border-r border-slate-700 font-black text-blue-400 uppercase tracking-widest text-sm sticky left-0 z-30 bg-slate-800">
+                                          {teamName}
+                                        </td>
+                                        <td className="p-1 border-r border-slate-800 bg-slate-800"></td>
+                                        <td className="p-1 border-r border-slate-800 bg-slate-800"></td>
+                                        <td className="text-center font-bold text-blue-300 border-r border-slate-700 bg-slate-800">{teamAvgLPD}</td>
+                                        <td className="text-center text-slate-400 border-r border-slate-700 bg-slate-800">{teamTotalDays}</td>
+                                        <td colSpan={4} className="bg-slate-800 border-r border-slate-700"></td>
 
-                                      <td className="p-1 text-center border-b border-slate-800 text-green-400 font-bold text-[10px]">{presentCount}</td>
-                                      <td className="p-1 text-center border-b border-slate-800 text-yellow-400 font-bold text-[10px]">{lateCount}</td>
-                                      <td className="p-1 text-center border-b border-r border-slate-800 text-red-400 font-bold text-[10px]">{absentCount}</td>
+                                        {dateArray.map(d => {
+                                          // ⚡ FAST LOOKUP: O(1) Access
+                                          const dailyCount = teamDailyMap[teamName]?.[d] || 0;
+                                          const isFriday = new Date(d).getDay() === 5;
 
-                                      {/* Daily Cells */}
-                                      {dateArray.map(dateStr => {
-                                        const currentDate = new Date(dateStr);
-                                        currentDate.setHours(0, 0, 0, 0);
-                                        const isWeekend = currentDate.getDay() === 0 || currentDate.getDay() === 6;
-                                        const isBeforeJoining = joinDate && currentDate < joinDate;
+                                          return (
+                                            <React.Fragment key={d}>
+                                              <td className={`text-center text-[10px] border-b border-slate-700 font-bold ${dailyCount > 0 ? 'text-blue-300 bg-blue-500/10' : 'text-slate-600 bg-slate-800/30'}`}>
+                                                {dailyCount > 0 ? dailyCount : '-'}
+                                              </td>
 
-                                        // 1. [NEW] Check for Holiday
-                                        const isHoliday = holidays.some(h => h.date === dateStr);
+                                              {/* [INJECT] Team Weekly Total */}
+                                              {isFriday && (
+                                                <td className="text-center text-[10px] border-b border-r border-l border-slate-700 font-black text-emerald-400 bg-emerald-900/20">
+                                                  {teamWeeklyMap[teamName]?.[d] || 0}
+                                                </td>
+                                              )}
+                                            </React.Fragment>
+                                          );
+                                        })}
 
-                                        // Keep your existing record lookup
-                                        const record = empRecords.find(a => a.date === dateStr);
+                                        <td className="text-center font-black text-green-400 sticky right-0 z-30 bg-slate-800 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
+                                          {teamTotalSales}
+                                        </td>
+                                      </tr>
 
-                                        let cellContent = '-';
-                                        let cellClass = 'text-slate-700';
+                                      {/* Agent Rows */}
+                                      {teamAgents.map((stat, idx) => {
+                                        // Join Date Logic
+                                        const hrRec = hrRecords.find(h => h.cnic === stat.cnic) || {};
+                                        const joinDateStr = hrRec.joining_date || stat.activeDate || stat.active_date;
+                                        const joinDate = joinDateStr ? new Date(joinDateStr) : null;
+                                        if (joinDate) joinDate.setHours(0, 0, 0, 0);
 
-                                        if (isBeforeJoining) {
-                                          cellContent = '•';
-                                          cellClass = 'text-slate-800';
-                                        }
-                                        // 2. If Present -> Show Time (Prioritize working over holiday)
-                                        else if (record && record.status === 'Present') {
-                                          cellContent = formatTo12Hour(record.loginTime) || 'OK';
-                                          const status = getLateStatus(record.loginTime);
-                                          if (status.isLate) {
-                                            cellClass = `bg-slate-800/50 ${status.color} font-mono text-[10px]`;
-                                          } else {
-                                            cellClass = 'text-green-400 font-mono text-[10px]';
-                                          }
-                                        }
-                                        // 3. [NEW] If Holiday -> Show 'H' (Purple)
-                                        else if (isHoliday) {
-                                          cellContent = 'H';
-                                          cellClass = 'bg-purple-900/40 text-purple-400 font-bold';
-                                        }
-                                        // 4. If Explicit Absent
-                                        else if (record && record.status === 'Absent') {
-                                          cellContent = 'A';
-                                          cellClass = 'bg-red-500/10 text-red-500 font-bold';
-                                        }
-                                        // 5. Default (Weekend or Implicit Absent)
-                                        else {
-                                          if (isWeekend) {
-                                            cellContent = '';
-                                            cellClass = 'bg-slate-800/30';
-                                          } else if (currentDate <= new Date()) {
-                                            // Only mark 'A' if it was NOT a holiday
-                                            cellContent = 'A';
-                                            cellClass = 'text-red-500/50 font-bold';
-                                          }
-                                        }
+                                        // Status Logic
+                                        const isInactive = stat.status !== 'Active' && stat.status !== 'Promoted';
+                                        const rowClass = isInactive ? 'bg-red-900/10 hover:bg-red-900/20' : 'hover:bg-blue-900/10';
+                                        const nameClass = isInactive ? 'text-red-400' : 'text-slate-200';
+
+                                        // [FIX 4] Create Normalized Key for this Row (Lowercase)
+                                        const agentKey = stat.name.toLowerCase().trim();
 
                                         return (
-                                          <td key={dateStr} className={`p-1 text-center border-b border-slate-800 text-[11px] ${cellClass}`}>
-                                            {cellContent}
-                                          </td>
+                                          <tr key={stat.id} className={`${rowClass} transition-colors group`}>
+                                            <td className="p-2 text-center border-r border-slate-800 bg-slate-900 text-slate-600 font-mono text-[10px] sticky left-0 z-10 group-hover:text-white">{idx + 1}</td>
+
+                                            <td className="p-2 px-3 font-medium border-r border-slate-800 bg-slate-900 sticky left-12 z-10 truncate text-xs">
+                                              <div className={nameClass}>{stat.name}</div>
+                                              {stat.isPromoted ? (
+                                                <div className="text-[9px] text-red-500 font-bold uppercase mt-0.5 tracking-tighter">
+                                                  PROMOTED TO {stat.designation.toUpperCase()}
+                                                </div>
+                                              ) : (
+                                                isInactive && (
+                                                  <div className="text-[9px] text-red-500/80 font-mono mt-0.5 font-bold">
+                                                    {stat.status.toUpperCase()}: {stat.leftDate || 'N/A'}
+                                                  </div>
+                                                )
+                                              )}
+                                            </td>
+
+                                            <td className="p-1 text-center border-r border-slate-800 text-slate-300 font-mono text-[10px]">
+                                              {stat.baseSalary ? parseInt(stat.baseSalary).toLocaleString() : '0'}
+                                            </td>
+                                            <td className="p-1 text-center border-r border-slate-800 text-slate-300 font-mono text-[10px]">
+                                              {stat.target || '-'}
+                                            </td>
+
+                                            <td className="p-1 text-center border-r border-slate-800 bg-blue-500/5 font-bold text-blue-400 text-xs">{stat.lpd}</td>
+                                            <td className="p-1 text-center border-r border-slate-800 text-slate-400 text-[10px]">{stat.dialingDays}</td>
+                                            <td className="p-1 text-center text-red-400 text-[10px]">{stat.daysOn0}</td>
+                                            <td className="p-1 text-center text-orange-300/80 text-[10px]">{stat.daysOn1}</td>
+                                            <td className="p-1 text-center text-yellow-300/80 text-[10px]">{stat.daysOn2}</td>
+                                            <td className="p-1 text-center border-r border-slate-800 text-green-400 font-bold text-[10px]">{stat.daysOn3}</td>
+
+                                            {/* Agent Date Loop */}
+                                            {dateArray.map(dateStr => {
+                                              const currentDate = new Date(dateStr);
+                                              currentDate.setHours(0, 0, 0, 0);
+                                              const isFriday = currentDate.getDay() === 5;
+
+                                              // [FIX 5] Case-Insensitive Lookup (O(1))
+                                              const dailyCount = agentDailyMap[agentKey]?.[dateStr] || 0;
+
+                                              // Checks
+                                              const isHoliday = holidays.some(h => h.date === dateStr);
+                                              const isBeforeJoining = joinDate && currentDate < joinDate;
+
+                                              // [FIX 6] Case-Insensitive Attendance Check
+                                              const hasAttendance = attendance.some(a =>
+                                                a.date === dateStr &&
+                                                a.agentName?.toString().trim().toLowerCase() === agentKey &&
+                                                (a.status === 'Present' || a.status === 'Late')
+                                              );
+                                              const isWorkingDay = grandDailyMap[dateStr] > 0; // Check if *anyone* made a sale
+
+                                              let cellContent = '-';
+                                              let cellClass = 'text-slate-700';
+
+                                              if (dailyCount > 0) {
+                                                cellContent = dailyCount;
+                                                cellClass = 'bg-green-500/10 text-green-400 font-bold';
+                                              } else if (isHoliday) {
+                                                cellContent = 'H';
+                                                cellClass = 'text-purple-400 font-bold bg-purple-900/20';
+                                              } else if (!isBeforeJoining) {
+                                                if (hasAttendance) {
+                                                  cellContent = '0';
+                                                  cellClass = 'bg-red-500/20 text-red-400 font-bold';
+                                                } else if (isWorkingDay) {
+                                                  cellContent = 'A';
+                                                  cellClass = 'text-red-500 font-black';
+                                                }
+                                              }
+
+                                              return (
+                                                <React.Fragment key={dateStr}>
+                                                  <td className={`p-1 text-center border-b border-slate-800 text-[11px] ${cellClass}`}>
+                                                    {cellContent}
+                                                  </td>
+
+                                                  {/* [INJECT] Agent Weekly Total */}
+                                                  {isFriday && (
+                                                    <td className="p-1 text-center border-b border-r border-l border-slate-800 text-[11px] font-bold text-emerald-300 bg-emerald-900/10">
+                                                      {agentWeeklyMap[agentKey]?.[dateStr] || 0}
+                                                    </td>
+                                                  )}
+                                                </React.Fragment>
+                                              );
+                                            })}
+
+                                            <td className="p-2 text-center font-bold text-white bg-slate-900 sticky right-0 z-10 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
+                                              {stat.totalSales}
+                                            </td>
+                                          </tr>
                                         );
                                       })}
-
-                                      {/* Row Summary */}
-                                      <td className={`p-2 text-center font-bold sticky right-0 z-10 bg-slate-900 shadow-[-4px_0_10px_rgba(0,0,0,0.5)] ${latePercentage > 20 ? 'text-red-400' : 'text-slate-400'}`}>
-                                        {latePercentage}%
-                                      </td>
-                                    </tr>
+                                    </React.Fragment>
                                   );
                                 })}
                               </tbody>
 
-                              {/* --- FOOTER --- */}
+                              {/* --- FOOTER (Grand Totals) --- */}
                               <tfoot className="sticky bottom-0 z-40 shadow-[0_-4px_10px_rgba(0,0,0,0.5)]">
-                                <tr className={`bg-slate-950 border-t-2 ${themeColor === 'orange' ? 'border-orange-500' : 'border-purple-500'} font-black text-white`}>
-                                  <td colSpan={3} className="p-3 text-left sticky left-0 bg-slate-950 z-50 uppercase tracking-tighter">Total</td>
+                                <tr className="bg-slate-950 border-t-2 border-blue-500 font-black text-white">
+                                  <td colSpan={2} className="p-3 text-left sticky left-0 bg-slate-950 z-50 uppercase tracking-tighter">Grand Total</td>
+                                  <td className="bg-slate-950"></td>
+                                  <td className="bg-slate-950"></td>
+                                  <td className="text-center text-blue-400 bg-slate-950">
+                                    {(displayedStats.reduce((s, a) => s + a.totalSales, 0) / (displayedStats.reduce((s, a) => s + a.dialingDays, 0) || 1)).toFixed(2)}
+                                  </td>
+                                  <td className="text-center text-slate-400 bg-slate-950">
+                                    {displayedStats.reduce((s, a) => s + a.dialingDays, 0)}
+                                  </td>
+                                  <td colSpan={4} className="bg-slate-950"></td>
 
-                                  {/* Grand Metrics */}
-                                  <td className="text-center text-green-400 bg-slate-950 text-[10px]">
-                                    {attendance.filter(a =>
-                                      a.status === 'Present' &&
-                                      staff.some(s => s.agent_name === a.agentName)
-                                    ).length}
-                                  </td>
-                                  <td className="text-center text-yellow-400 bg-slate-950 text-[10px]">
-                                    {attendance.filter(a =>
-                                      a.late === true &&
-                                      staff.some(s => s.agent_name === a.agentName)
-                                    ).length}
-                                  </td>
-                                  <td className="text-center text-red-400 bg-slate-950 border-r border-slate-800 text-[10px]">
-                                    -
-                                  </td>
-
-                                  {/* Daily Grand Totals */}
+                                  {/* Footer Date Loop */}
                                   {dateArray.map(d => {
-                                    const dailyTotal = attendance.filter(a =>
-                                      a.date === d &&
-                                      a.status === 'Present' &&
-                                      staff.some(s => s.agent_name === a.agentName)
-                                    ).length;
+                                    // ⚡ FAST LOOKUP
+                                    const dailyGrandTotal = grandDailyMap[d] || 0;
+                                    const isFriday = new Date(d).getDay() === 5;
+
                                     return (
-                                      <td key={d} className="bg-slate-950 text-center text-[10px] font-bold text-slate-500">
-                                        {dailyTotal > 0 ? dailyTotal : ''}
-                                      </td>
+                                      <React.Fragment key={d}>
+                                        <td className="bg-slate-950 text-center text-xs font-bold text-green-400">
+                                          {dailyGrandTotal > 0 ? dailyGrandTotal : ''}
+                                        </td>
+
+                                        {/* [INJECT] Grand Weekly Total */}
+                                        {isFriday && (
+                                          <td className="bg-slate-950 border-r border-l border-slate-800 text-center text-xs font-black text-emerald-400">
+                                            {grandWeeklyMap[d] || 0}
+                                          </td>
+                                        )}
+                                      </React.Fragment>
                                     );
                                   })}
 
-                                  <td className={`p-3 text-center ${themeColor === 'orange' ? 'text-orange-400' : 'text-purple-400'} text-lg sticky right-0 bg-slate-950 z-50 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]`}>
-                                    -
+                                  <td className="p-3 text-center text-green-400 text-lg sticky right-0 bg-slate-950 z-50 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
+                                    {displayedStats.reduce((s, a) => s + a.totalSales, 0)}
                                   </td>
                                 </tr>
                               </tfoot>
@@ -5225,28 +4736,544 @@ const getSmartWeeks = (cycleStartStr, cycleEndStr) => {
                           </div>
                         </div>
                       );
-                    };
+                    })()}
+                  </div>
+                )}
 
-                    return (
-                      <>
-                        {/* Table 1: Agent Cycle (21st - 20th) */}
-                        {renderAttendanceTable(agentCycleStaff, 'agent', 'orange')}
-
-                        {/* Table 2: Standard Cycle (1st - End of Month) */}
-                        {renderAttendanceTable(standardCycleStaff, 'standard', 'purple')}
-                      </>
-                    );
-                  })()}
-                </div>
               </div>
             )}
-          </div>
-        )}
 
-        {/* =====================================================================================
-            TAB: ATTENDANCE Tab (Fixed Time Calculation Logic)
-           ===================================================================================== */}
-        {activeTab === 'attendance' && (
+            {/* Management TAB */}
+            {activeTab === 'management' && (
+
+              <div className="space-y-6">
+                <SubTabBar
+                  tabs={[
+                    // [FIX] Show Payroll tab ONLY to HR, Admin, SuperAdmin
+                    ...(['HR', 'Admin', 'SuperAdmin', 'Finance'].includes(userRole) ? [{ id: 'payroll', label: 'Payroll' }] : []),
+
+                    ...(userRole !== 'Finance' ? [{ id: 'attendance', label: 'Attendance' }] : [])
+                  ]}
+                  activeSubTab={managementSubTab}
+                  setActiveSubTab={setManagementSubTab}
+                />
+
+                {managementSubTab === 'payroll' && ['HR', 'Admin', 'SuperAdmin', 'Finance'].includes(userRole) && (
+                  <div className="space-y-8 animate-in fade-in duration-300">
+
+                    {/* Header Section */}
+                    <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-slate-800 p-6 rounded-2xl border border-slate-700">
+                      <div>
+                        <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
+                          Management Payroll
+                        </h2>
+                        <p className="text-slate-400 text-sm mt-1">
+                          Payroll Breakdown for {selectedMonth}
+                        </p>
+                      </div>
+
+                      {/* [NEW] Action Buttons for Management */}
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => setShowMgmtBonus(true)} // Opens NEW Modal
+                          className="flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-lg shadow-green-900/20"
+                        >
+                          <Plus className="w-4 h-4" /> Add Bonus
+                        </button>
+                        <button
+                          onClick={() => setShowMgmtFine(true)} // Opens NEW Modal
+                          className="flex items-center gap-2 bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-lg shadow-red-900/20"
+                        >
+                          <Plus className="w-4 h-4" /> Add Fine
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* --- RENDER TABLES --- */}
+                    {(() => {
+                      const { standard, agentCycle } = managementPayrollStats;
+
+                      const renderPayrollTable = (title, staffList, badgeColor) => (
+                        <div className="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden mb-8 shadow-xl">
+                          <div className="p-5 border-b border-slate-700 flex items-center gap-3">
+                            <h3 className="text-lg font-semibold text-white">{title}</h3>
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${badgeColor} text-white font-medium`}>
+                              {staffList.length} Employees
+                            </span>
+                          </div>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                              <thead>
+                                <tr className="bg-slate-900 text-slate-400 text-xs uppercase tracking-wider">
+                                  <th className="p-4 font-medium border-b border-slate-700">Employee</th>
+                                  <th className="p-4 font-medium border-b border-slate-700">Designation</th>
+                                  <th className="p-4 font-medium border-b border-slate-700 text-center">Attendance</th>
+                                  <th className="p-4 font-medium border-b border-slate-700 text-right">Base Salary</th>
+                                  <th className="p-4 font-medium border-b border-slate-700 text-right">Earned Base</th>
+                                  <th className="p-4 font-medium border-b border-slate-700 text-right text-green-400">Bonus</th>
+                                  <th className="p-4 font-medium border-b border-slate-700 text-right text-red-400">Fine</th>
+                                  <th className="p-4 font-medium border-b border-slate-700 text-right text-blue-400">Net Salary</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-700">
+                                {staffList.length > 0 ? (
+                                  staffList.map((emp, idx) => (
+                                    <tr key={idx} className="hover:bg-slate-700/20 text-sm group">
+                                      <td className="p-4 font-medium text-white">{emp.agent_name}</td>
+                                      <td className="p-4 text-slate-400">{emp.designation}</td>
+                                      <td className="p-4 text-center">
+                                        <span className={`px-2 py-1 rounded text-xs font-mono ${emp.daysPresent === emp.totalWorkingDays ? 'bg-green-500/20 text-green-400' : 'bg-slate-700 text-blue-300'}`}>
+                                          {emp.daysPresent} / {emp.totalWorkingDays}
+                                        </span>
+                                      </td>
+                                      <td className="p-4 text-right text-slate-400 font-mono text-xs">
+                                        {emp.baseSalary?.toLocaleString()}
+                                      </td>
+                                      <td className="p-4 text-right text-slate-200 font-mono">
+                                        {emp.earnedBase?.toLocaleString()}
+                                      </td>
+                                      <td className="p-4 text-right font-mono text-green-400">
+                                        {emp.totalBonus > 0 ? `+${emp.totalBonus.toLocaleString()}` : '-'}
+                                      </td>
+                                      <td className="p-4 text-right font-mono text-red-400">
+                                        {emp.totalFine > 0 ? `-${emp.totalFine.toLocaleString()}` : '-'}
+                                      </td>
+                                      <td className="p-4 text-right font-bold font-mono text-blue-300 text-base bg-slate-800/30">
+                                        {emp.netSalary?.toLocaleString()} <span className="text-xs text-slate-500">PKR</span>
+                                      </td>
+                                    </tr>
+                                  ))
+                                ) : (
+                                  <tr>
+                                    <td colSpan="8" className="p-8 text-center text-slate-500 italic">
+                                      No employees found in this cycle.
+                                    </td>
+                                  </tr>
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      );
+
+                      return (
+                        <>
+                          {renderPayrollTable("Standard Month Cycle (1st - 30th)", standard, "bg-purple-500/20 border border-purple-500/30")}
+                          {renderPayrollTable("Agent Cycle (21st - 20th)", agentCycle, "bg-orange-500/20 border border-orange-500/30")}
+                        </>
+                      );
+                    })()}
+                  </div>
+                )}
+
+                {managementSubTab === 'attendance' && (
+                  <div className="space-y-6">
+                    {/* =====================================================================================
+    TAB: MANAGEMENT ATTENDANCE MATRIX (HR/QA/TL/IT Staff)
+   ===================================================================================== */}
+
+                    <div className="space-y-6">
+
+                      {/* [FIXED] Attendance Matrix Header & Action Bar */}
+                      <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-slate-800 p-6 rounded-2xl border border-slate-700 mb-6">
+                        <div>
+                          <h2 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+                            Management Attendance Matrix
+                          </h2>
+                          <p className="text-slate-400 text-sm mt-1">
+                            Login Times • Late Tracking • Non-Agent Staff for {selectedMonth}
+                          </p>
+                        </div>
+
+                        {/* RIGHT SIDE: Cycle Dates & Buttons */}
+                        <div className="flex flex-col md:flex-row items-center gap-4">
+
+                          {/* Cycle Text */}
+                          <div className="text-xs text-slate-500 font-medium bg-slate-900/50 px-3 py-1.5 rounded border border-slate-700/50">
+                            Cycle: <span className="text-slate-300">{getPayrollRange(selectedMonth).start.toDateString()} - {getPayrollRange(selectedMonth).end.toDateString()}</span>
+                          </div>
+
+                          {['Admin', 'SuperAdmin', 'QA', 'Finance'].includes(userRole) && (
+                            <div className="flex items-center gap-3">
+                              <button
+                                onClick={() => setShowMgmtBonus(true)} // [FIXED] Matches your existing state
+                                className="flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-lg shadow-green-900/20"
+                              >
+                                <Plus className="w-4 h-4" /> Add Bonus
+                              </button>
+                            </div>
+                          )}
+
+                          {['Admin', 'SuperAdmin', 'QA', 'HR', 'IT'].includes(userRole) && (
+                            <div className="flex items-center gap-3">
+                              <button
+                                onClick={() => setShowMgmtFine(true)} // Opens NEW Modal
+                                className="flex items-center gap-2 bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-lg shadow-red-900/20"
+                              >
+                                <Plus className="w-4 h-4" /> Add Fine
+                              </button>
+                            </div>
+                          )}
+
+                          {/* BUTTON: EDIT DAY ATTENDANCE (NEW) */}
+                          {['Admin', 'SuperAdmin', 'IT'].includes(userRole) && (
+                            <button
+                              onClick={() => setShowMgmtAttendanceModal(true)}
+                              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-lg shadow-blue-900/20"
+                            >
+                              <Calendar className="w-4 h-4" /> Edit Day Attendance
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* --- [ADDED] FILTER BAR --- */}
+                      <div className="bg-slate-800 rounded-xl shadow-sm border border-slate-600 p-4">
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                          <input
+                            type="text"
+                            placeholder="Search employee..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                          <select value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="All">All Teams</option>
+                            {teams.map(t => <option key={t} value={t}>{t}</option>)}
+                          </select>
+                          <select value={centerFilter} onChange={(e) => setCenterFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="All">All Centers</option>
+                            {centers.map(c => <option key={c} value={c}>{c}</option>)}
+                          </select>
+                          <select value={agentStatusFilter} onChange={(e) => setAgentStatusFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="All">All Status</option>
+                            <option value="Active">Active</option>
+                            <option value="Left">Left / Ex-Employees</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* --- LOGIC STARTS --- */}
+                      {(() => {
+                        // Helper: Format time to 12-hour
+                        const formatTo12Hour = (timeStr) => {
+                          if (!timeStr) return '';
+                          const [h, m] = timeStr.toString().split(':');
+                          if (!h || !m) return timeStr;
+                          let hours = parseInt(h);
+                          const ampm = hours >= 12 ? 'PM' : 'AM';
+                          hours = hours % 12;
+                          hours = hours ? hours : 12;
+                          return `${hours}:${m} ${ampm}`;
+                        };
+
+                        // Helper: Calculate late status
+                        const getLateStatus = (timeStr) => {
+                          if (!timeStr) return { isLate: false, color: 'text-green-400' };
+                          const [h, m] = timeStr.toString().split(':').map(Number);
+                          let loginMins = h * 60 + m;
+                          if (h < 12) loginMins += 1440;
+                          const shiftStartMins = 19 * 60;
+                          const diff = loginMins - shiftStartMins;
+                          if (diff <= 0) return { isLate: false, color: 'text-green-400' };
+                          else if (diff <= 10) return { isLate: true, color: 'text-yellow-400 font-bold' };
+                          else return { isLate: true, color: 'text-red-500 font-bold' };
+                        };
+
+                        // [FIXED] Filter Logic using Search/Team/Center/Status
+                        const allManagementStaff = hrRecords
+                          .filter(emp => {
+                            // 1. Must NOT be an Agent
+                            const designation = (emp.designation || '').toLowerCase().trim();
+                            if (designation === 'agent') return false;
+
+                            // 2. Search Filter
+                            const matchesSearch = !searchQuery || (emp.agent_name && emp.agent_name.toLowerCase().includes(searchQuery.toLowerCase()));
+
+                            // 3. Team Filter
+                            const matchesTeam = teamFilter === 'All' || emp.team === teamFilter;
+
+                            // 4. Center Filter
+                            const matchesCenter = centerFilter === 'All' || emp.center === centerFilter;
+
+                            // 5. Status Filter (Allows seeing Left employees)
+                            const matchesStatus = agentStatusFilter === 'All' || emp.status === agentStatusFilter;
+
+                            return matchesSearch && matchesTeam && matchesCenter && matchesStatus;
+                          })
+                          .sort((a, b) => a.agent_name.localeCompare(b.agent_name));
+
+                        // Split by cycle type
+                        const agentCycleStaff = allManagementStaff.filter(emp =>
+                          (emp.payroll_cycle_type || '').toLowerCase().includes('agent')
+                        );
+
+                        const standardCycleStaff = allManagementStaff.filter(emp =>
+                          !(emp.payroll_cycle_type || '').toLowerCase().includes('agent')
+                        );
+
+                        // Reusable table renderer
+                        const renderAttendanceTable = (staff, cycleType, themeColor) => {
+                          if (staff.length === 0) return null;
+
+                          const { start, end } = cycleType === 'agent'
+                            ? getPayrollRange(selectedMonth)
+                            : getStandardMonthRange(selectedMonth);
+
+                          const dateArray = getDaysArray(start, end);
+
+                          return (
+                            <div className="bg-slate-900 rounded-xl border border-slate-700 shadow-2xl overflow-hidden flex flex-col max-h-[70vh] mb-8">
+                              <div className="p-4 bg-slate-800 border-b border-slate-700">
+                                <h3 className={`text-lg font-bold ${themeColor === 'orange' ? 'text-orange-400' : 'text-purple-400'}`}>
+                                  {cycleType === 'agent' ? 'Agent Cycle (21st - 20th)' : 'Standard Month Cycle (1st - End of Month)'}
+                                </h3>
+                                <p className="text-xs text-slate-400 mt-1">
+                                  Cycle: {start.toDateString()} - {end.toDateString()}
+                                </p>
+                              </div>
+
+                              <div className="overflow-auto relative">
+                                <table className="w-full text-slate-300 border-collapse table-fixed">
+
+                                  {/* --- HEADER --- */}
+                                  <thead className="sticky top-0 z-40 shadow-md">
+                                    <tr className="bg-slate-950">
+                                      <th className="p-3 text-center border-b border-r border-slate-800 sticky left-0 z-50 bg-slate-950 w-12">No.</th>
+                                      <th className="p-3 text-left border-b border-r border-slate-800 sticky left-12 z-50 bg-slate-950 w-44">Employee Name</th>
+                                      <th className="p-3 text-left border-b border-r border-slate-800 bg-slate-950 w-32">Designation</th>
+
+                                      {/* Attendance Metrics */}
+                                      <th className="p-2 text-center border-b border-slate-800 bg-green-900/20 text-green-400 text-[10px] font-bold w-10" title="Days Present">P</th>
+                                      <th className="p-2 text-center border-b border-slate-800 bg-yellow-900/20 text-yellow-400 text-[10px] font-bold w-10" title="Days Late">L</th>
+                                      <th className="p-2 text-center border-b border-r border-slate-800 bg-red-900/20 text-red-400 text-[10px] font-bold w-10" title="Days Absent">A</th>
+
+                                      {/* Date Columns */}
+                                      {dateArray.map(dateStr => {
+                                        const d = new Date(dateStr);
+                                        const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+                                        return (
+                                          <th key={dateStr} className={`p-2 text-center border-b border-slate-800 w-16 ${isWeekend ? 'bg-slate-800' : 'bg-slate-900'}`}>
+                                            <div className="text-[10px] text-slate-500 uppercase">{d.toLocaleDateString('en-US', { weekday: 'narrow' })}</div>
+                                            <div className={`text-xs font-bold ${isWeekend ? 'text-slate-500' : 'text-white'}`}>{d.getDate()}</div>
+                                          </th>
+                                        );
+                                      })}
+
+                                      {/* Summary Column */}
+                                      <th className="p-3 text-center bg-slate-950 border-b border-l border-slate-800 font-bold text-yellow-400 sticky right-0 z-40 w-20 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">
+                                        LATE %
+                                      </th>
+                                    </tr>
+                                  </thead>
+
+                                  <tbody className="divide-y divide-slate-800">
+                                    {staff.map((emp, idx) => {
+                                      const joinDate = emp.joining_date ? new Date(emp.joining_date) : null;
+                                      if (joinDate) joinDate.setHours(0, 0, 0, 0);
+
+                                      const empRecords = attendance.filter(a => a.agentName === emp.agent_name);
+                                      // 1. Calculate Scanned Presents
+                                      const scannedPresent = empRecords.filter(a => a.status === 'Present').length;
+
+                                      // 2. [NEW] Calculate Valid Holidays (Add to Present count)
+                                      let validHolidays = 0;
+                                      holidays.forEach(h => {
+                                        // Must be in current view
+                                        if (!dateArray.includes(h.date)) return;
+
+                                        // Must be after joining
+                                        const hDate = new Date(h.date); hDate.setHours(0, 0, 0, 0);
+                                        if (joinDate && hDate < joinDate) return;
+
+                                        // Don't double count if they actually worked on the holiday
+                                        const hasScan = empRecords.some(a => a.date === h.date && a.status === 'Present');
+                                        if (!hasScan) {
+                                          validHolidays++;
+                                        }
+                                      });
+
+                                      // [FINAL P COUNT] = Scans + Holidays
+                                      const presentCount = scannedPresent + validHolidays;
+
+                                      const lateCount = empRecords.filter(a =>
+                                        a.status === 'Present' && getLateStatus(a.loginTime).isLate
+                                      ).length;
+
+                                      let absentCount = 0;
+                                      dateArray.forEach(dStr => {
+                                        const dObj = new Date(dStr);
+                                        dObj.setHours(0, 0, 0, 0);
+                                        if (dObj.getDay() === 0 || dObj.getDay() === 6) return;
+                                        if (dObj > new Date()) return;
+                                        if (joinDate && dObj < joinDate) return;
+
+                                        // [FIX] Check for Holiday to prevent false Absents
+                                        const isHoliday = holidays.some(h => h.date === dStr);
+                                        const hasRec = empRecords.some(a => a.date === dStr);
+
+                                        if (!hasRec) {
+                                          // Only increment Absent if it is NOT a holiday
+                                          if (!isHoliday) absentCount++;
+                                        }
+                                        else if (empRecords.find(a => a.date === dStr).status === 'Absent') {
+                                          absentCount++;
+                                        }
+                                      });
+
+                                      const latePercentage = presentCount > 0 ? Math.round((lateCount / presentCount) * 100) : 0;
+
+                                      // Visual for Left Employees
+                                      const isLeft = emp.status === 'Left';
+                                      const rowClass = isLeft ? 'hover:bg-red-900/10' : `hover:${themeColor === 'orange' ? 'bg-orange-900/10' : 'bg-purple-900/10'}`;
+                                      const nameClass = isLeft ? 'text-red-400' : 'text-slate-200';
+
+                                      return (
+                                        <tr key={emp.id} className={`${rowClass} transition-colors group`}>
+                                          <td className="p-2 text-center border-r border-slate-800 bg-slate-900 text-slate-600 font-mono text-[10px] sticky left-0 z-10 group-hover:text-white">{idx + 1}</td>
+                                          <td className="p-2 px-3 font-medium border-r border-slate-800 bg-slate-900 sticky left-12 z-10 truncate text-xs">
+                                            <div className={nameClass}>{emp.agent_name}</div>
+                                            {isLeft && <div className="text-[9px] text-red-500 font-mono mt-0.5">LEFT</div>}
+                                          </td>
+                                          <td className="p-2 px-3 text-xs text-slate-400 border-r border-slate-800 bg-slate-900">{emp.designation}</td>
+
+                                          <td className="p-1 text-center border-b border-slate-800 text-green-400 font-bold text-[10px]">{presentCount}</td>
+                                          <td className="p-1 text-center border-b border-slate-800 text-yellow-400 font-bold text-[10px]">{lateCount}</td>
+                                          <td className="p-1 text-center border-b border-r border-slate-800 text-red-400 font-bold text-[10px]">{absentCount}</td>
+
+                                          {/* Daily Cells */}
+                                          {dateArray.map(dateStr => {
+                                            const currentDate = new Date(dateStr);
+                                            currentDate.setHours(0, 0, 0, 0);
+                                            const isWeekend = currentDate.getDay() === 0 || currentDate.getDay() === 6;
+                                            const isBeforeJoining = joinDate && currentDate < joinDate;
+
+                                            // 1. [NEW] Check for Holiday
+                                            const isHoliday = holidays.some(h => h.date === dateStr);
+
+                                            // Keep your existing record lookup
+                                            const record = empRecords.find(a => a.date === dateStr);
+
+                                            let cellContent = '-';
+                                            let cellClass = 'text-slate-700';
+
+                                            if (isBeforeJoining) {
+                                              cellContent = '•';
+                                              cellClass = 'text-slate-800';
+                                            }
+                                            // 2. If Present -> Show Time (Prioritize working over holiday)
+                                            else if (record && record.status === 'Present') {
+                                              cellContent = formatTo12Hour(record.loginTime) || 'OK';
+                                              const status = getLateStatus(record.loginTime);
+                                              if (status.isLate) {
+                                                cellClass = `bg-slate-800/50 ${status.color} font-mono text-[10px]`;
+                                              } else {
+                                                cellClass = 'text-green-400 font-mono text-[10px]';
+                                              }
+                                            }
+                                            // 3. [NEW] If Holiday -> Show 'H' (Purple)
+                                            else if (isHoliday) {
+                                              cellContent = 'H';
+                                              cellClass = 'bg-purple-900/40 text-purple-400 font-bold';
+                                            }
+                                            // 4. If Explicit Absent
+                                            else if (record && record.status === 'Absent') {
+                                              cellContent = 'A';
+                                              cellClass = 'bg-red-500/10 text-red-500 font-bold';
+                                            }
+                                            // 5. Default (Weekend or Implicit Absent)
+                                            else {
+                                              if (isWeekend) {
+                                                cellContent = '';
+                                                cellClass = 'bg-slate-800/30';
+                                              } else if (currentDate <= new Date()) {
+                                                // Only mark 'A' if it was NOT a holiday
+                                                cellContent = 'A';
+                                                cellClass = 'text-red-500/50 font-bold';
+                                              }
+                                            }
+
+                                            return (
+                                              <td key={dateStr} className={`p-1 text-center border-b border-slate-800 text-[11px] ${cellClass}`}>
+                                                {cellContent}
+                                              </td>
+                                            );
+                                          })}
+
+                                          {/* Row Summary */}
+                                          <td className={`p-2 text-center font-bold sticky right-0 z-10 bg-slate-900 shadow-[-4px_0_10px_rgba(0,0,0,0.5)] ${latePercentage > 20 ? 'text-red-400' : 'text-slate-400'}`}>
+                                            {latePercentage}%
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+
+                                  {/* --- FOOTER --- */}
+                                  <tfoot className="sticky bottom-0 z-40 shadow-[0_-4px_10px_rgba(0,0,0,0.5)]">
+                                    <tr className={`bg-slate-950 border-t-2 ${themeColor === 'orange' ? 'border-orange-500' : 'border-purple-500'} font-black text-white`}>
+                                      <td colSpan={3} className="p-3 text-left sticky left-0 bg-slate-950 z-50 uppercase tracking-tighter">Total</td>
+
+                                      {/* Grand Metrics */}
+                                      <td className="text-center text-green-400 bg-slate-950 text-[10px]">
+                                        {attendance.filter(a =>
+                                          a.status === 'Present' &&
+                                          staff.some(s => s.agent_name === a.agentName)
+                                        ).length}
+                                      </td>
+                                      <td className="text-center text-yellow-400 bg-slate-950 text-[10px]">
+                                        {attendance.filter(a =>
+                                          a.late === true &&
+                                          staff.some(s => s.agent_name === a.agentName)
+                                        ).length}
+                                      </td>
+                                      <td className="text-center text-red-400 bg-slate-950 border-r border-slate-800 text-[10px]">
+                                        -
+                                      </td>
+
+                                      {/* Daily Grand Totals */}
+                                      {dateArray.map(d => {
+                                        const dailyTotal = attendance.filter(a =>
+                                          a.date === d &&
+                                          a.status === 'Present' &&
+                                          staff.some(s => s.agent_name === a.agentName)
+                                        ).length;
+                                        return (
+                                          <td key={d} className="bg-slate-950 text-center text-[10px] font-bold text-slate-500">
+                                            {dailyTotal > 0 ? dailyTotal : ''}
+                                          </td>
+                                        );
+                                      })}
+
+                                      <td className={`p-3 text-center ${themeColor === 'orange' ? 'text-orange-400' : 'text-purple-400'} text-lg sticky right-0 bg-slate-950 z-50 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]`}>
+                                        -
+                                      </td>
+                                    </tr>
+                                  </tfoot>
+                                </table>
+                              </div>
+                            </div>
+                          );
+                        };
+
+                        return (
+                          <>
+                            {/* Table 1: Agent Cycle (21st - 20th) */}
+                            {renderAttendanceTable(agentCycleStaff, 'agent', 'orange')}
+
+                            {/* Table 2: Standard Cycle (1st - End of Month) */}
+                            {renderAttendanceTable(standardCycleStaff, 'standard', 'purple')}
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Attendance TAB */}
+            {activeTab === 'attendance' && (
               <div className="space-y-6">
 
                 {/* Header */}
@@ -5749,274 +5776,274 @@ const getSmartWeeks = (cycleStartStr, cycleEndStr) => {
               </div>
             )}
 
-        {/* --- FINES TAB (Modern Premium UI) --- */}
-        {activeTab === 'fines' && (
-          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {/* Fines TAB */}
+            {activeTab === 'fines' && (
+              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
 
-            {/* Header Section */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-900/50 p-6 rounded-2xl border border-slate-700/50 backdrop-blur-sm">
-              <div>
-                <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-                  <span className="bg-clip-text text-transparent bg-gradient-to-r from-red-400 to-orange-500">
-                    Fines & Penalties
-                  </span>
-                </h2>
-                <p className="text-slate-400 text-sm mt-1">Manage disciplinary actions and financial deductions.</p>
-              </div>
+                {/* Header Section */}
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-900/50 p-6 rounded-2xl border border-slate-700/50 backdrop-blur-sm">
+                  <div>
+                    <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                      <span className="bg-clip-text text-transparent bg-gradient-to-r from-red-400 to-orange-500">
+                        Fines & Penalties
+                      </span>
+                    </h2>
+                    <p className="text-slate-400 text-sm mt-1">Manage disciplinary actions and financial deductions.</p>
+                  </div>
 
-              <div className="flex gap-3">
-                {/* Add Fine Button */}
-                <button
-                  onClick={() => setShowAddFine(true)}
-                  className="flex items-center gap-2 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-red-900/20 transition-all hover:scale-[1.02] border border-white/10"
-                >
-                  <Plus className="w-4 h-4" /> Add Fine
-                </button>
-              </div>
-            </div>
+                  <div className="flex gap-3">
+                    {/* Add Fine Button */}
+                    <button
+                      onClick={() => setShowAddFine(true)}
+                      className="flex items-center gap-2 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-red-900/20 transition-all hover:scale-[1.02] border border-white/10"
+                    >
+                      <Plus className="w-4 h-4" /> Add Fine
+                    </button>
+                  </div>
+                </div>
 
-            {/* Search Bar */}
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                <Search className="h-5 w-5 text-slate-500" />
-              </div>
-              <input
-                type="text"
-                placeholder="Search fines by agent name or reason..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-11 pr-4 py-3 bg-slate-900/80 border border-slate-700 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500 transition-all shadow-sm"
-              />
-            </div>
+                {/* Search Bar */}
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <Search className="h-5 w-5 text-slate-500" />
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Search fines by agent name or reason..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-11 pr-4 py-3 bg-slate-900/80 border border-slate-700 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500 transition-all shadow-sm"
+                  />
+                </div>
 
-            {/* Table Container */}
-            <div className="bg-slate-900/80 rounded-2xl shadow-xl border border-slate-700/50 overflow-hidden backdrop-blur-md">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-slate-950/50 border-b border-slate-700">
-                    <tr>
-                      <th className="text-left py-4 px-6 text-xs font-bold text-slate-400 uppercase tracking-wider">No.</th>
-                      <th className="text-left py-4 px-6 text-xs font-bold text-slate-400 uppercase tracking-wider">Date Issued</th>
-                      <th className="text-left py-4 px-6 text-xs font-bold text-slate-400 uppercase tracking-wider">Agent</th>
-                      <th className="text-left py-4 px-6 text-xs font-bold text-slate-400 uppercase tracking-wider">Reason / Violation</th>
-                      <th className="text-right py-4 px-6 text-xs font-bold text-slate-400 uppercase tracking-wider">Deduction</th>
-                      <th className="text-center py-4 px-6 text-xs font-bold text-slate-400 uppercase tracking-wider">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800/50">
-                    {filteredFines.length > 0 ? (
-                      filteredFines.map((fine, idx) => (
-                        <tr key={fine.id} className="group hover:bg-slate-800/40 transition-colors duration-200">
-                          <td className="py-4 px-6 text-slate-500 font-mono text-sm">{idx + 1}</td>
-
-                          <td className="py-4 px-6 text-slate-400 text-sm">
-                            <span className="flex items-center gap-2">
-                              <Calendar className="w-3.5 h-3.5 text-slate-500" />
-                              {fine.date}
-                            </span>
-                          </td>
-
-                          <td className="py-4 px-6">
-                            <span className="font-semibold text-white block">{fine.agentName}</span>
-                          </td>
-
-                          <td className="py-4 px-6 text-slate-300 text-sm">
-                            {fine.reason}
-                          </td>
-
-                          <td className="py-4 px-6 text-right">
-                            <span className="font-mono font-bold text-red-400 text-sm bg-red-500/5 px-2 py-1 rounded border border-red-500/10">
-                              - {fine.amount ? fine.amount.toLocaleString() : '0'} PKR
-                            </span>
-                          </td>
-
-                          <td className="py-4 px-6">
-                            <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <button
-                                onClick={() => { setEditingFine(fine); setShowAddFine(true); }}
-                                className="p-2 bg-blue-500/10 text-blue-400 rounded-lg hover:bg-blue-500 hover:text-white transition-all shadow-sm border border-transparent hover:border-blue-400"
-                                title="Edit"
-                              >
-                                <Pencil className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteFine(fine.id)}
-                                className="p-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500 hover:text-white transition-all shadow-sm border border-transparent hover:border-red-400"
-                                title="Delete"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </td>
+                {/* Table Container */}
+                <div className="bg-slate-900/80 rounded-2xl shadow-xl border border-slate-700/50 overflow-hidden backdrop-blur-md">
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-slate-950/50 border-b border-slate-700">
+                        <tr>
+                          <th className="text-left py-4 px-6 text-xs font-bold text-slate-400 uppercase tracking-wider">No.</th>
+                          <th className="text-left py-4 px-6 text-xs font-bold text-slate-400 uppercase tracking-wider">Date Issued</th>
+                          <th className="text-left py-4 px-6 text-xs font-bold text-slate-400 uppercase tracking-wider">Agent</th>
+                          <th className="text-left py-4 px-6 text-xs font-bold text-slate-400 uppercase tracking-wider">Reason / Violation</th>
+                          <th className="text-right py-4 px-6 text-xs font-bold text-slate-400 uppercase tracking-wider">Deduction</th>
+                          <th className="text-center py-4 px-6 text-xs font-bold text-slate-400 uppercase tracking-wider">Actions</th>
                         </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan="6" className="py-12 text-center text-slate-500">
-                          <div className="flex flex-col items-center justify-center gap-3">
-                            <div className="p-4 bg-slate-800/50 rounded-full">
-                              <AlertCircle className="w-8 h-8 text-slate-600" />
-                            </div>
-                            <p>No fines found for this search.</p>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/50">
+                        {filteredFines.length > 0 ? (
+                          filteredFines.map((fine, idx) => (
+                            <tr key={fine.id} className="group hover:bg-slate-800/40 transition-colors duration-200">
+                              <td className="py-4 px-6 text-slate-500 font-mono text-sm">{idx + 1}</td>
 
-        {/* --- BONUSES TAB (Modern UI) --- */}
-        {activeTab === 'bonuses' && (
-          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                              <td className="py-4 px-6 text-slate-400 text-sm">
+                                <span className="flex items-center gap-2">
+                                  <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                                  {fine.date}
+                                </span>
+                              </td>
 
-            {/* Header Section */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-900/50 p-6 rounded-2xl border border-slate-700/50 backdrop-blur-sm">
-              <div>
-                <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-                  <span className="bg-clip-text text-transparent bg-gradient-to-r from-green-400 to-emerald-500">
-                    Bonuses Management
-                  </span>
-                </h2>
-                <p className="text-slate-400 text-sm mt-1">Manage agent incentives, automated tiers, and manual rewards.</p>
-              </div>
+                              <td className="py-4 px-6">
+                                <span className="font-semibold text-white block">{fine.agentName}</span>
+                              </td>
 
-              <div className="flex gap-3">
-                {/* Auto Gen Button */}
-                <button
-                  onClick={handleGenerateAutoBonuses}
-                  className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-purple-900/20 transition-all hover:scale-[1.02] border border-white/10"
-                >
-                  <TrendingUp className="w-4 h-4" /> Auto-Gen Bonuses
-                </button>
+                              <td className="py-4 px-6 text-slate-300 text-sm">
+                                {fine.reason}
+                              </td>
 
-                {/* Add Bonus Button */}
-                <button
-                  onClick={() => setShowAddBonus(true)}
-                  className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-green-900/20 transition-all hover:scale-[1.02] border border-white/10"
-                >
-                  <Plus className="w-4 h-4" /> Add Bonus
-                </button>
-              </div>
-            </div>
+                              <td className="py-4 px-6 text-right">
+                                <span className="font-mono font-bold text-red-400 text-sm bg-red-500/5 px-2 py-1 rounded border border-red-500/10">
+                                  - {fine.amount ? fine.amount.toLocaleString() : '0'} PKR
+                                </span>
+                              </td>
 
-            {/* Search Bar */}
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                <Search className="h-5 w-5 text-slate-500" />
-              </div>
-              <input
-                type="text"
-                placeholder="Search bonuses by agent name..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-11 pr-4 py-3 bg-slate-900/80 border border-slate-700 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all shadow-sm"
-              />
-            </div>
-
-            {/* Table Container */}
-            <div className="bg-slate-900/80 rounded-2xl shadow-xl border border-slate-700/50 overflow-hidden backdrop-blur-md">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-slate-950/50 border-b border-slate-700">
-                    <tr>
-                      <th className="text-left py-4 px-6 text-xs font-bold text-slate-400 uppercase tracking-wider">No.</th>
-                      <th className="text-left py-4 px-6 text-xs font-bold text-slate-400 uppercase tracking-wider">Agent</th>
-                      <th className="text-left py-4 px-6 text-xs font-bold text-slate-400 uppercase tracking-wider">Month</th>
-                      <th className="text-left py-4 px-6 text-xs font-bold text-slate-400 uppercase tracking-wider">Type</th>
-                      <th className="text-left py-4 px-6 text-xs font-bold text-slate-400 uppercase tracking-wider">Reason / Details</th>
-                      <th className="text-right py-4 px-6 text-xs font-bold text-slate-400 uppercase tracking-wider">Amount</th>
-                      <th className="text-center py-4 px-6 text-xs font-bold text-slate-400 uppercase tracking-wider">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800/50">
-                    {filteredBonuses.length > 0 ? (
-                      filteredBonuses.map((bonus, idx) => (
-                        <tr key={bonus.id} className="group hover:bg-slate-800/40 transition-colors duration-200">
-                          <td className="py-4 px-6 text-slate-500 font-mono text-sm">{idx + 1}</td>
-
-                          <td className="py-4 px-6">
-                            <span className="font-semibold text-white block">{bonus.agentName}</span>
-                          </td>
-
-                          <td className="py-4 px-6 text-slate-400 text-sm">
-                            {bonus.month || bonus.period}
-                          </td>
-
-                          <td className="py-4 px-6">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold border ${bonus.type === 'Weekly'
-                                ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
-                                : bonus.type === 'Performance'
-                                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                                  : 'bg-purple-500/10 text-purple-400 border-purple-500/20'
-                              }`}>
-                              {bonus.type || 'Bonus'}
-                            </span>
-                          </td>
-
-                          <td className="py-4 px-6 text-slate-300 text-sm">
-                            {bonus.reason ? (
-                              <span className="line-clamp-1">{bonus.reason}</span>
-                            ) : (
-                              <div className="flex gap-3 text-xs text-slate-500">
-                                <span>Target: <span className="text-slate-300">{bonus.targetSales || '-'}</span></span>
-                                <span>Actual: <span className="text-slate-300">{bonus.actualSales || '-'}</span></span>
+                              <td className="py-4 px-6">
+                                <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button
+                                    onClick={() => { setEditingFine(fine); setShowAddFine(true); }}
+                                    className="p-2 bg-blue-500/10 text-blue-400 rounded-lg hover:bg-blue-500 hover:text-white transition-all shadow-sm border border-transparent hover:border-blue-400"
+                                    title="Edit"
+                                  >
+                                    <Pencil className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteFine(fine.id)}
+                                    className="p-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500 hover:text-white transition-all shadow-sm border border-transparent hover:border-red-400"
+                                    title="Delete"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan="6" className="py-12 text-center text-slate-500">
+                              <div className="flex flex-col items-center justify-center gap-3">
+                                <div className="p-4 bg-slate-800/50 rounded-full">
+                                  <AlertCircle className="w-8 h-8 text-slate-600" />
+                                </div>
+                                <p>No fines found for this search.</p>
                               </div>
-                            )}
-                          </td>
-
-                          <td className="py-4 px-6 text-right">
-                            <span className="font-mono font-bold text-emerald-400 text-sm bg-emerald-500/5 px-2 py-1 rounded">
-                              {bonus.amount ? bonus.amount.toLocaleString() : '0'} PKR
-                            </span>
-                          </td>
-
-                          <td className="py-4 px-6">
-                            <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <button
-                                onClick={() => { setEditingBonus(bonus); setShowAddBonus(true); }}
-                                className="p-2 bg-blue-500/10 text-blue-400 rounded-lg hover:bg-blue-500 hover:text-white transition-all shadow-sm border border-transparent hover:border-blue-400"
-                                title="Edit"
-                              >
-                                <Pencil className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteBonus(bonus.id)}
-                                className="p-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500 hover:text-white transition-all shadow-sm border border-transparent hover:border-red-400"
-                                title="Delete"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan="7" className="py-12 text-center text-slate-500">
-                          <div className="flex flex-col items-center justify-center gap-3">
-                            <div className="p-4 bg-slate-800/50 rounded-full">
-                              <Gift className="w-8 h-8 text-slate-600" />
-                            </div>
-                            <p>No bonuses found for this month.</p>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-        )}
+            )}
 
+            {/* Bonuses TAB */}
+            {activeTab === 'bonuses' && (
+              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
 
-        {activeTab === 'payroll' && (
+                {/* Header Section */}
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-900/50 p-6 rounded-2xl border border-slate-700/50 backdrop-blur-sm">
+                  <div>
+                    <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                      <span className="bg-clip-text text-transparent bg-gradient-to-r from-green-400 to-emerald-500">
+                        Bonuses Management
+                      </span>
+                    </h2>
+                    <p className="text-slate-400 text-sm mt-1">Manage agent incentives, automated tiers, and manual rewards.</p>
+                  </div>
+
+                  <div className="flex gap-3">
+                    {/* Auto Gen Button */}
+                    <button
+                      onClick={handleGenerateAutoBonuses}
+                      className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-purple-900/20 transition-all hover:scale-[1.02] border border-white/10"
+                    >
+                      <TrendingUp className="w-4 h-4" /> Auto-Gen Bonuses
+                    </button>
+
+                    {/* Add Bonus Button */}
+                    <button
+                      onClick={() => setShowAddBonus(true)}
+                      className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-green-900/20 transition-all hover:scale-[1.02] border border-white/10"
+                    >
+                      <Plus className="w-4 h-4" /> Add Bonus
+                    </button>
+                  </div>
+                </div>
+
+                {/* Search Bar */}
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <Search className="h-5 w-5 text-slate-500" />
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Search bonuses by agent name..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-11 pr-4 py-3 bg-slate-900/80 border border-slate-700 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all shadow-sm"
+                  />
+                </div>
+
+                {/* Table Container */}
+                <div className="bg-slate-900/80 rounded-2xl shadow-xl border border-slate-700/50 overflow-hidden backdrop-blur-md">
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-slate-950/50 border-b border-slate-700">
+                        <tr>
+                          <th className="text-left py-4 px-6 text-xs font-bold text-slate-400 uppercase tracking-wider">No.</th>
+                          <th className="text-left py-4 px-6 text-xs font-bold text-slate-400 uppercase tracking-wider">Agent</th>
+                          <th className="text-left py-4 px-6 text-xs font-bold text-slate-400 uppercase tracking-wider">Month</th>
+                          <th className="text-left py-4 px-6 text-xs font-bold text-slate-400 uppercase tracking-wider">Type</th>
+                          <th className="text-left py-4 px-6 text-xs font-bold text-slate-400 uppercase tracking-wider">Reason / Details</th>
+                          <th className="text-right py-4 px-6 text-xs font-bold text-slate-400 uppercase tracking-wider">Amount</th>
+                          <th className="text-center py-4 px-6 text-xs font-bold text-slate-400 uppercase tracking-wider">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/50">
+                        {filteredBonuses.length > 0 ? (
+                          filteredBonuses.map((bonus, idx) => (
+                            <tr key={bonus.id} className="group hover:bg-slate-800/40 transition-colors duration-200">
+                              <td className="py-4 px-6 text-slate-500 font-mono text-sm">{idx + 1}</td>
+
+                              <td className="py-4 px-6">
+                                <span className="font-semibold text-white block">{bonus.agentName}</span>
+                              </td>
+
+                              <td className="py-4 px-6 text-slate-400 text-sm">
+                                {bonus.month || bonus.period}
+                              </td>
+
+                              <td className="py-4 px-6">
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold border ${bonus.type === 'Weekly'
+                                  ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                                  : bonus.type === 'Performance'
+                                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                    : 'bg-purple-500/10 text-purple-400 border-purple-500/20'
+                                  }`}>
+                                  {bonus.type || 'Bonus'}
+                                </span>
+                              </td>
+
+                              <td className="py-4 px-6 text-slate-300 text-sm">
+                                {bonus.reason ? (
+                                  <span className="line-clamp-1">{bonus.reason}</span>
+                                ) : (
+                                  <div className="flex gap-3 text-xs text-slate-500">
+                                    <span>Target: <span className="text-slate-300">{bonus.targetSales || '-'}</span></span>
+                                    <span>Actual: <span className="text-slate-300">{bonus.actualSales || '-'}</span></span>
+                                  </div>
+                                )}
+                              </td>
+
+                              <td className="py-4 px-6 text-right">
+                                <span className="font-mono font-bold text-emerald-400 text-sm bg-emerald-500/5 px-2 py-1 rounded">
+                                  {bonus.amount ? bonus.amount.toLocaleString() : '0'} PKR
+                                </span>
+                              </td>
+
+                              <td className="py-4 px-6">
+                                <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button
+                                    onClick={() => { setEditingBonus(bonus); setShowAddBonus(true); }}
+                                    className="p-2 bg-blue-500/10 text-blue-400 rounded-lg hover:bg-blue-500 hover:text-white transition-all shadow-sm border border-transparent hover:border-blue-400"
+                                    title="Edit"
+                                  >
+                                    <Pencil className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteBonus(bonus.id)}
+                                    className="p-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500 hover:text-white transition-all shadow-sm border border-transparent hover:border-red-400"
+                                    title="Delete"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan="7" className="py-12 text-center text-slate-500">
+                              <div className="flex flex-col items-center justify-center gap-3">
+                                <div className="p-4 bg-slate-800/50 rounded-full">
+                                  <Gift className="w-8 h-8 text-slate-600" />
+                                </div>
+                                <p>No bonuses found for this month.</p>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Payroll TAB */}
+            {activeTab === 'payroll' && (
               <div className="bg-slate-900 rounded-xl border border-slate-700 shadow-2xl overflow-hidden flex flex-col h-[80vh] animate-fade-in">
-                
+
                 {/* Header */}
                 <div className="p-4 border-b border-slate-700 bg-slate-800/50 flex justify-between items-center">
                   <div className="flex items-center gap-2">
@@ -6052,15 +6079,15 @@ const getSmartWeeks = (cycleStartStr, cycleEndStr) => {
                       if (!timeStr) return null;
                       // If it's a full ISO string (2023-01-01T09:00:00), extract time
                       if (timeStr.includes('T')) {
-                         return new Date(timeStr).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+                        return new Date(timeStr).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
                       }
                       // If it's already HH:mm:ss (09:30:00)
                       const [h, m] = timeStr.split(':');
                       if (h && m) {
-                         const hours = parseInt(h);
-                         const ampm = hours >= 12 ? 'PM' : 'AM';
-                         const h12 = hours % 12 || 12;
-                         return `${h12}:${m} ${ampm}`;
+                        const hours = parseInt(h);
+                        const ampm = hours >= 12 ? 'PM' : 'AM';
+                        const h12 = hours % 12 || 12;
+                        return `${h12}:${m} ${ampm}`;
                       }
                       return timeStr;
                     };
@@ -6069,17 +6096,17 @@ const getSmartWeeks = (cycleStartStr, cycleEndStr) => {
                     const filteredAgents = agents.filter(agent => {
                       const targetName = agent.name?.toString().trim().toLowerCase();
                       const hrRec = hrRecords.find(h => (agent.cnic && h.cnic === agent.cnic) || (h.agent_name?.toString().trim().toLowerCase() === targetName)) || {};
-                      
+
                       const joinDateStr = hrRec.joining_date || agent.activeDate || agent.active_date;
                       const joinDate = joinDateStr ? new Date(joinDateStr) : null;
                       const leftDate = agent.leftDate ? new Date(agent.leftDate) : null;
 
                       // Joined AFTER cycle ended? Hide.
                       if (joinDate && joinDate > end) return false;
-                      
+
                       // Left BEFORE cycle started? Hide.
                       if (['Left', 'Terminated', 'Resigned', 'NCNS', 'Absconded'].includes(agent.status) && leftDate) {
-                         if (leftDate < start) return false;
+                        if (leftDate < start) return false;
                       }
                       return true;
                     });
@@ -6088,9 +6115,9 @@ const getSmartWeeks = (cycleStartStr, cycleEndStr) => {
                     const salesMap = {};
                     sales.forEach(s => {
                       if (s.status === 'Sale' || ['HW- Xfer', 'HW-IBXfer', 'HW-Xfer-CDR'].includes(s.disposition)) {
-                         const dateKey = typeof s.date === 'string' ? s.date.substring(0, 10) : '';
-                         const key = `${s.agentName?.toString().trim().toLowerCase()}-${dateKey}`;
-                         salesMap[key] = (salesMap[key] || 0) + 1;
+                        const dateKey = typeof s.date === 'string' ? s.date.substring(0, 10) : '';
+                        const key = `${s.agentName?.toString().trim().toLowerCase()}-${dateKey}`;
+                        salesMap[key] = (salesMap[key] || 0) + 1;
                       }
                     });
 
@@ -6119,34 +6146,34 @@ const getSmartWeeks = (cycleStartStr, cycleEndStr) => {
                     });
 
                     // 4. PROCESS ROWS & CALCULATE PAY
-                   // 5. BUILD ROWS & SUMMARY STATS
+                    // 5. BUILD ROWS & SUMMARY STATS
                     // [FIX] Added tracking for monthly summary columns
-                    const grandTotals = { 
-                        baseSalary: 0, bonus: 0, fine: 0, earned: 0, 
-                        dailySales: {}, weeklyStats: {},
-                        monthSales: 0, monthPresent: 0, monthLate: 0, monthAbsent: 0
+                    const grandTotals = {
+                      baseSalary: 0, bonus: 0, fine: 0, earned: 0,
+                      dailySales: {}, weeklyStats: {},
+                      monthSales: 0, monthPresent: 0, monthLate: 0, monthAbsent: 0
                     };
 
                     let processedAgents = filteredAgents.map(agent => {
                       const targetName = agent.name?.toString().trim().toLowerCase();
                       const hrRec = hrRecords.find(h => h.agent_name?.toString().trim().toLowerCase() === targetName) || {};
-                      
+
                       let baseSalary = agent.baseSalary || hrRec.base_salary || 0;
                       if (typeof baseSalary === 'string') baseSalary = parseInt(baseSalary.replace(/,/g, '')) || 0;
-                      
+
                       // UI Fields
                       const bankName = hrRec.bank_name || '-';
                       const accountNo = hrRec.account_number || '-';
                       const joinDateDisplay = hrRec.joining_date || agent.activeDate || '-';
-                      const leftDateDisplay = agent.leftDate || hrRec.left_date; 
-                      
+                      const leftDateDisplay = agent.leftDate || hrRec.left_date;
+
                       // Status Checking
                       const isBadStatus = ['Left', 'Terminated', 'Resigned', 'NCNS', 'Absconded'].includes(agent.status);
 
                       let totalSales = 0;
-                      let paidDays = 0;      
-                      let physicalDays = 0;  
-                      
+                      let paidDays = 0;
+                      let physicalDays = 0;
+
                       // [NEW] Monthly Counters
                       let countPresent = 0;
                       let countLate = 0;
@@ -6157,46 +6184,46 @@ const getSmartWeeks = (cycleStartStr, cycleEndStr) => {
                       dateArray.forEach(dateStr => {
                         const daySalesCount = salesMap[`${targetName}-${dateStr}`] || 0;
                         const attRecord = attMap[`${targetName}-${dateStr}`];
-                        
+
                         const d = new Date(dateStr);
                         const isWeekend = d.getDay() === 0 || d.getDay() === 6;
                         const isHoliday = holidays.some(h => h.date === dateStr);
 
                         // Physically Present Check
                         const isPresent = (attRecord && (attRecord.status === 'Present' || attRecord.status === 'Late')) || daySalesCount > 0;
-                        
+
                         // [NEW] Increment Stats
                         if (isPresent) {
-                            physicalDays++;
-                            countPresent++;
-                            // Check DB for late status
-                            if (attRecord && attRecord.late) countLate++; 
+                          physicalDays++;
+                          countPresent++;
+                          // Check DB for late status
+                          if (attRecord && attRecord.late) countLate++;
                         }
 
                         // [NEW] Absent Logic: Not Present AND Not Holiday AND Not Weekend AND Not Future
                         if (!isPresent && !isHoliday && !isWeekend && d <= new Date()) {
-                            countAbsent++;
+                          countAbsent++;
                         }
 
                         // Payable Counter (Used for Money)
                         if (isPresent || (isHoliday && !isWeekend)) {
-                            paidDays++;
+                          paidDays++;
                         }
-                        
+
                         totalSales += daySalesCount;
 
                         // Time Formatting
                         let displayTime = null;
                         if (attRecord && attRecord.status === 'Present') {
-                            displayTime = formatTime(attRecord.loginTime || attRecord.timeIn); 
+                          displayTime = formatTime(attRecord.loginTime || attRecord.timeIn);
                         }
 
                         dailyData[dateStr] = {
                           sales: daySalesCount,
-                          time: displayTime, 
+                          time: displayTime,
                           status: isPresent ? 'P' : 'A',
                           isGhostPresent: !attRecord && daySalesCount > 0,
-                          isHoliday: isHoliday 
+                          isHoliday: isHoliday
                         };
 
                         grandTotals.dailySales[dateStr] = (grandTotals.dailySales[dateStr] || 0) + daySalesCount;
@@ -6204,13 +6231,13 @@ const getSmartWeeks = (cycleStartStr, cycleEndStr) => {
 
                       const totalBonus = bonusMap[targetName] || 0;
                       const totalFine = fineMap[targetName] || 0;
-                      
+
                       // --- SALARY FORMULA ---
                       const perDaySalary = baseSalary / targetBusinessDays;
                       let earnedSalary = Math.round((perDaySalary * paidDays) + totalBonus - totalFine);
-                      
+
                       if (paidDays >= targetBusinessDays && totalBonus === 0 && totalFine === 0) {
-                          earnedSalary = baseSalary;
+                        earnedSalary = baseSalary;
                       }
                       if (earnedSalary < 0) earnedSalary = 0;
 
@@ -6218,8 +6245,8 @@ const getSmartWeeks = (cycleStartStr, cycleEndStr) => {
                       const lpd = paidDays > 0 ? (totalSales / paidDays).toFixed(2) : "0.00";
 
                       return {
-                        ...agent, 
-                        baseSalary, paidDays, physicalDays, totalSales, totalBonus, totalFine, earnedSalary, dailyData, 
+                        ...agent,
+                        baseSalary, paidDays, physicalDays, totalSales, totalBonus, totalFine, earnedSalary, dailyData,
                         bankName, accountNo, team: agent.team || 'Unassigned',
                         joinDateDisplay, leftDateDisplay, isBadStatus, targetBusinessDays,
                         // [NEW] Return new stats
@@ -6232,15 +6259,15 @@ const getSmartWeeks = (cycleStartStr, cycleEndStr) => {
 
                     // 6. UPDATE GRAND TOTALS
                     processedAgents.forEach(a => {
-                        grandTotals.baseSalary += a.baseSalary;
-                        grandTotals.bonus += a.totalBonus;
-                        grandTotals.fine += a.totalFine;
-                        grandTotals.earned += a.earnedSalary;
-                        // [NEW] Accumulate Summary Totals
-                        grandTotals.monthSales += a.totalSales;
-                        grandTotals.monthPresent += a.countPresent;
-                        grandTotals.monthLate += a.countLate;
-                        grandTotals.monthAbsent += a.countAbsent;
+                      grandTotals.baseSalary += a.baseSalary;
+                      grandTotals.bonus += a.totalBonus;
+                      grandTotals.fine += a.totalFine;
+                      grandTotals.earned += a.earnedSalary;
+                      // [NEW] Accumulate Summary Totals
+                      grandTotals.monthSales += a.totalSales;
+                      grandTotals.monthPresent += a.countPresent;
+                      grandTotals.monthLate += a.countLate;
+                      grandTotals.monthAbsent += a.countAbsent;
                     });
 
                     // 7. SORT & GROUP
@@ -6248,7 +6275,7 @@ const getSmartWeeks = (cycleStartStr, cycleEndStr) => {
 
                     return (
                       <table className="w-full text-left border-collapse table-fixed min-w-[5000px]">
-                        
+
                         {/* --- HEADER --- */}
                         <thead className="sticky top-0 z-50 shadow-lg text-xs uppercase font-bold text-slate-400 bg-slate-950">
                           <tr>
@@ -6267,7 +6294,7 @@ const getSmartWeeks = (cycleStartStr, cycleEndStr) => {
                               const isFri = d.getDay() === 5;
                               const isWeekend = d.getDay() === 0 || d.getDay() === 6;
                               const isHoliday = holidays.some(h => h.date === dateStr);
-                              
+
                               return (
                                 <React.Fragment key={dateStr}>
                                   <th colSpan={2} className={`p-1 border-b border-r border-slate-700 text-center ${isHoliday ? 'bg-purple-900/40' : (isWeekend ? 'bg-slate-800/50' : 'bg-slate-900')}`}>
@@ -6283,7 +6310,7 @@ const getSmartWeeks = (cycleStartStr, cycleEndStr) => {
                               );
                             })}
 
-{/* [NEW] SUMMARY COLUMNS HEADERS */}
+                            {/* [NEW] SUMMARY COLUMNS HEADERS */}
                             <th rowSpan={2} className="p-2 border-b border-l-2 border-slate-600 bg-slate-900 text-center text-green-400 w-20">Total Sales</th>
                             <th rowSpan={2} className="p-2 border-b border-slate-700 bg-slate-900 text-center text-blue-300 w-16">LPD</th>
                             <th rowSpan={2} className="p-2 border-b border-slate-700 bg-slate-900 text-center text-emerald-400 w-16">Pres</th>
@@ -6293,25 +6320,25 @@ const getSmartWeeks = (cycleStartStr, cycleEndStr) => {
                           </tr>
 
                           <tr className="bg-slate-900 text-[9px]">
-                             {dateArray.map(dateStr => {
-                               const isFri = new Date(dateStr).getDay() === 5;
-                               return (
-                                 <React.Fragment key={dateStr + '-sub'}>
-                                   <th className="p-1 border-b border-r border-slate-800 text-center text-green-400 w-8">Sale</th>
-                                   <th className="p-1 border-b border-r border-slate-700 text-center text-blue-300 w-12">Time</th>
-                                   {isFri && (
-                                     <>
+                            {dateArray.map(dateStr => {
+                              const isFri = new Date(dateStr).getDay() === 5;
+                              return (
+                                <React.Fragment key={dateStr + '-sub'}>
+                                  <th className="p-1 border-b border-r border-slate-800 text-center text-green-400 w-8">Sale</th>
+                                  <th className="p-1 border-b border-r border-slate-700 text-center text-blue-300 w-12">Time</th>
+                                  {isFri && (
+                                    <>
                                       <th className="p-1 border-b border-r border-slate-800 bg-yellow-900/10 text-center text-green-400 w-10">Sale</th>
                                       <th className="p-1 border-b border-r border-slate-800 bg-yellow-900/10 text-center text-blue-300 w-12">Bns</th>
                                       <th className="p-1 border-b border-r border-l border-slate-600 bg-yellow-900/10 text-center text-red-300 w-12">Fine</th>
-                                     </>
-                                   )}
-                                 </React.Fragment>
-                               )
-                             })}
+                                    </>
+                                  )}
+                                </React.Fragment>
+                              )
+                            })}
                           </tr>
                         </thead>
-                        
+
                         {/* --- BODY --- */}
                         <tbody className="divide-y divide-slate-800 text-xs text-slate-300">
                           {uniqueTeams.map(teamName => {
@@ -6330,7 +6357,7 @@ const getSmartWeeks = (cycleStartStr, cycleEndStr) => {
                                 {teamAgents.map((agent, idx) => (
                                   <tr key={agent.id} className="hover:bg-slate-800/50 transition-colors group">
                                     <td className="p-2 sticky left-0 z-40 bg-slate-900 border-r border-slate-700 text-center font-mono text-slate-500">{idx + 1}</td>
-                                    
+
                                     <td className="p-2 sticky left-10 z-40 bg-slate-900 border-r border-slate-700">
                                       <div className={`font-medium truncate ${agent.isBadStatus ? 'text-red-500 font-bold' : 'text-white'}`}>
                                         {agent.name}
@@ -6361,11 +6388,11 @@ const getSmartWeeks = (cycleStartStr, cycleEndStr) => {
                                       const d = new Date(dateStr);
                                       const isWeekend = d.getDay() === 0 || d.getDay() === 6;
                                       const isFri = d.getDay() === 5;
-                                      const isHoliday = data.isHoliday; 
+                                      const isHoliday = data.isHoliday;
 
                                       let bgClass = isWeekend ? "bg-slate-800/30" : "";
                                       if (data.isGhostPresent) bgClass = "bg-orange-900/20";
-                                      else if (isHoliday) bgClass = "bg-purple-900/10"; 
+                                      else if (isHoliday) bgClass = "bg-purple-900/10";
                                       else if (data.status === 'A' && !isWeekend) bgClass = "bg-red-900/10";
 
                                       return (
@@ -6375,9 +6402,9 @@ const getSmartWeeks = (cycleStartStr, cycleEndStr) => {
                                           </td>
 
                                           <td className={`p-1 border-r border-slate-700 text-center align-middle font-mono text-[10px] ${bgClass}`}>
-                                            {data.time ? <span className="text-slate-300">{data.time}</span> : 
+                                            {data.time ? <span className="text-slate-300">{data.time}</span> :
                                               (isHoliday ? <span className="text-purple-400 font-bold">HOL</span> :
-                                              (isWeekend ? <span className="text-slate-700">-</span> : <span className="text-red-900 font-bold">ABS</span>))
+                                                (isWeekend ? <span className="text-slate-700">-</span> : <span className="text-red-900 font-bold">ABS</span>))
                                             }
                                           </td>
 
@@ -6388,19 +6415,19 @@ const getSmartWeeks = (cycleStartStr, cycleEndStr) => {
                                             const weekEndStr = dateStr;
                                             const targetName = agent.name?.toString().trim().toLowerCase();
 
-                                            for(let i=0; i<=4; i++) {
-                                                const tempD = new Date(d); 
-                                                tempD.setDate(d.getDate() - i);
-                                                const k = `${targetName}-${tempD.toISOString().split('T')[0]}`;
-                                                wkSales += (salesMap[k] || 0);
+                                            for (let i = 0; i <= 4; i++) {
+                                              const tempD = new Date(d);
+                                              tempD.setDate(d.getDate() - i);
+                                              const k = `${targetName}-${tempD.toISOString().split('T')[0]}`;
+                                              wkSales += (salesMap[k] || 0);
                                             }
                                             bonuses.forEach(b => {
-                                              if(b.agentName?.toString().trim().toLowerCase() === targetName && b.date >= weekStartStr && b.date <= weekEndStr) wkBonus += parseInt(b.amount);
+                                              if (b.agentName?.toString().trim().toLowerCase() === targetName && b.date >= weekStartStr && b.date <= weekEndStr) wkBonus += parseInt(b.amount);
                                             });
                                             fines.forEach(f => {
-                                              if(f.agentName?.toString().trim().toLowerCase() === targetName && f.date >= weekStartStr && f.date <= weekEndStr) wkFine += parseInt(f.amount);
+                                              if (f.agentName?.toString().trim().toLowerCase() === targetName && f.date >= weekStartStr && f.date <= weekEndStr) wkFine += parseInt(f.amount);
                                             });
-                                            
+
                                             // Aggregate Weekly
                                             if (!grandTotals.weeklyStats[dateStr]) grandTotals.weeklyStats[dateStr] = { sales: 0, bonus: 0, fine: 0 };
                                             grandTotals.weeklyStats[dateStr].sales += wkSales;
@@ -6410,8 +6437,8 @@ const getSmartWeeks = (cycleStartStr, cycleEndStr) => {
                                             return (
                                               <>
                                                 <td className="p-1 border-r border-slate-800 bg-yellow-900/10 text-center font-bold text-green-400">{wkSales}</td>
-                                                <td className="p-1 border-r border-slate-800 bg-yellow-900/10 text-center text-[10px] text-blue-300">{wkBonus > 0 ? (wkBonus/1000).toFixed(1)+'k' : '-'}</td>
-                                                <td className="p-1 border-r border-l border-slate-600 bg-yellow-900/10 text-center text-[10px] text-red-300">{wkFine > 0 ? (wkFine/1000).toFixed(1)+'k' : '-'}</td>
+                                                <td className="p-1 border-r border-slate-800 bg-yellow-900/10 text-center text-[10px] text-blue-300">{wkBonus > 0 ? (wkBonus / 1000).toFixed(1) + 'k' : '-'}</td>
+                                                <td className="p-1 border-r border-l border-slate-600 bg-yellow-900/10 text-center text-[10px] text-red-300">{wkFine > 0 ? (wkFine / 1000).toFixed(1) + 'k' : '-'}</td>
                                               </>
                                             );
                                           })()}
@@ -6419,7 +6446,7 @@ const getSmartWeeks = (cycleStartStr, cycleEndStr) => {
                                       );
                                     })}
 
-{/* ... existing date loop ... */}
+                                    {/* ... existing date loop ... */}
 
                                     {/* [NEW] SUMMARY COLUMNS DATA */}
                                     <td className="p-2 border-b border-l-2 border-slate-600 bg-slate-900/50 text-center font-black text-green-400">{agent.totalSales}</td>
@@ -6444,32 +6471,32 @@ const getSmartWeeks = (cycleStartStr, cycleEndStr) => {
                             <td className="p-3 border-r border-slate-800 text-right bg-slate-950 text-red-400">{grandTotals.fine.toLocaleString()}</td>
                             <td className="p-3 border-r border-slate-800 text-right bg-slate-950 text-emerald-400 font-black">{grandTotals.earned.toLocaleString()}</td>
                             <td colSpan={3} className="p-3 border-r border-slate-800 bg-slate-950"></td>
-                            
+
                             {dateArray.map(dateStr => {
-                               const isFri = new Date(dateStr).getDay() === 5;
-                               return (
-                                 <React.Fragment key={dateStr}>
-                                    <td colSpan={2} className="p-1 border-r border-slate-800 text-center text-green-400 bg-slate-950">
-                                       {grandTotals.dailySales[dateStr] || 0}
-                                    </td>
-                                    {isFri && (
-                                       <>
-                                         <td className="p-1 border-r border-slate-800 bg-yellow-900/20 text-center text-green-400">
-                                            {grandTotals.weeklyStats[dateStr]?.sales || 0}
-                                         </td>
-                                         <td className="p-1 border-r border-slate-800 bg-yellow-900/20 text-center text-blue-300">
-                                            {(grandTotals.weeklyStats[dateStr]?.bonus / 1000).toFixed(0)}k
-                                         </td>
-                                         <td className="p-1 border-r border-l border-slate-600 bg-yellow-900/20 text-center text-red-300">
-                                            {(grandTotals.weeklyStats[dateStr]?.fine / 1000).toFixed(0)}k
-                                         </td>
-                                       </>
-                                    )}
-                                 </React.Fragment>
-                               );
+                              const isFri = new Date(dateStr).getDay() === 5;
+                              return (
+                                <React.Fragment key={dateStr}>
+                                  <td colSpan={2} className="p-1 border-r border-slate-800 text-center text-green-400 bg-slate-950">
+                                    {grandTotals.dailySales[dateStr] || 0}
+                                  </td>
+                                  {isFri && (
+                                    <>
+                                      <td className="p-1 border-r border-slate-800 bg-yellow-900/20 text-center text-green-400">
+                                        {grandTotals.weeklyStats[dateStr]?.sales || 0}
+                                      </td>
+                                      <td className="p-1 border-r border-slate-800 bg-yellow-900/20 text-center text-blue-300">
+                                        {(grandTotals.weeklyStats[dateStr]?.bonus / 1000).toFixed(0)}k
+                                      </td>
+                                      <td className="p-1 border-r border-l border-slate-600 bg-yellow-900/20 text-center text-red-300">
+                                        {(grandTotals.weeklyStats[dateStr]?.fine / 1000).toFixed(0)}k
+                                      </td>
+                                    </>
+                                  )}
+                                </React.Fragment>
+                              );
                             })}
 
-{/* [NEW] SUMMARY GRAND TOTALS */}
+                            {/* [NEW] SUMMARY GRAND TOTALS */}
                             <td className="p-2 border-r border-l-2 border-slate-600 bg-slate-950 text-center font-black text-green-400">{grandTotals.monthSales}</td>
                             <td className="p-2 border-r border-slate-800 bg-slate-950 text-center text-slate-500">-</td>
                             <td className="p-2 border-r border-slate-800 bg-slate-950 text-center font-bold text-emerald-400">{grandTotals.monthPresent}</td>
@@ -6484,7 +6511,44 @@ const getSmartWeeks = (cycleStartStr, cycleEndStr) => {
                 </div>
               </div>
             )}
+
+           {/* Super Controls TAB */}
+            {activeTab === 'super_controls' && (
+              <div className="h-full w-full animate-fade-in">
+                <SuperControls 
+                  agents={agents} 
+                  sales={sales} 
+                  attendance={attendance} 
+                  hrRecords={hrRecords} 
+                  selectedMonth={selectedMonth} 
+                />
+              </div>
+            )}
+
           </div>
+        </div>
+      )}
+
+
+      {/* ======================================================= */}
+      {/* MAJOR TAB 2: NEW MODULE                                 */}
+      {/* ======================================================= */}
+      {activeMajorTab === 'new_module' && (
+        <div className="flex-1 p-6 animate-fade-in bg-slate-900 min-h-screen">
+
+          <div className="bg-slate-800 p-8 rounded-2xl border border-slate-700 shadow-xl text-center">
+            <h2 className="text-3xl font-bold text-white mb-4 bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+              Welcome to the New Module
+            </h2>
+            <p className="text-slate-400 max-w-2xl mx-auto">
+              MATW is constantly evolving, and this new module is designed to bring you even more powerful features and insights. Stay tuned for updates as we roll out this exciting addition!
+            </p>
+          </div>
+
+          {/* You can add a new activeTab state specifically for this major tab later, e.g., activeNewModuleTab */}
+
+        </div>
+      )}
 
       {/* Modals */}
       {/* Add this with the other modals */}
@@ -7399,5 +7463,3 @@ const getSmartWeeks = (cycleStartStr, cycleEndStr) => {
 };
 
 export default AgentPayrollSystem;
-
-// Satrted working on Sales filteration
