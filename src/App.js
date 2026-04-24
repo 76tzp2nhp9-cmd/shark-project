@@ -5778,10 +5778,10 @@ const AgentPayrollSystem = () => {
 
             {/* Fines TAB */}
             {activeTab === 'fines' && (
-              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="space-y-6 ">
 
                 {/* Header Section */}
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-900/50 p-6 rounded-2xl border border-slate-700/50 backdrop-blur-sm">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-900 p-6 rounded-2xl border border-slate-700">
                   <div>
                     <h2 className="text-2xl font-bold text-white flex items-center gap-2">
                       <span className="bg-clip-text text-transparent bg-gradient-to-r from-red-400 to-orange-500">
@@ -5795,7 +5795,7 @@ const AgentPayrollSystem = () => {
                     {/* Add Fine Button */}
                     <button
                       onClick={() => setShowAddFine(true)}
-                      className="flex items-center gap-2 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-red-900/20 transition-all hover:scale-[1.02] border border-white/10"
+                      className="flex items-center gap-2 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-red-900 transition-all hover:scale-[1.02]"
                     >
                       <Plus className="w-4 h-4" /> Add Fine
                     </button>
@@ -5812,15 +5812,15 @@ const AgentPayrollSystem = () => {
                     placeholder="Search fines by agent name or reason..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-11 pr-4 py-3 bg-slate-900/80 border border-slate-700 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500 transition-all shadow-sm"
+                    className="w-full pl-11 pr-4 py-3 bg-slate-900 border border-slate-700 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all shadow-sm"
                   />
                 </div>
 
                 {/* Table Container */}
-                <div className="bg-slate-900/80 rounded-2xl shadow-xl border border-slate-700/50 overflow-hidden backdrop-blur-md">
+                <div className="bg-slate-900 rounded-2xl shadow-xl border border-slate-700 overflow-hidden">
                   <div className="overflow-x-auto">
                     <table className="w-full">
-                      <thead className="bg-slate-950/50 border-b border-slate-700">
+                      <thead className="bg-slate-950 border-b border-slate-700">
                         <tr>
                           <th className="text-left py-4 px-6 text-xs font-bold text-slate-400 uppercase tracking-wider">No.</th>
                           <th className="text-left py-4 px-6 text-xs font-bold text-slate-400 uppercase tracking-wider">Date Issued</th>
@@ -5830,10 +5830,10 @@ const AgentPayrollSystem = () => {
                           <th className="text-center py-4 px-6 text-xs font-bold text-slate-400 uppercase tracking-wider">Actions</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-800/50">
+                      <tbody className="divide-y divide-slate-800">
                         {filteredFines.length > 0 ? (
                           filteredFines.map((fine, idx) => (
-                            <tr key={fine.id} className="group hover:bg-slate-800/40 transition-colors duration-200">
+                            <tr key={fine.id} className="group hover:bg-slate-800 transition-colors duration-200">
                               <td className="py-4 px-6 text-slate-500 font-mono text-sm">{idx + 1}</td>
 
                               <td className="py-4 px-6 text-slate-400 text-sm">
@@ -5852,7 +5852,7 @@ const AgentPayrollSystem = () => {
                               </td>
 
                               <td className="py-4 px-6 text-right">
-                                <span className="font-mono font-bold text-red-400 text-sm bg-red-500/5 px-2 py-1 rounded border border-red-500/10">
+                                <span className="font-mono font-bold text-red-400 text-sm bg-red-500/5 px-2 py-1 rounded border border-red-500">
                                   - {fine.amount ? fine.amount.toLocaleString() : '0'} PKR
                                 </span>
                               </td>
@@ -5861,7 +5861,7 @@ const AgentPayrollSystem = () => {
                                 <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                   <button
                                     onClick={() => { setEditingFine(fine); setShowAddFine(true); }}
-                                    className="p-2 bg-blue-500/10 text-blue-400 rounded-lg hover:bg-blue-500 hover:text-white transition-all shadow-sm border border-transparent hover:border-blue-400"
+                                    className="p-2 bg-blue-500 text-blue-500 rounded-lg hover:bg-blue-500 hover:text-white transition-all shadow-sm border border-transparent hover:border-blue-400"
                                     title="Edit"
                                   >
                                     <Pencil className="w-3.5 h-3.5" />
@@ -5901,7 +5901,7 @@ const AgentPayrollSystem = () => {
               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
 
                 {/* Header Section */}
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-900/50 p-6 rounded-2xl border border-slate-700/50 backdrop-blur-sm">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-900 p-6 rounded-2xl border border-slate-700 backdrop-blur-sm">
                   <div>
                     <h2 className="text-2xl font-bold text-white flex items-center gap-2">
                       <span className="bg-clip-text text-transparent bg-gradient-to-r from-green-400 to-emerald-500">
@@ -5915,7 +5915,7 @@ const AgentPayrollSystem = () => {
                     {/* Auto Gen Button */}
                     <button
                       onClick={handleGenerateAutoBonuses}
-                      className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-purple-900/20 transition-all hover:scale-[1.02] border border-white/10"
+                      className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-purple-900 transition-all hover:scale-[1.02]"
                     >
                       <TrendingUp className="w-4 h-4" /> Auto-Gen Bonuses
                     </button>
@@ -5923,7 +5923,7 @@ const AgentPayrollSystem = () => {
                     {/* Add Bonus Button */}
                     <button
                       onClick={() => setShowAddBonus(true)}
-                      className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-green-900/20 transition-all hover:scale-[1.02] border border-white/10"
+                      className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-green-900 transition-all hover:scale-[1.02]"
                     >
                       <Plus className="w-4 h-4" /> Add Bonus
                     </button>
@@ -5945,7 +5945,7 @@ const AgentPayrollSystem = () => {
                 </div>
 
                 {/* Table Container */}
-                <div className="bg-slate-900/80 rounded-2xl shadow-xl border border-slate-700/50 overflow-hidden backdrop-blur-md">
+                <div className="bg-slate-900 rounded-2xl shadow-xl border border-slate-700 overflow-hidden backdrop-blur-md">
                   <div className="overflow-x-auto">
                     <table className="w-full">
                       <thead className="bg-slate-950/50 border-b border-slate-700">
@@ -5962,7 +5962,7 @@ const AgentPayrollSystem = () => {
                       <tbody className="divide-y divide-slate-800/50">
                         {filteredBonuses.length > 0 ? (
                           filteredBonuses.map((bonus, idx) => (
-                            <tr key={bonus.id} className="group hover:bg-slate-800/40 transition-colors duration-200">
+                            <tr key={bonus.id} className="group hover:bg-slate-800 transition-colors duration-200">
                               <td className="py-4 px-6 text-slate-500 font-mono text-sm">{idx + 1}</td>
 
                               <td className="py-4 px-6">
@@ -5975,10 +5975,10 @@ const AgentPayrollSystem = () => {
 
                               <td className="py-4 px-6">
                                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold border ${bonus.type === 'Weekly'
-                                  ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                                  ? 'bg-blue-500 text-white border-blue-500'
                                   : bonus.type === 'Performance'
-                                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                                    : 'bg-purple-500/10 text-purple-400 border-purple-500/20'
+                                    ? 'bg-emerald-500 text-white border-emerald-500'
+                                    : 'bg-purple-500 text-white border-purple-500'
                                   }`}>
                                   {bonus.type || 'Bonus'}
                                 </span>
@@ -6005,14 +6005,14 @@ const AgentPayrollSystem = () => {
                                 <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                   <button
                                     onClick={() => { setEditingBonus(bonus); setShowAddBonus(true); }}
-                                    className="p-2 bg-blue-500/10 text-blue-400 rounded-lg hover:bg-blue-500 hover:text-white transition-all shadow-sm border border-transparent hover:border-blue-400"
+                                    className="p-2 bg-blue-500 text-blue-400 rounded-lg hover:bg-blue-500 hover:text-white transition-all shadow-sm border border-transparent hover:border-blue-400"
                                     title="Edit"
                                   >
                                     <Pencil className="w-3.5 h-3.5" />
                                   </button>
                                   <button
                                     onClick={() => handleDeleteBonus(bonus.id)}
-                                    className="p-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500 hover:text-white transition-all shadow-sm border border-transparent hover:border-red-400"
+                                    className="p-2 bg-red-500 text-red-400 rounded-lg hover:bg-red-500 hover:text-white transition-all shadow-sm border border-transparent hover:border-red-400"
                                     title="Delete"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
