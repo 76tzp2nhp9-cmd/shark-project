@@ -6,13 +6,13 @@ const EditAttendanceModal = ({ isOpen, onClose, agents, attendanceRecords, onSav
   const [selectedAgentId, setSelectedAgentId] = useState('');
   const [status, setStatus] = useState('Absent');
   
-  // [NEW] Separate states for Login and Logout
+  // ⭐ [FIX 1]: State to hold the existing record's database ID
+  const [recordId, setRecordId] = useState(null); 
+  
   const [loginTime, setLoginTime] = useState('');
   const [logoutTime, setLogoutTime] = useState('');
-  
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Status Options
   const statuses = [
     { label: 'Present', value: 'Present', color: 'bg-green-500/20 text-green-400 border-green-500/50' },
     { label: 'Late', value: 'Late', color: 'bg-orange-500/20 text-orange-400 border-orange-500/50' },
@@ -22,7 +22,6 @@ const EditAttendanceModal = ({ isOpen, onClose, agents, attendanceRecords, onSav
     { label: 'Off', value: 'Off', color: 'bg-slate-500/20 text-slate-400 border-slate-500/50' },
   ];
 
-  // Load existing data when Agent or Date changes
   useEffect(() => {
     if (selectedAgentId && selectedDate) {
       const agent = agents.find(a => a.name === selectedAgentId);
@@ -32,35 +31,40 @@ const EditAttendanceModal = ({ isOpen, onClose, agents, attendanceRecords, onSav
           r.agentName?.toLowerCase() === agent.name?.toLowerCase()
         );
         
-        setStatus(record ? record.status : 'Absent');
+        // ⭐ [FIX 2]: If a record exists, save its ID! If not, reset it to null.
+        setRecordId(record ? record.id : null);
         
-        // [NEW] Load Login/Logout times safely
+        setStatus(record ? record.status : 'Absent');
         setLoginTime(record ? (record.loginTime || '') : '');
         setLogoutTime(record ? (record.logoutTime || '') : '');
       }
     }
   }, [selectedAgentId, selectedDate, agents, attendanceRecords]);
 
-const handleSubmit = () => {
+  const handleSubmit = () => {
     if (!selectedAgentId) return;
     
-    // [FIX] Calculate 'late' boolean based on status
     const isLate = status === 'Late';
-
-    // [FIX] Handle Times: Send NULL if empty string (to avoid text format errors)
     const safeLogin = loginTime ? loginTime : null;
     const safeLogout = logoutTime ? logoutTime : null;
 
-    const updatePayload = [{
+    // ⭐ [FIX 3]: Build the payload and attach the ID if we are editing an existing row
+    const payloadObject = {
       agentName: selectedAgentId,
       date: selectedDate,
       status: status,
       loginTime: safeLogin,
       logoutTime: safeLogout,
-      late: isLate // [NEW] Send this to satisfy the DB
-    }];
+      late: isLate
+    };
 
-    onSave(updatePayload);
+    // This is the magic line! If we grabbed an ID earlier, pass it to Supabase
+    if (recordId) {
+      payloadObject.id = recordId;
+    }
+
+    onSave([payloadObject]);
+    onClose(); // ⭐ [FIX 4]: Close the modal after clicking save
   };
 
   const filteredAgents = agents.filter(a => 
@@ -89,18 +93,16 @@ const handleSubmit = () => {
 
         <div className="p-6 space-y-6">
           
-          {/* 1. DATE SELECTION */}
           <div className="space-y-2">
             <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Target Date</label>
             <input 
               type="date" 
               value={selectedDate} 
               onChange={(e) => setSelectedDate(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-600 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-blue-500 font-bold"
+              className="w-full bg-slate-800 border border-slate-600 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-blue-500 font-bold [color-scheme:dark]"
             />
           </div>
 
-          {/* 2. AGENT SELECTION */}
           <div className="space-y-2">
             <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Select Employee</label>
             <div className="relative">
@@ -121,11 +123,9 @@ const handleSubmit = () => {
             </div>
           </div>
 
-          {/* 3. EDIT DETAILS */}
           {selectedAgentId ? (
             <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700 space-y-4 animate-in slide-in-from-top-2">
               
-              {/* Status Grid */}
               <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Mark Status</label>
                 <div className="grid grid-cols-3 gap-2">
@@ -146,10 +146,8 @@ const handleSubmit = () => {
                 </div>
               </div>
 
-              {/* [NEW] Login / Logout Times */}
               {['Present', 'Late', 'Half Day'].includes(status) && (
                 <div className="grid grid-cols-2 gap-4">
-                  {/* Login Time */}
                   <div className="space-y-2">
                      <label className="text-xs font-bold text-green-400 uppercase tracking-wider flex items-center gap-2">
                        <LogIn className="w-3 h-3" /> Login Time
@@ -158,11 +156,10 @@ const handleSubmit = () => {
                        type="time" 
                        value={loginTime} 
                        onChange={(e) => setLoginTime(e.target.value)}
-                       className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2.5 text-white text-sm font-mono outline-none focus:border-green-500"
+                       className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2.5 text-white text-sm font-mono outline-none focus:border-green-500 [color-scheme:dark]"
                      />
                   </div>
 
-                  {/* Logout Time */}
                   <div className="space-y-2">
                      <label className="text-xs font-bold text-red-400 uppercase tracking-wider flex items-center gap-2">
                        <LogOut className="w-3 h-3" /> Logout Time
@@ -171,7 +168,7 @@ const handleSubmit = () => {
                        type="time" 
                        value={logoutTime} 
                        onChange={(e) => setLogoutTime(e.target.value)}
-                       className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2.5 text-white text-sm font-mono outline-none focus:border-red-500"
+                       className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2.5 text-white text-sm font-mono outline-none focus:border-red-500 [color-scheme:dark]"
                      />
                   </div>
                 </div>
@@ -186,7 +183,6 @@ const handleSubmit = () => {
 
         </div>
 
-        {/* Footer */}
         <div className="p-5 border-t border-slate-700 bg-slate-800/50 flex justify-end gap-3">
           <button onClick={onClose} className="px-5 py-2.5 text-slate-300 hover:bg-slate-700 rounded-xl text-sm font-bold transition-all">
             Close

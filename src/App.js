@@ -222,20 +222,24 @@ const AgentPayrollSystem = () => {
     return targetDate.toLocaleString('default', { month: 'long', year: 'numeric' });
   });
 
-  const handleUpdateAttendance = async (updates) => {
+const handleUpdateAttendance = async (updates) => {
     try {
-      // 1. Upsert data to Supabase (Matches on agentName + date)
+      // ⭐ THE FIX: Removed the onConflict rule. 
+      // Because 'updates' now contains the exact 'id', Supabase will naturally overwrite it!
       const { data, error } = await supabase
         .from('attendance')
-        .upsert(updates, { onConflict: 'agentName, date' })
+        .upsert(updates) 
         .select();
 
       if (error) throw error;
 
-      // 2. Update Local State (So the matrix updates instantly)
-      // We remove old records for that date and add the new ones
-      const updatedDate = updates[0].date;
-      const otherRecords = attendance.filter(r => r.date !== updatedDate);
+      // 2. Safely Update Local State without deleting other agents
+      const updatedRecord = updates[0];
+      
+      const otherRecords = attendance.filter(r => 
+        !(r.date === updatedRecord.date && r.agentName === updatedRecord.agentName)
+      );
+      
       setAttendance([...otherRecords, ...data]);
 
       setShowAttendanceModal(false);
@@ -5441,9 +5445,26 @@ const AgentPayrollSystem = () => {
                           const { start, end } = getPayrollRange(selectedMonth);
                           const dateArray = getDaysArray(start, end);
 
+                          
                           // Create Date Objects for Cycle Boundaries
-                          const cycleStart = new Date(start); cycleStart.setHours(0, 0, 0, 0);
-                          const cycleEnd = new Date(end); cycleEnd.setHours(23, 59, 59, 999); // [NEW] Needed for future check
+const cycleStart = new Date(start); cycleStart.setHours(0, 0, 0, 0);
+const cycleEnd = new Date(end); cycleEnd.setHours(23, 59, 59, 999); 
+
+// ⭐ NEW DATE CLEANER HELPER
+const getCleanDate = (rawDate) => {
+  if (!rawDate) return null;
+  let clean = String(rawDate).trim().split('T')[0].split(' ')[0];
+  if (clean.includes('/')) {
+    const parts = clean.split('/');
+    if (parts.length === 3 && parts[2].length === 4) return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+  } else if (clean.split('-')[0].length === 2) {
+    const parts = clean.split('-');
+    if (parts.length === 3 && parts[2].length === 4) return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+  }
+  return clean;
+};
+
+// 2. [UPDATED] FILTERING LOGIC// [NEW] Needed for future check
 
                           // 2. [UPDATED] FILTERING LOGIC
                           let filteredAgents = agents.filter(a => {
@@ -5523,44 +5544,41 @@ const AgentPayrollSystem = () => {
 
                             if (teamAgents.length === 0) return null;
 
-                            // --- TEAM SUMMARY ---
-                            // [UPDATED] Team Total Present (Records + Holidays)
-                            const teamTotalPresent = teamAgents.reduce((sum, agent) => {
-                              // A. Count Database Presents
-                              const recordsCount = attendance.filter(a =>
-                                a.agentName?.toString().trim().toLowerCase() === agent.name?.toString().trim().toLowerCase() &&
-                                a.status === 'Present'
-                              ).length;
+                           // --- TEAM SUMMARY ---
+const teamTotalPresent = teamAgents.reduce((sum, agent) => {
+  const recordsCount = attendance.filter(a =>
+    a.agentName?.toString().trim().toLowerCase() === agent.name?.toString().trim().toLowerCase() &&
+    a.status === 'Present' &&
+    dateArray.includes(getCleanDate(a.date)) // ⭐ Restricts to selected month
+  ).length;
 
-                              // B. Count Valid Holidays (that don't have a record)
-                              const hrRec = hrRecords.find(h => h.cnic === agent.cnic) || {};
-                              const joinDateStr = hrRec.joining_date || agent.activeDate;
-                              const jDate = joinDateStr ? new Date(joinDateStr) : null;
-                              if (jDate) jDate.setHours(0, 0, 0, 0);
+  const hrRec = hrRecords.find(h => h.cnic === agent.cnic) || {};
+  const joinDateStr = hrRec.joining_date || agent.activeDate;
+  const jDate = joinDateStr ? new Date(joinDateStr) : null;
+  if (jDate) jDate.setHours(0, 0, 0, 0);
 
-                              let holidayCount = 0;
-                              holidays.forEach(h => {
-                                if (!dateArray.includes(h.date)) return; // Must be in view
-                                if (jDate && new Date(h.date) < jDate) return; // Must be after joining
+  let holidayCount = 0;
+  holidays.forEach(h => {
+    if (!dateArray.includes(h.date)) return;
+    if (jDate && new Date(h.date) < jDate) return;
+    const hasRecord = attendance.some(a =>
+      a.agentName?.toString().trim().toLowerCase() === agent.name?.toString().trim().toLowerCase() &&
+      getCleanDate(a.date) === h.date &&
+      a.status === 'Present'
+    );
+    if (!hasRecord) holidayCount++;
+  });
 
-                                // Only count holiday if they weren't ALREADY marked Present that day
-                                const hasRecord = attendance.some(a =>
-                                  a.agentName?.toString().trim().toLowerCase() === agent.name?.toString().trim().toLowerCase() &&
-                                  a.date === h.date &&
-                                  a.status === 'Present'
-                                );
-                                if (!hasRecord) holidayCount++;
-                              });
+  return sum + recordsCount + holidayCount;
+}, 0);
 
-                              return sum + recordsCount + holidayCount;
-                            }, 0);
-
-                            const teamTotalLate = teamAgents.reduce((sum, agent) => {
-                              return sum + attendance.filter(a =>
-                                a.agentName?.toString().trim().toLowerCase() === agent.name?.toString().trim().toLowerCase() &&
-                                getLateStatus(a.loginTime).isLate
-                              ).length;
-                            }, 0);
+const teamTotalLate = teamAgents.reduce((sum, agent) => {
+  return sum + attendance.filter(a =>
+    a.agentName?.toString().trim().toLowerCase() === agent.name?.toString().trim().toLowerCase() &&
+    getLateStatus(a.loginTime).isLate &&
+    dateArray.includes(getCleanDate(a.date)) // ⭐ Restricts to selected month
+  ).length;
+}, 0);
 
                             return (
                               <React.Fragment key={teamName}>
@@ -5598,57 +5616,43 @@ const AgentPayrollSystem = () => {
                                   const joinDate = joinDateStr ? new Date(joinDateStr) : null;
                                   if (joinDate) joinDate.setHours(0, 0, 0, 0);
 
-                                  // --- AGENT STATS CALCULATION ---
-                                  const agentRecs = attendance.filter(a =>
-                                    a.agentName?.toString().trim().toLowerCase() === agent.name?.toString().trim().toLowerCase()
-                                  );
+                                 // --- AGENT STATS CALCULATION ---
+// ⭐ Restricts agent records to the currently selected month
+const agentRecs = attendance.filter(a =>
+  a.agentName?.toString().trim().toLowerCase() === agent.name?.toString().trim().toLowerCase() &&
+  dateArray.includes(getCleanDate(a.date)) 
+);
 
-                                  // 1. Base Present Count (From Scans)
-                                  const scannedPresent = agentRecs.filter(a => a.status === 'Present').length;
+const presentDates = agentRecs.filter(a => a.status === 'Present').map(a => getCleanDate(a.date)).filter(Boolean);
+const scannedPresent = new Set(presentDates).size; // Prevents duplicate counts
 
-                                  // 2. Holiday Count (Add 'H' days to Present)
-                                  let validHolidays = 0;
-                                  holidays.forEach(h => {
-                                    // Ensure holiday is in current view
-                                    if (!dateArray.includes(h.date)) return;
+let validHolidays = 0;
+holidays.forEach(h => {
+  if (!dateArray.includes(h.date)) return;
+  const hDate = new Date(h.date); hDate.setHours(0, 0, 0, 0);
+  if (joinDate && hDate < joinDate) return;
+  const hasScan = agentRecs.some(a => getCleanDate(a.date) === h.date && a.status === 'Present');
+  if (!hasScan) validHolidays++;
+});
 
-                                    // Ensure holiday is NOT before joining
-                                    const hDate = new Date(h.date); hDate.setHours(0, 0, 0, 0);
-                                    if (joinDate && hDate < joinDate) return;
+const presentCount = scannedPresent + validHolidays;
+const lateCount = agentRecs.filter(a => a.status === 'Present' && getLateStatus(a.loginTime).isLate).length;
 
-                                    // Ensure we don't double count if they worked on holiday
-                                    const hasScan = agentRecs.some(a => a.date === h.date && a.status === 'Present');
-                                    if (!hasScan) {
-                                      validHolidays++;
-                                    }
-                                  });
+let absentCount = 0;
+dateArray.forEach(dStr => {
+  const dObj = new Date(dStr); dObj.setHours(0, 0, 0, 0);
+  if (dObj.getDay() === 0 || dObj.getDay() === 6) return; 
+  if (dObj > new Date()) return; 
+  if (joinDate && dObj < joinDate) return; 
 
-                                  // [FINAL P COUNT] = Scans + Holidays
-                                  const presentCount = scannedPresent + validHolidays;
+  const isHoliday = holidays.some(h => h.date === dStr);
+  const hasRec = agentRecs.some(a => getCleanDate(a.date) === dStr);
 
-                                  const lateCount = agentRecs.filter(a =>
-                                    a.status === 'Present' &&
-                                    getLateStatus(a.loginTime).isLate
-                                  ).length;
+  if (!isHoliday && !hasRec) absentCount++;
+  else if (agentRecs.find(a => getCleanDate(a.date) === dStr)?.status === 'Absent') absentCount++;
+});
 
-                                  // Absent Calculation (Remains loop-based for accuracy)
-                                  let absentCount = 0;
-                                  dateArray.forEach(dStr => {
-                                    const dObj = new Date(dStr);
-                                    dObj.setHours(0, 0, 0, 0);
-                                    if (dObj.getDay() === 0 || dObj.getDay() === 6) return; // Weekend
-                                    if (dObj > new Date()) return; // Future
-                                    if (joinDate && dObj < joinDate) return; // Before Join
-
-                                    // If no Present record AND no Holiday -> Absent
-                                    const isHoliday = holidays.some(h => h.date === dStr);
-                                    const hasRec = agentRecs.some(a => a.date === dStr);
-
-                                    if (!isHoliday && !hasRec) absentCount++;
-                                    else if (agentRecs.find(a => a.date === dStr)?.status === 'Absent') absentCount++;
-                                  });
-
-                                  const latePercentage = presentCount > 0 ? Math.round((lateCount / presentCount) * 100) : 0;
+const latePercentage = presentCount > 0 ? Math.round((lateCount / presentCount) * 100) : 0;
 
                                   // Visual for Inactive
                                   const isInactive = agent.status !== 'Active';
@@ -5686,7 +5690,30 @@ const AgentPayrollSystem = () => {
                                         // 1. Check for Holiday
                                         const isHoliday = holidays.some(h => h.date === dateStr);
 
-                                        const record = agentRecs.find(a => a.date === dateStr);
+                                      const record = agentRecs.find(a => {
+  if (!a.date) return false;
+  
+  // 1. Clean the database date (Remove 'T00:00:00Z' timestamps and spaces)
+  let cleanDate = String(a.date).trim().split('T')[0].split(' ')[0];
+  
+  // 2. If the DB saved it as DD/MM/YYYY, manually flip it to YYYY-MM-DD
+  if (cleanDate.includes('/')) {
+    const parts = cleanDate.split('/');
+    if (parts.length === 3 && parts[2].length === 4) {
+      cleanDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+    }
+  } 
+  // 3. If the DB saved it as DD-MM-YYYY, manually flip it to YYYY-MM-DD
+  else if (cleanDate.split('-')[0].length === 2) {
+    const parts = cleanDate.split('-');
+    if (parts.length === 3 && parts[2].length === 4) {
+      cleanDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+    }
+  }
+  
+  // Now safely compare the perfectly cleaned database date to the column header date!
+  return cleanDate === dateStr; 
+});
 
                                         let cellContent = '-';
                                         let cellClass = 'text-slate-700';
@@ -5744,32 +5771,60 @@ const AgentPayrollSystem = () => {
                         })()}
                       </tbody>
 
-                      <tfoot className="sticky bottom-0 z-40 shadow-[0_-4px_10px_rgba(0,0,0,0.5)]">
-                        <tr className="bg-slate-950 border-t-2 border-purple-500 font-black text-white">
-                          <td colSpan={2} className="p-3 text-left sticky left-0 bg-slate-950 z-50 uppercase tracking-tighter">Grand Total</td>
+                   <tfoot className="sticky bottom-0 z-40 shadow-[0_-4px_10px_rgba(0,0,0,0.5)]">
+  {(() => {
+    // 1. Re-calculate dates since tfoot is outside the tbody scope
+    const { start, end } = getPayrollRange(selectedMonth);
+    const tfootDateArray = getDaysArray(start, end);
 
-                          <td className="p-1 text-center border-r border-slate-800 text-slate-300 font-mono text-[10px]">
-                            {'-'}
-                          </td>
+    const getCleanDate = (rawDate) => {
+      if (!rawDate) return null;
+      let clean = String(rawDate).trim().split('T')[0].split(' ')[0];
+      if (clean.includes('/')) {
+        const parts = clean.split('/');
+        if (parts.length === 3 && parts[2].length === 4) return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+      } else if (clean.split('-')[0].length === 2) {
+        const parts = clean.split('-');
+        if (parts.length === 3 && parts[2].length === 4) return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+      }
+      return clean;
+    };
 
-                          <td className="text-center text-green-400 bg-slate-950 text-[10px]">
-                            {attendance.filter(a => a.status === 'Present').length}
-                          </td>
-                          <td className="text-center text-yellow-400 bg-slate-950 text-[10px]">
-                            {attendance.filter(a => a.late === true).length}
-                          </td>
-                          <td className="text-center text-red-400 bg-slate-950 border-r border-slate-800 text-[10px]">-</td>
-                          {getDaysArray(getPayrollRange(selectedMonth).start, getPayrollRange(selectedMonth).end).map(d => {
-                            const dailyTotal = attendance.filter(a => a.date === d && a.status === 'Present').length;
-                            return (
-                              <td key={d} className="bg-slate-950 text-center text-[10px] font-bold text-slate-500">
-                                {dailyTotal > 0 ? dailyTotal : ''}
-                              </td>
-                            );
-                          })}
-                          <td className="p-3 text-center text-purple-400 text-lg sticky right-0 bg-slate-950 z-50 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">-</td>
-                        </tr>
-                      </tfoot>
+    const checkIsLate = (timeStr) => {
+      if (!timeStr) return false;
+      const [h, m] = timeStr.toString().split(':').map(Number);
+      let loginMins = h * 60 + m;
+      if (h < 12) loginMins += 1440;
+      return (loginMins - (19 * 60)) > 0;
+    };
+
+    // ⭐ Restricts footer math to the selected month
+    const cycleRecords = attendance.filter(a => tfootDateArray.includes(getCleanDate(a.date)));
+    const grandPresent = cycleRecords.filter(a => a.status === 'Present').length;
+    const grandLate = cycleRecords.filter(a => a.status === 'Present' && checkIsLate(a.loginTime)).length;
+
+    return (
+      <tr className="bg-slate-950 border-t-2 border-purple-500 font-black text-white">
+        <td colSpan={2} className="p-3 text-left sticky left-0 bg-slate-950 z-50 uppercase tracking-tighter">Grand Total</td>
+        <td className="p-1 text-center border-r border-slate-800 text-slate-300 font-mono text-[10px]">-</td>
+        
+        <td className="text-center text-green-400 bg-slate-950 text-[10px]">{grandPresent}</td>
+        <td className="text-center text-yellow-400 bg-slate-950 text-[10px]">{grandLate}</td>
+        <td className="text-center text-red-400 bg-slate-950 border-r border-slate-800 text-[10px]">-</td>
+        
+        {tfootDateArray.map(d => {
+          const dailyTotal = cycleRecords.filter(a => getCleanDate(a.date) === d && a.status === 'Present').length;
+          return (
+            <td key={d} className="bg-slate-950 text-center text-[10px] font-bold text-slate-500">
+              {dailyTotal > 0 ? dailyTotal : ''}
+            </td>
+          );
+        })}
+        <td className="p-3 text-center text-purple-400 text-lg sticky right-0 bg-slate-950 z-50 shadow-[-4px_0_10px_rgba(0,0,0,0.5)]">-</td>
+      </tr>
+    );
+  })()}
+</tfoot>
                     </table>
                   </div>
                 </div>
