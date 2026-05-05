@@ -62,16 +62,41 @@ const FineModal = ({ agents, onClose, onSubmit, fine, isEdit }) => {
                 <User className="w-3 h-3" /> Select Agent
               </label>
               <div className="relative">
-                <select
+               <select
                   name="agentName"
                   value={formData.agentName}
                   onChange={handleChange}
                   className="w-full bg-slate-800 border border-slate-600 rounded-xl px-4 py-3 text-white text-sm focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none appearance-none transition-all cursor-pointer hover:bg-slate-700/50"
                 >
                   <option value="">-- Choose Agent --</option>
-                  {agents.filter(a => a.status === 'Active').map((agent) => (
-                    <option key={agent.id || agent.cnic} value={agent.name}>{agent.name}</option>
-                  ))}
+                  
+                  {(() => {
+                    // 1. Extract unique team names from ALL agents
+                    const uniqueTeams = [...new Set(agents.map(a => a.team || 'Unassigned'))].sort();
+
+                    // 2. Map through teams and create grouped options
+                    return uniqueTeams.map(teamName => (
+                      <optgroup 
+                        key={teamName} 
+                        label={teamName} 
+                        className="bg-slate-900 text-blue-400 font-bold italic"
+                      >
+                        {agents
+                          .filter(a => (a.team || 'Unassigned') === teamName)
+                          .sort((a, b) => a.name.localeCompare(b.name)) // Sort names alphabetically within the team
+                          .map(agent => (
+                            <option 
+                              key={agent.id || agent.cnic} 
+                              value={agent.name} 
+                              // Dim the text slightly if they are not active
+                              className={agent.status === 'Active' ? "text-white font-normal not-italic bg-slate-800" : "text-slate-400 font-normal not-italic bg-slate-800"}
+                            >
+                              {agent.name} {agent.status !== 'Active' ? `(${agent.status})` : ''}
+                            </option>
+                          ))}
+                      </optgroup>
+                    ));
+                  })()}
                 </select>
                 <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-slate-400">
                   <svg className="w-4 h-4 fill-current" viewBox="0 0 20 20"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/></svg>

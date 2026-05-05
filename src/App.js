@@ -3857,7 +3857,8 @@ const handleUpdateAttendance = async (updates) => {
                   activeSubTab={salesSubTab}
                   setActiveSubTab={setSalesSubTab}
                 />
-
+ 
+ {/* Submissions Tab */}
                 {salesSubTab === 'list' && (
                   <div className="space-y-6">
 
@@ -4373,7 +4374,6 @@ const handleUpdateAttendance = async (updates) => {
 
                     {/* --- MATRIX LOGIC STARTS HERE --- */}
                     {/* --- OPTIMIZED MATRIX LOGIC --- */}
-                    {/* --- OPTIMIZED MATRIX LOGIC --- */}
                     {(() => {
                       // 1. Prepare Dates
                       const { start, end } = getPayrollRange(selectedMonth);
@@ -4743,8 +4743,7 @@ const handleUpdateAttendance = async (updates) => {
                     })()}
                   </div>
                 )}
-
-              </div>
+             </div>
             )}
 
             {/* Management TAB */}
@@ -5553,14 +5552,26 @@ const teamTotalPresent = teamAgents.reduce((sum, agent) => {
   ).length;
 
   const hrRec = hrRecords.find(h => h.cnic === agent.cnic) || {};
+  
+  // 1. Setup Joining Date
   const joinDateStr = hrRec.joining_date || agent.activeDate;
   const jDate = joinDateStr ? new Date(joinDateStr) : null;
   if (jDate) jDate.setHours(0, 0, 0, 0);
 
+  // ⭐ 2. Setup Leave Date (Checks if terminated/left)
+  const leaveDateStr = agent.leftDate || agent.left_date || hrRec.left_date;
+  const lDate = (['Left', 'Terminated', 'NCNS'].includes(agent.status) && leaveDateStr) ? new Date(leaveDateStr) : null;
+  if (lDate) lDate.setHours(0, 0, 0, 0);
+
   let holidayCount = 0;
   holidays.forEach(h => {
     if (!dateArray.includes(h.date)) return;
-    if (jDate && new Date(h.date) < jDate) return;
+    
+    const hDate = new Date(h.date); hDate.setHours(0, 0, 0, 0);
+    
+    if (jDate && hDate < jDate) return; // Prevent holiday before joining
+    if (lDate && hDate > lDate) return; // ⭐ Prevent holiday after termination!
+
     const hasRecord = attendance.some(a =>
       a.agentName?.toString().trim().toLowerCase() === agent.name?.toString().trim().toLowerCase() &&
       getCleanDate(a.date) === h.date &&
@@ -5615,6 +5626,10 @@ const teamTotalLate = teamAgents.reduce((sum, agent) => {
                                   const joinDateStr = hrRec.joining_date || agent.activeDate;
                                   const joinDate = joinDateStr ? new Date(joinDateStr) : null;
                                   if (joinDate) joinDate.setHours(0, 0, 0, 0);
+                                  // ⭐ 1. NEW: Extract exact leave date
+const leaveDateStr = agent.leftDate || agent.left_date || hrRec.left_date;
+const leaveDate = (['Left', 'Terminated', 'NCNS'].includes(agent.status) && leaveDateStr) ? new Date(leaveDateStr) : null;
+if (leaveDate) leaveDate.setHours(0, 0, 0, 0);
 
                                  // --- AGENT STATS CALCULATION ---
 // ⭐ Restricts agent records to the currently selected month
@@ -5631,6 +5646,7 @@ holidays.forEach(h => {
   if (!dateArray.includes(h.date)) return;
   const hDate = new Date(h.date); hDate.setHours(0, 0, 0, 0);
   if (joinDate && hDate < joinDate) return;
+  if (leaveDate && hDate > leaveDate) return; // ⭐ 2. Prevent free holidays after termination
   const hasScan = agentRecs.some(a => getCleanDate(a.date) === h.date && a.status === 'Present');
   if (!hasScan) validHolidays++;
 });
@@ -5644,6 +5660,7 @@ dateArray.forEach(dStr => {
   if (dObj.getDay() === 0 || dObj.getDay() === 6) return; 
   if (dObj > new Date()) return; 
   if (joinDate && dObj < joinDate) return; 
+  if (leaveDate && dObj > leaveDate) return; // ⭐ 3. Stop counting as absent after leaving
 
   const isHoliday = holidays.some(h => h.date === dStr);
   const hasRec = agentRecs.some(a => getCleanDate(a.date) === dStr);
@@ -5686,6 +5703,7 @@ const latePercentage = presentCount > 0 ? Math.round((lateCount / presentCount) 
                                         currentDate.setHours(0, 0, 0, 0);
                                         const isWeekend = currentDate.getDay() === 0 || currentDate.getDay() === 6;
                                         const isBeforeJoining = joinDate && currentDate < joinDate;
+                                        const isAfterLeaving = leaveDate && currentDate > leaveDate; // ⭐ 4. Flag dates after termination
 
                                         // 1. Check for Holiday
                                         const isHoliday = holidays.some(h => h.date === dateStr);
@@ -5715,13 +5733,13 @@ const latePercentage = presentCount > 0 ? Math.round((lateCount / presentCount) 
   return cleanDate === dateStr; 
 });
 
-                                        let cellContent = '-';
-                                        let cellClass = 'text-slate-700';
+                                       let cellContent = '-';
+  let cellClass = 'text-slate-700';
 
-                                        if (isBeforeJoining) {
-                                          cellContent = '•';
-                                          cellClass = 'text-slate-800';
-                                        }
+  if (isBeforeJoining || isAfterLeaving) {
+    cellContent = '•';
+    cellClass = 'text-slate-800/50'; // ⭐ 5. Mute boxes after they leave
+  }
                                         // A. If Record Exists (Present/Late) -> Show Time (Prioritize working over holiday)
                                         else if (record && record.status === 'Present') {
                                           cellContent = formatTo12Hour(record.loginTime) || 'OK';
@@ -6115,11 +6133,63 @@ const latePercentage = presentCount > 0 ? Math.round((lateCount / presentCount) 
                   </div>
                 </div>
 
+                {/* --- FILTERS --- */}
+                {userRole !== 'Agent' && (
+                  <div className="bg-slate-800 rounded-xl shadow-sm border border-slate-600 p-4 m-4 mb-4">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                      <input
+                        type="text"
+                        placeholder="Search agent name..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <select value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="All">All Teams</option>
+                        {teams.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                      <select value={centerFilter} onChange={(e) => setCenterFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="All">All Centers</option>
+                        {centers.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                      <select value={agentStatusFilter} onChange={(e) => setAgentStatusFilter(e.target.value)} className="px-4 py-2 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-100 outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="All">All Status</option>
+                        <option value="Active">Active</option>
+                        <option value="Left">Left / Ex-Employees</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+
                 {/* TABLE */}
                 <div className="overflow-auto relative flex-1">
                   {(() => {
                     const { start, end } = getPayrollRange(selectedMonth);
                     const dateArray = getDaysArray(start, end);
+
+                    // ⭐ DATE CLEANER HELPER
+                    const getCleanDate = (rawDate) => {
+                      if (!rawDate) return null;
+                      let clean = String(rawDate).trim().split('T')[0].split(' ')[0];
+                      if (clean.includes('/')) {
+                        const parts = clean.split('/');
+                        if (parts.length === 3 && parts[2].length === 4) return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+                      } else if (clean.split('-')[0].length === 2) {
+                        const parts = clean.split('-');
+                        if (parts.length === 3 && parts[2].length === 4) return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+                      }
+                      return clean;
+                    };
+
+                    // ⭐ TIMEZONE-SAFE DATE PARSER
+                    const getSafeLocalDate = (dateStr) => {
+                      if (!dateStr) return null;
+                      const cleanStr = getCleanDate(dateStr);
+                      if (!cleanStr) return null;
+                      const parts = cleanStr.split('-');
+                      if (parts.length !== 3) return new Date(cleanStr);
+                      return new Date(parts[0], parseInt(parts[1]) - 1, parts[2], 0, 0, 0, 0);
+                    };
 
                     // 1. CALCULATE TARGET BUSINESS DAYS (Denominator)
                     // Count only Mon-Fri in the cycle. This is the standard divider.
@@ -6147,23 +6217,33 @@ const latePercentage = presentCount > 0 ? Math.round((lateCount / presentCount) 
                       return timeStr;
                     };
 
-                    // 2. RAW FILTER (Remove Agents strictly outside date range)
+                    // 2. RAW FILTER (Remove Agents strictly outside date range + Apply UI Filters)
                     const filteredAgents = agents.filter(agent => {
                       const targetName = agent.name?.toString().trim().toLowerCase();
                       const hrRec = hrRecords.find(h => (agent.cnic && h.cnic === agent.cnic) || (h.agent_name?.toString().trim().toLowerCase() === targetName)) || {};
 
                       const joinDateStr = hrRec.joining_date || agent.activeDate || agent.active_date;
-                      const joinDate = joinDateStr ? new Date(joinDateStr) : null;
-                      const leftDate = agent.leftDate ? new Date(agent.leftDate) : null;
+                      const joinDate = joinDateStr ? getSafeLocalDate(joinDateStr) : null;
+                      
+                      const leaveDateStr = agent.leftDate || agent.left_date || hrRec.left_date;
+                      const leaveDate = (['Left', 'Terminated', 'Resigned', 'NCNS', 'Absconded'].includes(agent.status) && leaveDateStr) ? getSafeLocalDate(leaveDateStr) : null;
 
-                      // Joined AFTER cycle ended? Hide.
+                      // A. Check Matrix Dates (Don't show ghosts)
                       if (joinDate && joinDate > end) return false;
+                      if (leaveDate && leaveDate < start) return false;
 
-                      // Left BEFORE cycle started? Hide.
-                      if (['Left', 'Terminated', 'Resigned', 'NCNS', 'Absconded'].includes(agent.status) && leftDate) {
-                        if (leftDate < start) return false;
-                      }
-                      return true;
+                      // B. Apply UI Search & Filters
+                      const query = searchQuery.toLowerCase();
+                      const matchesSearch = !searchQuery || targetName.includes(query) || (agent.phone && agent.phone.toString().includes(query));
+                      const matchesTeam = teamFilter === 'All' || agent.team === teamFilter;
+                      const matchesCenter = centerFilter === 'All' || agent.center === centerFilter;
+                      
+                      // Status Logic matches what you have in Attendance/Sales
+                      const matchesStatus = agentStatusFilter === 'All' ? true 
+                                          : agentStatusFilter === 'Active' ? agent.status === 'Active' 
+                                          : agent.status !== 'Active';
+
+                      return matchesSearch && matchesTeam && matchesCenter && matchesStatus;
                     });
 
                     // 3. PREPARE MAPS (String Key Matching)
@@ -6236,38 +6316,46 @@ const latePercentage = presentCount > 0 ? Math.round((lateCount / presentCount) 
 
                       const dailyData = {};
 
+                      // ⭐ Extract Safe Boundary Dates
+                      const joinDateStr = hrRec.joining_date || agent.activeDate || agent.active_date;
+                      const joinDate = joinDateStr ? getSafeLocalDate(joinDateStr) : null;
+
+                      const leaveDateStr = agent.leftDate || agent.left_date || hrRec.left_date;
+                      const leaveDate = (isBadStatus && leaveDateStr) ? getSafeLocalDate(leaveDateStr) : null;
+
                       dateArray.forEach(dateStr => {
                         const daySalesCount = salesMap[`${targetName}-${dateStr}`] || 0;
                         const attRecord = attMap[`${targetName}-${dateStr}`];
 
-                        const d = new Date(dateStr);
+                        // ⭐ Safe parse loop date
+                        const d = getSafeLocalDate(dateStr);
                         const isWeekend = d.getDay() === 0 || d.getDay() === 6;
                         const isHoliday = holidays.some(h => h.date === dateStr);
+
+                        const isBeforeJoining = joinDate && d < joinDate;
+                        const isAfterLeaving = leaveDate && d > leaveDate;
 
                         // Physically Present Check
                         const isPresent = (attRecord && (attRecord.status === 'Present' || attRecord.status === 'Late')) || daySalesCount > 0;
 
-                        // [NEW] Increment Stats
                         if (isPresent) {
                           physicalDays++;
                           countPresent++;
-                          // Check DB for late status
                           if (attRecord && attRecord.late) countLate++;
                         }
 
-                        // [NEW] Absent Logic: Not Present AND Not Holiday AND Not Weekend AND Not Future
-                        if (!isPresent && !isHoliday && !isWeekend && d <= new Date()) {
+                        // ⭐ FIXED Absent Logic: Ignore days before joining or after termination
+                        if (!isPresent && !isHoliday && !isWeekend && d <= new Date() && !isBeforeJoining && !isAfterLeaving) {
                           countAbsent++;
                         }
 
-                        // Payable Counter (Used for Money)
-                        if (isPresent || (isHoliday && !isWeekend)) {
+                        // ⭐ FIXED Payable Counter: Don't pay for holidays if terminated or not yet joined
+                        if (isPresent || (isHoliday && !isWeekend && !isBeforeJoining && !isAfterLeaving)) {
                           paidDays++;
                         }
 
                         totalSales += daySalesCount;
 
-                        // Time Formatting
                         let displayTime = null;
                         if (attRecord && attRecord.status === 'Present') {
                           displayTime = formatTime(attRecord.loginTime || attRecord.timeIn);
@@ -6278,7 +6366,8 @@ const latePercentage = presentCount > 0 ? Math.round((lateCount / presentCount) 
                           time: displayTime,
                           status: isPresent ? 'P' : 'A',
                           isGhostPresent: !attRecord && daySalesCount > 0,
-                          isHoliday: isHoliday
+                          isHoliday: isHoliday,
+                          isInactiveDay: isBeforeJoining || isAfterLeaving // ⭐ Flag to mute UI
                         };
 
                         grandTotals.dailySales[dateStr] = (grandTotals.dailySales[dateStr] || 0) + daySalesCount;
@@ -6446,20 +6535,23 @@ const latePercentage = presentCount > 0 ? Math.round((lateCount / presentCount) 
                                       const isHoliday = data.isHoliday;
 
                                       let bgClass = isWeekend ? "bg-slate-800/30" : "";
-                                      if (data.isGhostPresent) bgClass = "bg-orange-900/20";
+                                      if (data.isInactiveDay) bgClass = "bg-slate-800/30"; // ⭐ Mute background
+                                      else if (data.isGhostPresent) bgClass = "bg-orange-900/20";
                                       else if (isHoliday) bgClass = "bg-purple-900/10";
                                       else if (data.status === 'A' && !isWeekend) bgClass = "bg-red-900/10";
 
                                       return (
                                         <React.Fragment key={dateStr}>
                                           <td className={`p-1 border-r border-slate-800 text-center align-middle font-mono ${bgClass}`}>
-                                            {data.sales > 0 ? <span className="text-green-400 font-bold">{data.sales}</span> : <span className="text-slate-700">-</span>}
+                                            {data.isInactiveDay ? <span className="text-slate-700/50">•</span> : 
+                                              (data.sales > 0 ? <span className="text-green-400 font-bold">{data.sales}</span> : <span className="text-slate-700">-</span>)}
                                           </td>
 
                                           <td className={`p-1 border-r border-slate-700 text-center align-middle font-mono text-[10px] ${bgClass}`}>
-                                            {data.time ? <span className="text-slate-300">{data.time}</span> :
+                                            {data.isInactiveDay ? <span className="text-slate-700/50">•</span> :
+                                              (data.time ? <span className="text-slate-300">{data.time}</span> :
                                               (isHoliday ? <span className="text-purple-400 font-bold">HOL</span> :
-                                                (isWeekend ? <span className="text-slate-700">-</span> : <span className="text-red-900 font-bold">ABS</span>))
+                                                (isWeekend ? <span className="text-slate-700">-</span> : <span className="text-red-900 font-bold">ABS</span>)))
                                             }
                                           </td>
 
